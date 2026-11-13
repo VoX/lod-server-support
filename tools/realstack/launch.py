@@ -37,6 +37,9 @@ CLIENT_OPTIONS = {
     'simulationDistance': '5', 'soundCategory_master': '0.0', 'soundCategory_music': '0.0',
     'enableVsync': 'false', 'menuBackgroundBlurriness': '0', 'panoramaScrollSpeed': '0.0',
 }
+# A Paper plugin keeps its settings in a folder named after the plugin, and the Voxy Server
+# Side build of the plugin has its own name.
+PAPER_PLUGIN_FOLDERS = {'lss': 'LodServerSupport', 'vss': 'VoxyServerSide'}
 PLAIN_FILE = re.compile(r'^[A-Za-z0-9][A-Za-z0-9._+-]*$')
 
 
@@ -101,6 +104,15 @@ def server_properties(port: int, minecraft: str) -> str:
 def mods_folder(platform: str) -> str:
     """Where a server platform loads the mod under test and its companions from."""
     return 'plugins' if platform == 'paper' else 'mods'
+
+
+def server_settings_path(platform: str, brand: str) -> Path:
+    """The mod's server settings file, relative to the server directory. The file exists only
+    after the first start has created it."""
+    name = f'{brand}-server-config.yaml'
+    if platform == 'paper':
+        return Path('plugins') / PAPER_PLUGIN_FOLDERS[brand] / name
+    return Path('config') / name
 
 
 def client_options() -> str:

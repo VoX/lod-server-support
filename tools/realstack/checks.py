@@ -10,6 +10,8 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass, field
 
+import settings
+
 ANSI = re.compile(r'\x1b\[[0-9;]*[A-Za-z]')
 ENTRY = re.compile(r'^\[\d\d:\d\d:\d\d(?:\.\d+)?\] '
                    r'\[(?P<thread>.*?)/(?P<level>TRACE|DEBUG|INFO|WARN|ERROR|FATAL)\]'
@@ -35,6 +37,12 @@ CLIENT_SESSION = re.compile(r'^Server session config received \(protocol v(?P<pr
                             r'LOD distance: (?P<distance>\d+) chunks, enabled: (?P<enabled>\w+)\)')
 CLIENT_SAVED = re.compile(r'^Saved (?P<count>\d+) cached column entries')
 CLIENT_CONSUMER = re.compile(r'^Registered voxel column consumer: (?P<name>\S+)')
+RELOAD_APPLIED = re.compile(r'^Reloaded (?P<file>\S+): (?P<count>\d+) active setting\(s\) applied\.$')
+RELOAD_FAILED = 'Reload failed'
+# Lines that name settings a reload read but did not put into effect. A Paper server prints the
+# second one at every start for settings that mean nothing there, so only a line that names
+# the setting in question counts.
+RELOAD_NOT_APPLIED = re.compile(r'^(?:Restart required|Inactive on this platform): (?P<paths>.+)$')
 DIAG_LAST_FIELD = 'Bandwidth'
 PLAYER_JOINED = '{player} joined the game'
 # The client's own chat line, as the game logs it: "[System] [CHAT] [LSS] ...". The prefix is the
@@ -45,6 +53,8 @@ BRANDS = {'LSS': 'LOD Server Support', 'VSS': 'Voxy Server Side'}
 NOTICE_TEXTS = {
     'no_support': "This server doesn't seem to have this mod installed, so there is nothing for "
                   "it to show here. Nothing is wrong with your game.",
+    'server_off_world': "Distant terrain is switched off in this world on this server. Nothing "
+                        "is wrong with your game.",
 }
 CRASH_MARKERS = ('---- Minecraft Crash Report ----', '#@!@# Game crashed!',
                  'A fatal error has been detected by the Java Runtime Environment')
@@ -397,6 +407,118 @@ def check_client_notice(client_log: str, kind: str, brand: str) -> CheckResult:
     return CheckResult(name, True, f'one notice, from the {brand} build', evidence)
 
 
+def check_server_settings(server_log: str, settings_text: str, changes: list[dict]) -> CheckResult:
+    """A scenario's server settings took effect: the file the server read holds each value, and
+    the server answered the reload with the number of settings it applied. `changes` is what
+    the run recorded: [{'path': [...], 'value': '0'}, ...]."""
+    name = 'server_settings'
+    if not changes:
+        return CheckResult(name, False, 'the run recorded no change to the server settings')
+    evidence = []
+    for change in changes:
+        path = tuple(change['path'])
+        try:
+            value = settings.value_of(settings_text, path)
+        except settings.SettingsError as error:
+            return CheckResult(name, False, str(error), evidence)
+        if value is not None:
+            evidence.append('settings file: ' + settings.line_of(settings_text, path))
+        if value != change['value']:
+            return CheckResult(name, False, f'{settings.dotted(path)} is {value} in the saved '
+                               f'settings file, expected {change["value"]}', evidence)
+    entries = parse_entries(server_log)
+    wanted_paths = [tuple(change['path']) for change in changes]
+    refused = [entry.first_line() for entry in entries if entry.message.startswith(RELOAD_FAILED)]
+    for entry, match in all_matches(entries, RELOAD_NOT_APPLIED):
+        named = [tuple(path.split('.')) for path in match.group('paths').split(', ')]
+        if any(path[:len(prefix)] == prefix for path in wanted_paths for prefix in named):
+            refused.append(entry.first_line())
+    applied = all_matches(entries, RELOAD_APPLIED)
+    evidence += [entry.first_line() for entry, _match in applied[-1:]] + refused
+    if refused:
+        return CheckResult(name, False, 'the server did not apply the reload as asked', evidence)
+    if not applied or int(applied[-1][1].group('count')) < 1:
+        return CheckResult(name, False, 'the server never logged that a reload applied a '
+                           'setting', evidence)
+    wanted = ', '.join(f'{settings.dotted(tuple(change["path"]))} = {change["value"]}'
+                       for change in changes)
+    return CheckResult(name, True, f'the server reloaded its settings file with {wanted}',
+                       evidence)
+
+
+def check_handshake_off(server_log: str, client_log: str, diag_text: str, player: str,
+                        protocol: int) -> CheckResult:
+    """The handshake happened and the server answered "not here": the server logged the join
+    and the handshake on the current protocol, and the client logged a session config on that
+    protocol with enabled: false."""
+    server = parse_entries(server_log)
+    name = 'handshake_off'
+    joined = [entry for entry in server if entry.message == PLAYER_JOINED.format(player=player)]
+    if not joined:
+        return CheckResult(name, False, f'the server never logged "{player} joined the game"')
+    evidence = [joined[0].first_line()]
+    handshakes = [(entry, match) for entry, match in all_matches(server, SERVER_HANDSHAKE)
+                  if match.group('name') == player]
+    if not handshakes:
+        return CheckResult(name, False, f'the server received no LSS handshake from {player}',
+                           evidence)
+    evidence.append(handshakes[-1][0].first_line())
+    announced = int(handshakes[-1][1].group('protocol'))
+    if announced != protocol:
+        return CheckResult(name, False, f'the client announced protocol v{announced}, '
+                           f'expected v{protocol}', evidence)
+    evidence += [entry.first_line() for entry, match in all_matches(server, SERVER_REGISTERED)
+                 if match.group('name') == player][-1:]
+    sessions = all_matches(parse_entries(client_log), CLIENT_SESSION)
+    if not sessions:
+        return CheckResult(name, False, 'the client log has no "Server session config received" '
+                           'line', evidence)
+    evidence += [entry.first_line() for entry, _match in sessions]
+    dialects = parse_diag(diag_text)['fields'].get('Dialects')
+    if dialects is not None:
+        evidence.append('diag Dialects: ' + dialects)
+    told = [(int(match.group('protocol')), match.group('enabled')) for _entry, match in sessions]
+    if any(answer != (protocol, 'false') for answer in told):
+        return CheckResult(name, False, f'the client was told {told}; expected only protocol '
+                           f'v{protocol} with enabled: false', evidence)
+    return CheckResult(name, True, f'{player} joined, negotiated LSS protocol v{protocol} and was '
+                       'told that distant terrain is not available here', evidence)
+
+
+def check_no_columns(diag_text: str, diag_polls: list[dict], player: str) -> CheckResult:
+    """No terrain was sent: in the final `lsslod diag`, taken at the end of the observation
+    window with the player still online, the server-wide `sent=` counter is 0, and so is the
+    player's own where the server lists the player. The counters only ever grow, so 0 at the
+    end means 0 throughout."""
+    diag = parse_diag(diag_text)
+    name = 'no_columns'
+    if not diag['present']:
+        return CheckResult(name, False, 'no lsslod diag output was captured')
+    throughput = diag['fields'].get('Throughput')
+    player_line = diag['players'].get(player)
+    evidence = []
+    if throughput is not None:
+        evidence.append('diag Throughput: ' + throughput)
+    if 'Sources (total)' in diag['fields']:
+        evidence.append('diag Sources (total): ' + diag['fields']['Sources (total)'])
+    if player_line is not None:
+        evidence.append(f'diag {player}: ' + player_line)
+    answered = [poll for poll in diag_polls if poll.get('present')]
+    if answered:
+        evidence.append(f'{len(answered)} diag polls answered, the last '
+                        f'{answered[-1].get("seconds_after_join")} s after the join')
+    total = counter(throughput, 'sent')
+    if total is None:
+        return CheckResult(name, False, 'the diag has no Throughput: sent= counter', evidence)
+    if total:
+        return CheckResult(name, False, f'the server sent {total} columns', evidence)
+    if player_line is not None and counter(player_line, 'sent') != 0:
+        return CheckResult(name, False, f'the server sent columns to {player}', evidence)
+    whose = f'and to {player} ' if player_line is not None else ''
+    return CheckResult(name, True, f'the server sent no columns: sent=0 in total {whose}at the '
+                       'end of the observation window', evidence)
+
+
 def check_screenshot(shot: dict | None) -> CheckResult:
     """A screenshot of the private display was saved. The picture is not judged in this version;
     the check only proves that a real image of the right size was captured while a Minecraft
@@ -418,7 +540,8 @@ def check_screenshot(shot: dict | None) -> CheckResult:
 def run_checks(names: list[str], material: dict) -> list[CheckResult]:
     """Run the named checks over collected material: server_log, observed_server_log (the part
     written before the runner began to shut things down), client_log, diag, player, protocol,
-    crash_files, client_alive_at_end, screenshot, own_paths."""
+    crash_files, client_alive_at_end, screenshot, own_paths, and for scenarios notice, brand,
+    diag_polls, server_settings_text and server_settings_changes."""
     own_paths = tuple(material.get('own_paths', ()))
     server_log = material.get('server_log', '')
     client_log = material.get('client_log', '')
@@ -439,6 +562,12 @@ def run_checks(names: list[str], material: dict) -> list[CheckResult]:
         'client_joined': lambda: check_client_joined(material.get('observed_server_log', ''), player),
         'client_notice': lambda: check_client_notice(client_log, material.get('notice', 'no_support'),
                                                      material.get('brand', 'LSS')),
+        'server_settings': lambda: check_server_settings(
+            server_log, material.get('server_settings_text', ''),
+            material.get('server_settings_changes', [])),
+        'handshake_off': lambda: check_handshake_off(server_log, client_log, diag, player,
+                                                     material['protocol']),
+        'no_columns': lambda: check_no_columns(diag, material.get('diag_polls', []), player),
     }
     return [table[name]() for name in names]
 

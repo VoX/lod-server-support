@@ -35,7 +35,8 @@ Each run has its own directory, `<runs>/<UTC time>-<row>/`:
 
 - `verdict.json`: `passed`, and for every check its message and the log lines it relied on.
 - `evidence/`: server console log, client log, the final `lsslod diag`, `client.png`, the staged
-  jar list with hashes, and what was left running (nothing).
+  jar list with hashes, the server's settings file, and what was left running (nothing). A
+  scenario that changes the server's settings also keeps the file as the server generated it.
 - `facts.json`: port, display, timings, command lines, the diag polls.
 
 `realstack.py replay <run directory>` judges a saved run again from its evidence.
@@ -57,10 +58,34 @@ handshake check must go red.
 
 ## Scenarios and the other brand
 
-`run <row> --scenario server-without-lss` stages the server without LSS and judges what the client
-tells the player: the server started, the player joined, the client spoke its chat notice exactly
-once and in the expected words, stayed up, and a screenshot was saved. A scenario brings its own
-checks; the row's are not run.
+`run <row> --scenario <name>` stages a situation a player meets and judges what the client and the
+server say about it. A scenario brings its own checks; the row's are not run. Every scenario also
+runs `client_clean` and `screenshot`.
+
+| Scenario | Stages | Checks |
+| --- | --- | --- |
+| `server-without-lss` | the server without LSS | `server_ready`, `client_joined`, `client_notice` (the "this server doesn't seem to have this mod" notice) |
+| `off-in-world` | the server setting `lod.distance.by_dimension."minecraft:overworld": 0` | `server_started`, `server_settings`, `client_joined`, `handshake_off`, `no_columns`, `client_notice` (the "switched off in this world" notice) |
+
+| Scenario check | Passes when |
+| --- | --- |
+| `server_ready` | the server logged `Done` |
+| `client_joined` | the server logged the player's join during the observation window |
+| `client_notice` | the client spoke its chat notice exactly once, with the build's short name in front and in exactly the expected words |
+| `server_settings` | the saved settings file holds each value the scenario set, and the server logged that a reload applied a setting (and no line that says the setting was not applied) |
+| `handshake_off` | the server logged the join and the handshake on the current protocol, and every session config the client logged says that protocol and `enabled: false` |
+| `no_columns` | the final diag, taken at the end of the window with the player online, says `sent=0` server-wide, and for the player where the server lists the player |
+
+Server settings: the settings file (`plugins/LodServerSupport/lss-server-config.yaml` on Paper,
+`config/lss-server-config.yaml` elsewhere) exists only after the first start has created it. So
+the tool starts the server once, changes the one line that holds the value (as text, so every
+comment stays), sends `lsslod reload`, and lets the client join only after the server has
+answered `Reloaded ...: N active setting(s) applied.` This is what the file's own header tells an
+operator to do, it needs one start instead of two, and the server's answer is the proof that it
+took the value. A key that is missing, commented out or a block, a reload that fails or changes
+nothing, and a setting that needs a restart all end the run with the reason. On Paper a
+world-name entry under `lod.distance.by_world` would win over the dimension entry, so
+`off-in-world` also refuses to run when the generated file has one.
 
 `--brand vss` takes the Voxy Server Side build of the same jars from a gate's `jars/` directory
 (`--lss dir:` only). The server is then asked for `vsslod diag`, and the notice check expects

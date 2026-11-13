@@ -35,6 +35,7 @@ import checks  # noqa: E402
 import fetch  # noqa: E402
 import launch  # noqa: E402
 import procs  # noqa: E402
+import settings  # noqa: E402
 import stackfile  # noqa: E402
 import xwdpng  # noqa: E402
 
@@ -47,17 +48,34 @@ OBSERVE_SECONDS = 60         # the client stays in the world at least this long
 COLUMNS_SECONDS = 150        # how long after the join the columns counter may take to move
 DIAG_INTERVAL = 10
 CONSOLE_REPLY_SECONDS = 8
+RELOAD_SECONDS = 30          # how long the server may take to answer a settings reload
+SETTINGS_FILE_SECONDS = 30   # how long after "Done" the first start may take to write its settings
 INSTALLER_SECONDS = 900
 FAULTS = ('client-without-lss',)
 # A scenario replaces the row's checks: it stages a situation a player meets and reads what the
-# client says about it. `notice` is the chat line the client must speak (checks.NOTICE_TEXTS).
+# client and the server say about it.
+#   notice           the chat line the client must speak (checks.NOTICE_TEXTS)
+#   server_lss       False stages the server without the mod (and nothing asks it for a diag)
+#   server_settings  (path, value) pairs set in the server's settings file once the first start
+#                    has created it, then applied with a reload, all before the client joins
+#   server_settings_empty  map settings that must have no entries in the generated file,
+#                    because an entry there would take priority over what the scenario sets
 SCENARIOS = {
     'server-without-lss': {
         'checks': ['server_ready', 'client_joined', 'client_notice', 'client_clean', 'screenshot'],
         'notice': 'no_support',
+        'server_lss': False,
+    },
+    'off-in-world': {
+        'checks': ['server_started', 'server_settings', 'client_joined', 'handshake_off',
+                   'no_columns', 'client_notice', 'client_clean', 'screenshot'],
+        'notice': 'server_off_world',
+        'server_settings': [(('lod', 'distance', 'by_dimension', 'minecraft:overworld'), '0')],
+        'server_settings_empty': [('lod', 'distance', 'by_world')],
     },
 }
 NOTICE_SECONDS = 150         # how long after the join the client's chat notice may take
+SETTLE_SECONDS = 20          # how long the client stays after it, to catch a second notice
 BRAND_PREFIXES = {'lss': 'lod-server-support-', 'vss': 'voxy-server-side-'}
 SERVER_COMMANDS = {'lss': 'lsslod', 'vss': 'vsslod'}   # each build's own server command root
 KEEP_AFTER_RUN = ('logs', 'crash-reports', 'config', 'console.log', 'console.in', 'stdout.log',
@@ -294,7 +312,7 @@ class Run:
         self.scenario = SCENARIOS.get(options.scenario or '')
         self.facts: dict = {'rig_id': self.rig_id, 'player': launch.PLAYER, 'fault': options.fault,
                             'scenario': options.scenario, 'brand': options.brand.upper(),
-                            'notice': self.scenario['notice'] if self.scenario else None,
+                            'notice': self.scenario.get('notice') if self.scenario else None,
                             'own_paths': [str(self.cache), str(self.directory)], 'diag_polls': []}
         self.final_diag = ''
 
@@ -332,10 +350,11 @@ class Run:
             state = 'its process ended' if process.poll() is not None else f'{seconds:.0f} s passed'
             raise RunAborted(f'{what}: not seen ({state})')
 
-    def console(self, command: str, settle: float = 1.5, expect: str = '') -> str:
+    def console(self, command: str, settle: float = 1.5, expect: str | tuple[str, ...] = '',
+                seconds: float = CONSOLE_REPLY_SECONDS) -> str:
         """Send one command to the server console and return the output it produced. With
-        `expect`, wait (at most CONSOLE_REPLY_SECONDS) until that text has appeared, then let
-        the rest of the reply arrive; otherwise wait `settle` seconds."""
+        `expect`, wait (at most `seconds`) until that text, or one of those texts, has
+        appeared, then let the rest of the reply arrive; otherwise wait `settle` seconds."""
         if self.server is None or self.server.poll() is not None or self.server.stdin is None:
             return ''
         before = self.console_log.stat().st_size if self.console_log.exists() else 0
@@ -354,7 +373,9 @@ class Run:
                 return handle.read().decode('utf-8', 'replace')
 
         if expect:
-            procs.wait_until(lambda: expect in reply(), time.monotonic() + CONSOLE_REPLY_SECONDS, 0.2)
+            wanted = (expect,) if isinstance(expect, str) else expect
+            procs.wait_until(lambda: any(text in reply() for text in wanted),
+                             time.monotonic() + seconds, 0.2)
             settle = 0.5
         time.sleep(settle)
         return reply()
@@ -368,13 +389,14 @@ class Run:
                    'client': self.client_dir / 'mods'}
         for directory in folders.values():
             directory.mkdir(parents=True)
+        scenario = self.scenario or {}
         staged = []
         for side in ('server', 'client'):
             sources = [(Path(mod['path']), mod['sha512'], mod['slug'])
                        for mod in provisioned[side]['mods']]
             if side == 'client' and self.options.fault == 'client-without-lss':
                 staged.append({'side': side, 'mod': 'lss', 'left_out_by_fault': self.options.fault})
-            elif side == 'server' and self.options.scenario == 'server-without-lss':
+            elif side == 'server' and not scenario.get('server_lss', True):
                 staged.append({'side': side, 'mod': 'lss', 'left_out_by_scenario': self.options.scenario})
             else:
                 sources.append((Path(lss[side]['path']), lss[side]['sha512'], 'lss'))
@@ -459,6 +481,53 @@ class Run:
         say(f'server ready after {self.facts["server_start_seconds"]} s')
         return port
 
+    def apply_server_settings(self) -> None:
+        """A scenario's server settings. The settings file exists only once the first start has
+        created it, so this runs after the server is up and before the client joins: change
+        the lines in the file, tell the server to read it (`lsslod reload`), and go on only
+        when the server has answered that it applied a setting. Anything else ends the run."""
+        changes = (self.scenario or {}).get('server_settings')
+        if not changes:
+            return
+        self.wait_for_line(self.console_log, checks.SERVICE_START.match, self.server,
+                           SETTINGS_FILE_SECONDS, 'server settings: the mod\'s service start')
+        relative = launch.server_settings_path(self.row['server']['platform'], self.options.brand)
+        path = self.server_dir / relative
+        if not procs.wait_until(path.is_file, self.remaining(SETTINGS_FILE_SECONDS), 0.5):
+            raise RunAborted(f'server settings: the first start did not create {relative}')
+        generated = path.read_text()
+        (self.evidence / 'server-settings-generated.yaml').write_text(generated)
+        record = []
+        try:
+            for key in self.scenario.get('server_settings_empty', []):
+                if not settings.is_empty_or_absent(generated, key):
+                    raise settings.SettingsError(
+                        f'{settings.dotted(key)} has entries in the generated file, and they '
+                        'would take priority over what this scenario sets')
+            edited = generated
+            for key, value in changes:
+                before = settings.line_of(edited, key)
+                edited = settings.set_value(edited, key, value)
+                record.append({'path': list(key), 'value': value, 'line_before': before,
+                               'line_after': settings.line_of(edited, key)})
+        except settings.SettingsError as error:
+            raise RunAborted(f'server settings: {error}') from error
+        path.write_text(edited)
+        (self.evidence / 'server-settings.yaml').write_text(edited)
+        self.facts['server_settings'] = {'file': str(relative), 'changes': record}
+        reply = self.console(f'{SERVER_COMMANDS[self.options.brand]} reload', seconds=RELOAD_SECONDS,
+                             expect=('active setting(s) applied', 'no active changes',
+                                     'Reload failed', 'adoption pending'))
+        answered = [entry.message for entry in checks.parse_entries(reply)]
+        self.facts['server_settings']['reload_reply'] = answered
+        result = checks.check_server_settings(reply, edited, record)
+        if not result.passed:
+            raise RunAborted(f'server settings: {result.message}; the server answered '
+                             f'{answered[-4:] or "nothing"}')
+        say('server settings: ' + ', '.join(f'{settings.dotted(tuple(change["path"]))} = '
+                                            f'{change["value"]}' for change in record)
+            + ' set and reloaded')
+
     def start_client(self, provisioned: dict, display: int, port: int) -> None:
         """Start the production client on the private display and wait until it has joined."""
         java = Path(provisioned['java'])
@@ -495,59 +564,74 @@ class Run:
         self.facts['client_join_seconds'] = round(time.monotonic() - started, 1)
         say(f'client joined after {self.facts["client_join_seconds"]} s')
 
-    def observe_notice(self, display: int) -> None:
+    def poll_diag(self, joined: float) -> dict:
+        """Ask the server for its diagnostics (`lsslod diag`, or `vsslod diag` on the Voxy
+        Server Side build) and record what came back. The last answer is the final diag."""
+        reply = self.console(f'{SERVER_COMMANDS[self.options.brand]} diag', expect='Bandwidth:')
+        diag = checks.parse_diag(reply)
+        self.facts['diag_polls'].append({
+            'seconds_after_join': round(time.monotonic() - joined), 'present': diag['present'],
+            'sent': checks.counter(diag['players'].get(launch.PLAYER), 'sent') or 0,
+            'total': checks.counter(diag['fields'].get('Throughput'), 'sent')})
+        if diag['present']:
+            self.final_diag = reply
+        return diag
+
+    def end_observation(self, display: int) -> None:
+        """Record how the observation window ended and take the screenshot."""
+        (self.evidence / 'server-diag-final.txt').write_text(self.final_diag)
+        self.facts['client_alive_at_end'] = self.client is not None and self.client.poll() is None
+        self.facts['observation_end_offset'] = self.console_log.stat().st_size
+        self.take_screenshot(display)
+
+    def observe_scenario(self, display: int) -> None:
         """A scenario's window: keep the client in the world until it has spoken its chat notice
-        (plus a few seconds, to catch a second one) or the notice deadline passes."""
+        and the notice has had SETTLE_SECONDS to repeat itself, or the deadline passes. A server
+        that runs the mod is asked for its diag on every round, the client stays the usual
+        minimum, and the last diag is taken at the very end."""
+        with_diag = self.scenario.get('server_lss', True)
         joined = time.monotonic()
+        stay_until = self.remaining(self.options.observe) if with_diag else joined
         give_up = self.remaining(NOTICE_SECONDS)
         seen_at = None
         while True:
+            elapsed = round(time.monotonic() - joined)
+            diag = self.poll_diag(joined) if with_diag else None
             spoken = len(checks.all_matches(checks.parse_entries(self.log_text(self.client_log)),
                                             checks.NOTICE))
-            elapsed = round(time.monotonic() - joined)
-            say(f'  {elapsed:>3} s after join: {spoken} notice(s) in the client log')
+            say(f'  {elapsed:>3} s after join: {spoken} notice(s) in the client log'
+                + (f', diag {"ok" if diag["present"] else "MISSING"}' if diag else ''))
             now = time.monotonic()
             if spoken and seen_at is None:
                 seen_at = now
                 self.facts['notice_seconds_after_join'] = elapsed
             client_gone = self.client is not None and self.client.poll() is not None
-            if client_gone or now >= give_up or (seen_at is not None and now - seen_at >= 20):
+            settled = seen_at is not None and now - seen_at >= SETTLE_SECONDS and now >= stay_until
+            if client_gone or now >= give_up or settled:
                 break
             time.sleep(DIAG_INTERVAL)
-        (self.evidence / 'server-diag-final.txt').write_text('')
-        self.facts['client_alive_at_end'] = self.client is not None and self.client.poll() is None
-        self.facts['observation_end_offset'] = self.console_log.stat().st_size
-        self.take_screenshot(display)
+        self.end_observation(display)
 
     def observe(self, display: int) -> None:
         """Keep the client in the world for the observation window, polling the server's
         diagnostics command (`lsslod diag`, or `vsslod diag` on the Voxy Server Side build)."""
         if self.scenario:
-            self.observe_notice(display)
+            self.observe_scenario(display)
             return
         joined = time.monotonic()
         stay_until = self.remaining(self.options.observe)
         give_up = self.remaining(max(self.options.observe, self.options.columns_deadline))
         while True:
-            reply = self.console(f'{SERVER_COMMANDS[self.options.brand]} diag', expect='Bandwidth:')
-            diag = checks.parse_diag(reply)
-            sent = checks.counter(diag['players'].get(launch.PLAYER), 'sent') or 0
-            elapsed = round(time.monotonic() - joined)
-            self.facts['diag_polls'].append({'seconds_after_join': elapsed, 'sent': sent,
-                                             'present': diag['present']})
-            if diag['present']:
-                self.final_diag = reply
-            say(f'  {elapsed:>3} s after join: diag {"ok" if diag["present"] else "MISSING"}, '
-                f'sent to {launch.PLAYER} = {sent}')
+            diag = self.poll_diag(joined)
+            poll = self.facts['diag_polls'][-1]
+            say(f'  {poll["seconds_after_join"]:>3} s after join: diag '
+                f'{"ok" if diag["present"] else "MISSING"}, sent to {launch.PLAYER} = {poll["sent"]}')
             now = time.monotonic()
             client_gone = self.client is not None and self.client.poll() is not None
-            if client_gone or now >= give_up or (now >= stay_until and sent > 0):
+            if client_gone or now >= give_up or (now >= stay_until and poll['sent'] > 0):
                 break
             time.sleep(DIAG_INTERVAL)
-        (self.evidence / 'server-diag-final.txt').write_text(self.final_diag)
-        self.facts['client_alive_at_end'] = self.client is not None and self.client.poll() is None
-        self.facts['observation_end_offset'] = self.console_log.stat().st_size
-        self.take_screenshot(display)
+        self.end_observation(display)
 
     def take_screenshot(self, display: int) -> None:
         """Save the private display's framebuffer as evidence."""
@@ -585,6 +669,9 @@ class Run:
                   'server-latest.log': self.server_dir / 'logs' / 'latest.log',
                   'client-stdout.log': self.client_log,
                   'client-latest.log': self.client_dir / 'logs' / 'latest.log'}
+        if not (self.evidence / 'server-settings.yaml').exists():
+            copies['server-settings.yaml'] = self.server_dir / launch.server_settings_path(
+                self.row['server']['platform'], self.options.brand)
         for name, source in copies.items():
             if source.is_file():
                 shutil.copyfile(source, self.evidence / name)
@@ -639,6 +726,7 @@ class Run:
                 self.stage(provisioned, lss)
                 display = self.start_display()
                 port = self.start_server(provisioned)
+                self.apply_server_settings()
                 self.start_client(provisioned, display, port)
                 self.observe(display)
             except (Exception, KeyboardInterrupt) as error:   # judge what was collected anyway
@@ -679,7 +767,8 @@ def verdict_context(row: dict, facts: dict) -> dict:
             for side in ('server', 'client')}
     keys = ('rig_id', 'started', 'run_seconds', 'lock_wait_seconds', 'server_start_seconds',
             'client_join_seconds', 'port', 'display', 'java', 'fault', 'scenario', 'brand',
-            'notice_seconds_after_join', 'lss_selector', 'lss', 'diag_polls', 'stop_report')
+            'notice_seconds_after_join', 'server_settings', 'lss_selector', 'lss', 'diag_polls',
+            'stop_report')
     context = {key: facts.get(key) for key in keys}
     context.update({'minecraft': row['minecraft'], 'pins': pins,
                     'server_platform': loader_label(row['server'], 'platform'),
@@ -722,7 +811,10 @@ def load_material(directory: Path, document: dict) -> dict:
             'crash_files': facts.get('crash_files', []),
             'client_alive_at_end': facts.get('client_alive_at_end', False),
             'screenshot': screenshot, 'own_paths': facts.get('own_paths', []),
-            'notice': facts.get('notice') or 'no_support', 'brand': facts.get('brand') or 'LSS'}
+            'notice': facts.get('notice') or 'no_support', 'brand': facts.get('brand') or 'LSS',
+            'diag_polls': facts.get('diag_polls', []),
+            'server_settings_text': text('server-settings.yaml'),
+            'server_settings_changes': (facts.get('server_settings') or {}).get('changes', [])}
 
 
 def print_verdict(verdict: dict, where: Path) -> None:

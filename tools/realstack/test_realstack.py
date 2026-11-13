@@ -1,14 +1,16 @@
 """Offline tests for the real-stack matrix: the matrix file, hash verification, log parsing for
-every check (on excerpts captured from real runs, in fixtures/), port and display selection,
-process ownership, the screenshot converter and verdict assembly.
+every check (on excerpts captured from real runs, in fixtures/), the settings file edits, port
+and display selection, process ownership, the screenshot converter and verdict assembly.
 
 Run: python3 -m unittest discover -s tools/realstack
 Nothing here touches the network; every download function is replaced by one that fails.
 """
 from __future__ import annotations
 
+import contextlib
 import copy
 import hashlib
+import io
 import json
 import re
 import struct
@@ -27,6 +29,7 @@ import fetch  # noqa: E402
 import launch  # noqa: E402
 import procs  # noqa: E402
 import realstack  # noqa: E402
+import settings  # noqa: E402
 import stackfile  # noqa: E402
 import xwdpng  # noqa: E402
 
@@ -418,6 +421,119 @@ class FetchTest(OfflineCase):
         self.assertGreater(fetch.require_free_space(minimum=1), 0)
 
 
+OVERWORLD = ('lod', 'distance', 'by_dimension', 'minecraft:overworld')
+BY_WORLD = ('lod', 'distance', 'by_world')
+
+
+class SettingsTest(OfflineCase):
+    """The settings files as text: one line changes, every comment stays."""
+
+    SMALL = ('# A comment that names a key: enabled: false\n'
+             'config_version: 1 # schema\n'
+             'service:\n'
+             '  enabled: true # [restart] Enable the service.\n'
+             '  # show_permission_refusal: true # shown commented out\n'
+             'lod:\n'
+             '  distance:\n'
+             '    default_chunks: 512 # Fallback; 0 = off.\n'
+             '    by_dimension: # Fresh-install defaults.\n'
+             '      "minecraft:overworld": 512 # Overworld radius in chunks.\n'
+             '      "minecraft:the_nether": 64\n'
+             '    by_world: {} # Paper world-name overrides.\n'
+             'fallback: "minecraft:stone" # must not be air\n'
+             'label: "a # inside quotes" # a real comment\n'
+             'far_players:\n'
+             '  enabled: true\n')
+
+    def test_generated_files_take_the_scenario_setting(self) -> None:
+        for name in ('fabric-26.3-server-settings.yaml', 'paper-26.3-server-settings.yaml'):
+            generated = fixture(name)
+            self.assertEqual(settings.value_of(generated, OVERWORLD), '512', name)
+            self.assertTrue(settings.is_empty_or_absent(generated, BY_WORLD), name)
+            edited = settings.set_value(generated, OVERWORLD, '0')
+            before, after = generated.splitlines(), edited.splitlines()
+            changed = [(old, new) for old, new in zip(before, after) if old != new]
+            self.assertEqual(len(before), len(after), name)
+            self.assertEqual(changed, [('      "minecraft:overworld": 512 # Overworld radius in chunks.',
+                                        '      "minecraft:overworld": 0 # Overworld radius in chunks.')])
+            self.assertEqual(settings.value_of(edited, OVERWORLD), '0')
+            self.assertEqual(settings.value_of(edited, OVERWORLD[:3] + ('minecraft:the_nether',)), '64')
+            self.assertEqual(generated.count('#'), edited.count('#'), 'every comment is still there')
+        self.assertEqual(settings.value_of(fixture('paper-26.3-server-settings.yaml'), BY_WORLD), '{}')
+        self.assertIsNone(settings.value_of(fixture('fabric-26.3-server-settings.yaml'), BY_WORLD))
+
+    def test_every_scenario_setting_exists_in_the_templates(self) -> None:
+        folder = REPO_ROOT / 'common/src/main/resources/dev/vox/lss/settings'
+        if not folder.is_dir():
+            self.skipTest('the settings templates are not in this checkout')
+        for template in ('server.yaml', 'paper.yaml'):
+            text = (folder / template).read_text()
+            for scenario in realstack.SCENARIOS.values():
+                for path, value in scenario.get('server_settings', []):
+                    self.assertEqual(settings.value_of(settings.set_value(text, path, value), path),
+                                     value, (template, path))
+                for path in scenario.get('server_settings_empty', []):
+                    self.assertTrue(settings.is_empty_or_absent(text, path), (template, path))
+
+    def test_values(self) -> None:
+        value = settings.value_of
+        self.assertEqual(value(self.SMALL, ('config_version',)), '1')
+        self.assertEqual(value(self.SMALL, ('service', 'enabled')), 'true')
+        self.assertEqual(value(self.SMALL, ('far_players', 'enabled')), 'true', 'not service.enabled')
+        self.assertEqual(value(self.SMALL, OVERWORLD), '512')
+        self.assertEqual(value(self.SMALL, ('lod', 'distance', 'by_dimension')), '', 'a block')
+        self.assertEqual(value(self.SMALL, BY_WORLD), '{}')
+        self.assertEqual(value(self.SMALL, ('fallback',)), '"minecraft:stone"')
+        self.assertEqual(value(self.SMALL, ('label',)), '"a # inside quotes"')
+        self.assertIsNone(value(self.SMALL, ('enabled',)), 'a key named in a comment is not a key')
+        self.assertIsNone(value(self.SMALL, ('service', 'show_permission_refusal')))
+        self.assertIsNone(value(self.SMALL, ('lod', 'distance', 'by_dimension', 'minecraft:the_end')))
+        self.assertEqual(settings.line_of(self.SMALL, OVERWORLD),
+                         '"minecraft:overworld": 512 # Overworld radius in chunks.')
+        self.assertEqual(settings.dotted(OVERWORLD), 'lod.distance.by_dimension."minecraft:overworld"')
+
+    def test_one_line_changes(self) -> None:
+        cases = {
+            (('service', 'enabled'), 'false'): '  enabled: false # [restart] Enable the service.',
+            (('lod', 'distance', 'default_chunks'), '0'): '    default_chunks: 0 # Fallback; 0 = off.',
+            (OVERWORLD[:3] + ('minecraft:the_nether',), '0'): '      "minecraft:the_nether": 0',
+            (('label',), 'plain'): 'label: plain # a real comment',
+            (BY_WORLD, '{"world": 0}'): '    by_world: {"world": 0} # Paper world-name overrides.',
+        }
+        for (path, new), expected in cases.items():
+            edited = settings.set_value(self.SMALL, path, new)
+            changed = [line for line in edited.splitlines() if line not in self.SMALL.splitlines()]
+            self.assertEqual(changed, [expected])
+            self.assertEqual(len(edited.splitlines()), len(self.SMALL.splitlines()))
+        windows = self.SMALL.replace('\n', '\r\n')
+        self.assertEqual(settings.set_value(windows, OVERWORLD, '0').count('\r\n'), windows.count('\r\n'))
+
+    def test_a_key_that_cannot_be_set_is_an_error(self) -> None:
+        cases = {
+            'has no key': (self.SMALL, ('lod', 'distance', 'by_dimension', 'minecraft:the_end'), '0'),
+            'only shown as a comment': (self.SMALL, ('service', 'show_permission_refusal'), 'false'),
+            'is a block': (self.SMALL, ('lod', 'distance', 'by_dimension'), '0'),
+            '2 times': (self.SMALL + 'config_version: 2\n', ('config_version',), '3'),
+            'not a value': (self.SMALL, OVERWORLD, '0 # sneaky'),
+            'value for one line': (self.SMALL, OVERWORLD, ''),
+        }
+        for expected, (text, path, value) in cases.items():
+            with self.assertRaises(settings.SettingsError) as caught:
+                settings.set_value(text, path, value)
+            self.assertIn(expected, str(caught.exception))
+        with self.assertRaises(settings.SettingsError):
+            settings.value_of('key: "unclosed\n', ('key',))
+
+    def test_empty_maps(self) -> None:
+        self.assertTrue(settings.is_empty_or_absent(self.SMALL, BY_WORLD))
+        self.assertTrue(settings.is_empty_or_absent(self.SMALL, ('lod', 'distance', 'elsewhere')))
+        listed = self.SMALL.replace('by_world: {}', 'by_world: {"world": 64}')
+        self.assertFalse(settings.is_empty_or_absent(listed, BY_WORLD))
+        block = self.SMALL.replace('    by_world: {} # Paper world-name overrides.',
+                                   '    by_world:\n      world: 64')
+        self.assertFalse(settings.is_empty_or_absent(block, BY_WORLD))
+
+
 class LogParsingTest(OfflineCase):
     """Splitting logs into records and reading an `lsslod diag` block."""
 
@@ -754,6 +870,197 @@ class CheckTest(OfflineCase):
                       checks.check_screenshot({**good, 'windows': []}).message)
 
 
+class ScenarioCheckTest(OfflineCase):
+    """The scenarios that change settings, on logs captured from real runs of both server
+    kinds, then with one thing changed."""
+
+    CHANGES = [{'path': list(OVERWORLD), 'value': '0'}]
+
+    def material(self, prefix: str) -> dict:
+        """What a scenario run collects, built from one set of captured excerpts."""
+        server = fixture(f'{prefix}-server.log')
+        cut = server.index(f'{PLAYER} lost connection') if f'{PLAYER} lost connection' in server \
+            else len(server)
+        settings_name = prefix.split('-off-in-world')[0] + '-server-settings.yaml'
+        edited = (settings.set_value(fixture(settings_name), OVERWORLD, '0')
+                  if 'off-in-world' in prefix else '')
+        return {'server_log': server, 'observed_server_log': server[:server.rindex('\n', 0, cut) + 1],
+                'client_log': fixture(f'{prefix}-client.log'), 'diag': fixture(f'{prefix}-diag.txt'),
+                'player': PLAYER, 'protocol': 20, 'crash_files': [], 'client_alive_at_end': True,
+                'own_paths': OWN_PATHS, 'notice': 'server_off_world', 'brand': 'LSS',
+                'diag_polls': [{'seconds_after_join': 0, 'present': True, 'sent': 0, 'total': 0},
+                               {'seconds_after_join': 61, 'present': True, 'sent': 0, 'total': 0}],
+                'server_settings_text': edited,
+                'server_settings_changes': self.CHANGES if edited else [],
+                'screenshot': {'path': 'evidence/client.png', 'width': 1280, 'height': 720,
+                               'bytes': 300000, 'distinct_colours': 2000,
+                               'windows': ['Minecraft* 26.3 - Multiplayer (3rd-party Server)']}}
+
+    def judged(self, scenario: str, material: dict) -> dict:
+        """The scenario's checks over the material, by name."""
+        names = realstack.SCENARIOS[scenario]['checks']
+        return {result.name: result for result in checks.run_checks(names, material)}
+
+    def test_every_scenario_check_exists(self) -> None:
+        empty = {'player': PLAYER, 'protocol': 20}
+        for name, scenario in realstack.SCENARIOS.items():
+            results = checks.run_checks(scenario['checks'], empty)
+            self.assertEqual([result.name for result in results], scenario['checks'], name)
+            self.assertFalse(any(result.passed for result in results),
+                             f'{name}: a check passed on no evidence at all')
+
+    def test_off_in_world_runs_pass(self) -> None:
+        for prefix in ('fabric-26.3-off-in-world', 'paper-26.3-off-in-world'):
+            for name, result in self.judged('off-in-world', self.material(prefix)).items():
+                self.assertTrue(result.passed, (prefix, name, result.message))
+                self.assertTrue(result.evidence, (prefix, name))
+
+    def test_a_normal_run_fails_the_off_in_world_checks(self) -> None:
+        normal = CheckTest.material(self, 'fabric-26.3')
+        normal.update(notice='server_off_world', server_settings_text='', server_settings_changes=[])
+        results = self.judged('off-in-world', normal)
+        self.assertIn('enabled: false', results['handshake_off'].message)
+        self.assertIn('sent 3070 columns', results['no_columns'].message)
+        self.assertIn('no chat notice', results['client_notice'].message)
+        self.assertIn('recorded no change', results['server_settings'].message)
+
+    def test_server_settings_needs_the_file_and_the_servers_word(self) -> None:
+        for prefix in ('fabric-26.3-off-in-world', 'paper-26.3-off-in-world'):
+            material = self.material(prefix)
+            log, text = material['server_log'], material['server_settings_text']
+
+            def judge(log: str = log, text: str = text, changes: list = self.CHANGES):
+                """The check with some of its material replaced."""
+                return checks.check_server_settings(log, text, changes)
+
+            passed = judge()
+            self.assertTrue(passed.passed, passed.message)
+            self.assertIn('settings file: "minecraft:overworld": 0 # Overworld radius in chunks.',
+                          passed.evidence)
+            self.assertTrue(any('1 active setting(s) applied' in line for line in passed.evidence))
+            unsaved = fixture(prefix.split('-off-in-world')[0] + '-server-settings.yaml')
+            self.assertIn('is 512 in the saved settings file', judge(text=unsaved).message)
+            self.assertIn('is None in the saved', judge(text='').message)
+            silent = re.sub(r'.*Reloaded \S+: \d+ active setting\(s\) applied\.\n', '', log)
+            self.assertIn('never logged', judge(log=silent).message)
+            nothing = re.sub(r'\d+ active setting\(s\) applied\.', 'no active changes.', log)
+            self.assertIn('never logged', judge(log=nothing).message)
+            stamp = '[10:00:00] [Server thread/INFO]: '
+            self.assertIn('did not apply', judge(
+                log=log + stamp + 'Restart required: lod.distance.by_dimension\n').message)
+            self.assertIn('did not apply', judge(
+                log=log + stamp + 'Inactive on this platform: generation.enabled, lod.distance\n').message)
+            self.assertIn('did not apply', judge(
+                log=log + stamp + 'Reload failed: lod.distance.by_dimension: expected a map\n').message)
+            self.assertTrue(judge(log=log + stamp + 'Restart required: service.enabled\n').passed,
+                            'a line about another setting is not about this one')
+        # A Paper server names settings that mean nothing there at every start.
+        self.assertIn('Inactive on this platform: serialization.selective_nbt_parse',
+                      fixture('paper-26.3-off-in-world-server.log'))
+
+    def test_handshake_off_needs_each_witness(self) -> None:
+        material = self.material('fabric-26.3-off-in-world')
+
+        def judge(**changes) -> checks.CheckResult:
+            """The check's result with some of the material replaced."""
+            changed = {**material, **changes}
+            return checks.check_handshake_off(changed['server_log'], changed['client_log'],
+                                              changed['diag'], PLAYER, changed['protocol'])
+
+        self.assertTrue(judge().passed)
+        self.assertIn('joined the game', judge(
+            server_log=material['server_log'].replace('joined the game', 'tried')).message)
+        self.assertIn('no LSS handshake', judge(server_log=material['server_log'].replace(
+            f'handshake received from {PLAYER}', 'handshake received from Somebody')).message)
+        self.assertIn('expected v21', judge(protocol=21).message)
+        self.assertIn('Server session config', judge(client_log=re.sub(
+            r'.*Server session config received.*\n', '', material['client_log'])).message)
+        served = material['client_log'].replace('enabled: false', 'enabled: true')
+        self.assertIn("(20, 'true')", judge(client_log=served).message)
+        # One answer that offered terrain is enough to fail, whatever came after it.
+        first_on = material['client_log'] + (
+            '[10:00:00] [Render thread/INFO]: Server session config received (protocol v20, '
+            'LOD distance: 512 chunks, enabled: true)\n')
+        self.assertFalse(judge(client_log=first_on).passed)
+
+    def test_no_columns_reads_the_counters(self) -> None:
+        for prefix in ('fabric-26.3-off-in-world', 'paper-26.3-off-in-world'):
+            material = self.material(prefix)
+            diag, polls = material['diag'], material['diag_polls']
+            passed = checks.check_no_columns(diag, polls, PLAYER)
+            self.assertTrue(passed.passed, passed.message)
+            self.assertTrue(any(line.startswith('diag Throughput: sent=0 ') for line in passed.evidence))
+            self.assertIn('2 diag polls answered, the last 61 s after the join', passed.evidence)
+            total = diag.replace('Throughput: sent=0 ', 'Throughput: sent=12 ')
+            self.assertIn('sent 12 columns', checks.check_no_columns(total, polls, PLAYER).message)
+            gone = re.sub(r'.*Throughput: .*\n', '', diag)
+            self.assertIn('no Throughput', checks.check_no_columns(gone, polls, PLAYER).message)
+            self.assertIn('no lsslod diag', checks.check_no_columns('', polls, PLAYER).message)
+        fabric = self.material('fabric-26.3-off-in-world')['diag']
+        served = CheckTest.material(self, 'fabric-26.3')['diag'].replace('Throughput: sent=3070',
+                                                                         'Throughput: sent=0')
+        self.assertIn(f'columns to {PLAYER}', checks.check_no_columns(served, [], PLAYER).message)
+        self.assertTrue(checks.check_no_columns(fabric, [], PLAYER).passed,
+                        'the polls are evidence, the final diag is the witness')
+
+    def test_off_in_world_notice_text(self) -> None:
+        material = self.material('fabric-26.3-off-in-world')
+        notice = checks.check_client_notice
+        self.assertTrue(notice(material['client_log'], 'server_off_world', 'LSS').passed)
+        self.assertIn('prefixed [LSS]', notice(material['client_log'], 'server_off_world', 'VSS').message)
+        self.assertIn('does not read', notice(material['client_log'], 'no_support', 'LSS').message)
+        general = material['client_log'].replace(
+            'Distant terrain is switched off in this world on this server.',
+            'The server has distant terrain switched off here: for everyone, for this world, or '
+            'for you.')
+        self.assertIn('does not read', notice(general, 'server_off_world', 'LSS').message)
+        twice = material['client_log'] + next(
+            line + '\n' for line in material['client_log'].splitlines() if '[CHAT] [LSS]' in line)
+        self.assertIn('at most one', notice(twice, 'server_off_world', 'LSS').message)
+
+    def saved_run(self, prefix: str, scenario: str) -> Path:
+        """A run directory as a scenario run leaves it, built from captured excerpts."""
+        material = self.material(prefix)
+        directory = self.temp()
+        evidence = directory / 'evidence'
+        evidence.mkdir()
+        (evidence / 'server-console.log').write_text(material['server_log'])
+        (evidence / 'client-stdout.log').write_text(material['client_log'])
+        (evidence / 'server-diag-final.txt').write_text(material['diag'])
+        (evidence / 'client.png').write_bytes(b'png')
+        row = 'paper-26.3-fabric-client' if prefix.startswith('paper') else 'fabric-26.3-sodium-voxy-xaero'
+        facts = {'row': row, 'player': PLAYER, 'crash_files': [], 'client_alive_at_end': True,
+                 'observation_end_offset': len(material['observed_server_log'].encode()),
+                 'own_paths': list(OWN_PATHS), 'scenario': scenario, 'brand': 'LSS',
+                 'notice': realstack.SCENARIOS[scenario].get('notice'),
+                 'diag_polls': material['diag_polls'], 'screenshot': {**material['screenshot'], 'bytes': 3}}
+        if material['server_settings_text']:
+            (evidence / 'server-settings.yaml').write_text(material['server_settings_text'])
+            facts['server_settings'] = {'file': 'config/lss-server-config.yaml', 'changes': self.CHANGES}
+        (directory / 'facts.json').write_text(json.dumps(facts))
+        return directory
+
+    def replay(self, directory: Path) -> tuple[int, dict]:
+        """Run `replay` on a saved run; returns its exit code and the verdict it wrote."""
+        with contextlib.redirect_stdout(io.StringIO()):
+            code = realstack.main(['replay', str(directory)])
+        return code, json.loads((directory / 'verdict.replay.json').read_text())
+
+    def test_replay_judges_saved_scenario_runs(self) -> None:
+        for prefix, scenario in (('fabric-26.3-off-in-world', 'off-in-world'),
+                                 ('paper-26.3-off-in-world', 'off-in-world')):
+            directory = self.saved_run(prefix, scenario)
+            code, verdict = self.replay(directory)
+            self.assertEqual((code, verdict['failed_checks']), (0, []), prefix)
+            self.assertEqual([check['name'] for check in verdict['checks']],
+                             realstack.SCENARIOS[scenario]['checks'])
+            self.assertEqual(verdict['scenario'], scenario)
+        directory = self.saved_run('fabric-26.3-off-in-world', 'off-in-world')
+        (directory / 'evidence' / 'server-settings.yaml').unlink()
+        code, verdict = self.replay(directory)
+        self.assertEqual((code, verdict['failed_checks']), (1, ['server_settings']))
+
+
 class VerdictTest(OfflineCase):
     """A run passes only when every listed check ran and passed; replay reads a saved run."""
 
@@ -818,7 +1125,12 @@ class VerdictTest(OfflineCase):
 
 
 class RunStagingTest(OfflineCase):
-    """What a run puts on disk before anything starts."""
+    """What a run puts on disk before anything starts, and the server-settings hook, with the
+    server replaced by a recorded console."""
+
+    RELOADED = ('[10:00:05] [Server thread/INFO]: Reading config/lss-server-config.yaml…\n'
+                '[10:00:05] [Server thread/INFO]: Reloaded lss-server-config.yaml: 1 active '
+                'setting(s) applied.\n')
 
     def run_for(self, row_id: str, *arguments: str) -> realstack.Run:
         """A run of a row with its directories under a temporary folder; nothing is started."""
@@ -899,6 +1211,89 @@ class RunStagingTest(OfflineCase):
         self.assertEqual(list((run.server_dir / 'mods').iterdir()), [])
         self.assertIn({'side': 'server', 'mod': 'lss', 'left_out_by_scenario': 'server-without-lss'},
                       run.facts['staged'])
+
+    def hooked(self, row_id: str, reply: str, generated: str | None = None) -> tuple:
+        """A run of the off-in-world scenario whose server is a recorded console: returns the
+        run, the settings file and the list that collects (command, file text at that time)."""
+        run = self.run_for(row_id, '--scenario', 'off-in-world')
+        relative = launch.server_settings_path(run.row['server']['platform'], 'lss')
+        path = run.server_dir / relative
+        path.parent.mkdir(parents=True)
+        prefix = 'paper' if run.row['server']['platform'] == 'paper' else 'fabric'
+        path.write_text(fixture(f'{prefix}-26.3-server-settings.yaml') if generated is None
+                        else generated)
+        sent = []
+        run.wait_for_line = lambda *_args, **_kwargs: None
+
+        def console(command: str, **_kwargs) -> str:
+            """Record the command and what the file held when the server was told to read it."""
+            sent.append((command, path.read_text()))
+            return reply
+        run.console = console
+        return run, path, sent
+
+    def test_server_settings_hook_edits_then_reloads(self) -> None:
+        for row_id in ('fabric-26.3-sodium-voxy-xaero', 'paper-26.3-fabric-client'):
+            run, path, sent = self.hooked(row_id, self.RELOADED)
+            generated = path.read_text()
+            run.apply_server_settings()
+            self.assertEqual([command for command, _text in sent], ['lsslod reload'])
+            self.assertEqual(settings.value_of(sent[0][1], OVERWORLD), '0',
+                             'the file is changed before the server is told to read it')
+            self.assertEqual(path.read_text(), settings.set_value(generated, OVERWORLD, '0'))
+            self.assertEqual((run.evidence / 'server-settings-generated.yaml').read_text(), generated)
+            self.assertEqual((run.evidence / 'server-settings.yaml').read_text(), path.read_text())
+            recorded = run.facts['server_settings']
+            self.assertEqual(recorded['file'], str(launch.server_settings_path(
+                run.row['server']['platform'], 'lss')))
+            self.assertEqual(recorded['changes'], [{
+                'path': list(OVERWORLD), 'value': '0',
+                'line_before': '"minecraft:overworld": 512 # Overworld radius in chunks.',
+                'line_after': '"minecraft:overworld": 0 # Overworld radius in chunks.'}])
+            self.assertIn('Reloaded lss-server-config.yaml: 1 active setting(s) applied.',
+                          recorded['reload_reply'])
+
+    def test_server_settings_hook_fails_loudly(self) -> None:
+        refused = ('[10:00:05] [Server thread/INFO]: Reading config/lss-server-config.yaml…\n'
+                   '[10:00:05] [Server thread/ERROR]: Reload failed: lod.distance: expected a map\n')
+        unchanged = ('[10:00:05] [Server thread/INFO]: Reloaded lss-server-config.yaml: no active '
+                     'changes.\n')
+        restart = self.RELOADED + ('[10:00:05] [Server thread/INFO]: Restart required: '
+                                   'lod.distance.by_dimension\n')
+        for reply, expected in ((refused, 'did not apply the reload'), (unchanged, 'never logged'),
+                                ('', 'answered nothing'), (restart, 'Restart required')):
+            run, _path, sent = self.hooked('fabric-26.3-sodium-voxy-xaero', reply)
+            with self.assertRaises(realstack.RunAborted) as caught:
+                run.apply_server_settings()
+            self.assertIn(expected, str(caught.exception))
+            self.assertEqual(len(sent), 1)
+        generated = fixture('fabric-26.3-server-settings.yaml')
+        without_key = generated.replace('"minecraft:overworld"', '"minecraft:somewhere"')
+        per_world = fixture('paper-26.3-server-settings.yaml').replace('by_world: {}',
+                                                                       'by_world: {"world": 512}')
+        for text, row_id, expected in (
+                (without_key, 'fabric-26.3-sodium-voxy-xaero', 'has no key'),
+                (per_world, 'paper-26.3-fabric-client', 'would take priority')):
+            run, path, sent = self.hooked(row_id, self.RELOADED, text)
+            with self.assertRaises(realstack.RunAborted) as caught:
+                run.apply_server_settings()
+            self.assertIn(expected, str(caught.exception))
+            self.assertEqual(sent, [], 'the server is not asked to reload a file that was not set')
+            self.assertEqual(path.read_text(), text, 'the file is left as it was')
+        run, path, _sent = self.hooked('fabric-26.3-sodium-voxy-xaero', self.RELOADED)
+        path.unlink()
+        run.deadline = realstack.time.monotonic() + realstack.TEARDOWN_RESERVE
+        with self.assertRaises(realstack.RunAborted) as caught:
+            run.apply_server_settings()
+        self.assertIn('did not create', str(caught.exception))
+
+    def test_runs_without_server_settings_skip_the_hook(self) -> None:
+        for arguments in ((), ('--scenario', 'server-without-lss')):
+            run = self.run_for('fabric-26.3-sodium-voxy-xaero', *arguments)
+            run.console = no_network
+            run.wait_for_line = no_network
+            run.apply_server_settings()
+            self.assertNotIn('server_settings', run.facts)
 
 
 class LaunchTest(OfflineCase):
@@ -986,6 +1381,17 @@ class LaunchTest(OfflineCase):
         self.assertEqual(launch.mods_folder('paper'), 'plugins')
         self.assertEqual(launch.mods_folder('fabric'), 'mods')
         self.assertEqual(launch.mods_folder('neoforge'), 'mods')
+
+    def test_settings_paths(self) -> None:
+        self.assertEqual(launch.server_settings_path('fabric', 'lss'),
+                         Path('config/lss-server-config.yaml'))
+        self.assertEqual(launch.server_settings_path('neoforge', 'vss'),
+                         Path('config/vss-server-config.yaml'))
+        self.assertEqual(launch.server_settings_path('paper', 'lss'),
+                         Path('plugins/LodServerSupport/lss-server-config.yaml'))
+        self.assertEqual(launch.server_settings_path('paper', 'vss'),
+                         Path('plugins/VoxyServerSide/vss-server-config.yaml'))
+        self.assertEqual(set(launch.PAPER_PLUGIN_FOLDERS), set(realstack.BRAND_PREFIXES))
 
     def test_paper_download_list(self) -> None:
         sha256 = 'd0' * 32
