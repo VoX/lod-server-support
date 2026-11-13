@@ -43,10 +43,15 @@ class LSSNeoPermissionsContractTest {
     @Test
     void theFarPlayerHideNodesAreMintedFromTheSharedConstantsWithDefaultFalseResolvers() throws IOException {
         // far-player-render-hardening-plan.md WI-7a: the OPPOSITE shape of the service nodes —
-        // a grant-model "deny me" lever. A default-TRUE resolver here would hide every player
-        // on a provider-less NeoForge server; an unregistered node would THROW at the first
-        // snapshot read (and the read's containment would then hide far players for good).
+        // a grant model. Since 0.21.0 (hide-permission plan §2) a holder is hidden only while
+        // far_players.hide_permission_holders is on, so a default-TRUE resolver here would
+        // make every player a holder on a provider-less NeoForge server (all hidden the moment
+        // an operator turns the setting on, and a false upgrade notice before that); an
+        // unregistered node would THROW at the first snapshot read (the seam's containment
+        // then answers "not a holder" for good, so the setting could never hide anyone).
         String src = read("neoforge/src/main/java/dev/vox/lss/neoforge/LSSNeoPermissions.java");
+        assertTrue(src.contains("far_players.hide_permission_holders"),
+                "the class doc must name the setting that makes the hide nodes hide");
         assertTrue(src.contains("denyNode(LSSPermissions.FARPLAYERS_HIDDEN_LSS)")
                         && src.contains("denyNode(LSSPermissions.FARPLAYERS_HIDDEN_VSS)"),
                 "both hide spellings must be minted from the shared constants as deny nodes");

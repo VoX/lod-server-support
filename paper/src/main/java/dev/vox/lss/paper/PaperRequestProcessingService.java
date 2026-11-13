@@ -189,7 +189,8 @@ public class PaperRequestProcessingService {
     // the quit-originated mailbox Remove, notified (never removed) on dimension change.
     // Vanish bridge seam null until the reflective ladder lands (E2/E3).
     private final dev.vox.lss.common.farplayers.FarPlayerBroadcastService farPlayerService =
-            new dev.vox.lss.common.farplayers.FarPlayerBroadcastService(null);
+            new dev.vox.lss.common.farplayers.FarPlayerBroadcastService(null,
+                    LSSLogger::warn, this::sendFarPlayerNotice);
     private int farPlayerTickCounter;
 
     private final long startTimeNanos = System.nanoTime();
@@ -396,12 +397,11 @@ public class PaperRequestProcessingService {
     private final ConcurrentHashMap<UUID, RegionProbeBatch> regionProbeResults = new ConcurrentHashMap<>();
 
     /** Pump-only. The batch taken at tick T, released back into the mailbox at T+1 once its
-     *  probe task has had a region tick to publish — carrying the offer generation recorded
-     *  BEFORE the take, so the release can refuse a batch that was passed-through during the
-     *  hold (see {@code AbstractPlayerRequestState.republishHeldBatch}). */
-    private record HeldBatch(IncomingBatch batch, long offerGeneration) {}
-
-    private final Map<UUID, HeldBatch> heldForProbe = new HashMap<>();
+     *  probe task has had a region tick to publish — carrying the generation of the offer
+     *  that wrote it, handed out by the same atomic take, so the release can refuse a batch
+     *  that was passed-through during the hold (see
+     *  {@code AbstractPlayerRequestState.republishHeldBatch}). */
+    private final Map<UUID, AbstractPlayerRequestState.HeldIncomingBatch> heldForProbe = new HashMap<>();
 
     /** Collaborator set for the package-private constructor. Tests build it over recording
      *  collaborators; production wiring lives in {@link #productionWiring} only. */
@@ -2412,12 +2412,12 @@ public class PaperRequestProcessingService {
         // Either nothing was held, or the held batch lost the republish (a newer arrival in
         // the mailbox, or a pass-through the offer-generation guard caught — dropped and
         // counted superseded either way). Whatever is pending now is the newest declaration.
-        // The generation is recorded BEFORE the take: an offer slipping between the two can
-        // only make the eventual republish refuse spuriously (a healed drop), never let a
-        // stale batch resurrect.
-        long heldAtGeneration = state.offerGeneration();
-        var fresh = state.takeFreshIncomingBatchForProbe();
-        if (fresh == null) {
+        // The take hands the batch out with ITS OWN offer generation. A counter read beside
+        // the take can land inside a newer offer's bump-to-write window and label the older
+        // batch still resting there with the newer generation, which both release guards
+        // then pass once the newer declaration has passed through.
+        var held = state.takeFreshIncomingBatchForProbe();
+        if (held == null) {
             // The published-want-set arm (Folia review 2026-08-27 R1): before this arm
             // existed, Folia probed ONLY on a declaration's arrival tick — the probe
             // window advanced at the client's 1-4 Hz cadence instead of every tick, so
@@ -2457,9 +2457,10 @@ public class PaperRequestProcessingService {
             }
             return;
         }
-        this.heldForProbe.put(player.getUUID(), new HeldBatch(fresh, heldAtGeneration));
+        this.heldForProbe.put(player.getUUID(), held);
+        long heldAtGeneration = held.offerGeneration();
 
-        long[] positions = snapshotProbePositions(state, fresh, skipPositions);
+        long[] positions = snapshotProbePositions(state, held.batch(), skipPositions);
         if (positions.length == 0) return;
         UUID uuid = player.getUUID();
         try {
@@ -2645,7 +2646,9 @@ public class PaperRequestProcessingService {
                             this.config.farPlayersMinDistanceBlocks(),
                             this.config.farPlayersSendSpectators(),
                             this.config.farPlayersExclude(),
-                            this.config.farPlayersUpdateIntervalTicks()),
+                            this.config.farPlayersUpdateIntervalTicks(),
+                            this.config.farPlayersHidePermissionHolders(),
+                            this.config.farPlayersHidePermissionHoldersUndecided()),
                     this::sendFarPlayerFrame);
         } catch (Exception e) {
             // Containment (review): a snapshot/encode bug must degrade far players,
@@ -2661,7 +2664,7 @@ public class PaperRequestProcessingService {
 
     /** One snapshot per online player, CONTAINED per player (Folia review 2026-08-27
      *  R2): one raced cross-region read (equipment, vehicle, a throwing permissible
-     *  the hiddenFor belt did not cover) must not abort the pass for every other
+     *  the privacyFor belt did not cover) must not abort the pass for every other
      *  player — the pre-fix shape, where the only catch was around the whole pass.
      *  The skipped player reads as absent this interval; the roster reconciles next
      *  tick (stale-tolerant by the same doctrine as the reads themselves). The
@@ -2702,6 +2705,37 @@ public class PaperRequestProcessingService {
                         FAR_PLAYER_CHANNEL_IDS.computeIfAbsent(channel,
                                 net.minecraft.resources.Identifier::parse), body)));
         this.bandwidthLimiter.recordSend(body.length);
+        return true;
+    }
+
+    /** The far-player notices' chat-line send (hide-permission plan §2b; the map-policy
+     *  chat line's shape): NMS {@code sendSystemMessage} on the pump, an ordinary system
+     *  message, so it reaches every client version. Translatable with the English text
+     *  as its fallback: a client whose lang files carry the key shows its own language,
+     *  every other client (an older mod, no mod) shows the fallback. Seam-injected for
+     *  tests. */
+    private java.util.function.BiConsumer<ServerPlayer,
+            dev.vox.lss.common.farplayers.FarPlayerBroadcastService.ChatLine> farPlayerNoticeSender =
+            (player, line) -> player.sendSystemMessage(
+                    net.minecraft.network.chat.Component.translatableWithFallback(
+                            line.translationKey(), line.fallback()));
+
+    /** Test seam. */
+    void setFarPlayerNoticeSender(java.util.function.BiConsumer<ServerPlayer,
+            dev.vox.lss.common.farplayers.FarPlayerBroadcastService.ChatLine> sender) {
+        this.farPlayerNoticeSender = sender;
+    }
+
+    /** The broadcast core's {@code PlayerNotifier}: one system chat line to an online
+     *  player (mode "required" overriding their Share My Position choice, or the holder
+     *  notice). False = the player list no longer holds the player, so the core retries
+     *  on a later pass. */
+    private boolean sendFarPlayerNotice(UUID uuid,
+            dev.vox.lss.common.farplayers.FarPlayerBroadcastService.ChatLine line) {
+        var playerList = this.server == null ? null : this.server.getPlayerList();
+        var player = playerList == null ? null : playerList.getPlayer(uuid);
+        if (player == null) return false;
+        this.farPlayerNoticeSender.accept(player, line);
         return true;
     }
 

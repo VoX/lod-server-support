@@ -5,6 +5,8 @@ import dev.vox.lss.api.VoxelColumnConsumer;
 import dev.vox.lss.api.VoxelColumnData;
 import dev.vox.lss.config.LSSServerConfig;
 import dev.vox.lss.config.LSSClientConfig;
+import dev.vox.lss.config.menu.RedownloadTerrainConfirmScreen;
+import dev.vox.lss.networking.client.ClientCommandActions.ClearCacheScope;
 import dev.vox.lss.networking.client.FarPlaneExtension;
 import dev.vox.lss.networking.client.LSSClientNetworking;
 import dev.vox.lss.networking.server.LSSServerNetworking;
@@ -42,6 +44,10 @@ import java.util.function.BooleanSupplier;
  *       stay silent; publishing to LAN must start the service via {@code IntegratedServerLanHook}
  *       and complete the host handshake (the only production activation path on integrated
  *       servers, otherwise never exercised because gametest JVMs force the override).</li>
+ *   <li><b>Re-download Terrain dialog</b> (title screen, before any world) — the confirm
+ *       screen over a dummy parent: confirm runs the action once and returns to the parent;
+ *       Cancel (which holds the initial focus) and Escape (press swallowed, release acts) run
+ *       nothing; a changed scope asks again; a throwing clear still returns to the parent.</li>
  * </ul>
  */
 public class LSSClientGameTests implements FabricClientGameTest {
@@ -73,8 +79,124 @@ public class LSSClientGameTests implements FabricClientGameTest {
             client.options.simulationDistance().set(2);
         });
 
+        runRedownloadDialogTest(context);
         runMainFlowTest(context, recorder, rejector, thrower);
         runLanPublishActivationTest(context, recorder);
+    }
+
+    /**
+     * The Re-download Terrain confirm screen on the real client (re-download plan §5): the only
+     * automated run of this line's show-screen, toast and key handling. The scope read and the
+     * clear are test doubles, so no cache is touched. Runs at the title screen, in one client
+     * task, driving the screen's own key and button handlers.
+     */
+    private static void runRedownloadDialogTest(ClientGameTestContext context) {
+        var runs = new AtomicInteger();
+        var scope = new java.util.concurrent.atomic.AtomicReference<>(ClearCacheScope.CURRENT_SERVER);
+        java.util.function.Consumer<java.util.function.Consumer<net.minecraft.network.chat.Component>> clear = feedback -> {
+            runs.incrementAndGet();
+            feedback.accept(net.minecraft.network.chat.Component.literal("gametest clear"));
+        };
+        var enter = new net.minecraft.client.input.KeyEvent(com.mojang.blaze3d.platform.InputConstants.KEY_RETURN, 0, 0);
+        var escape = new net.minecraft.client.input.KeyEvent(com.mojang.blaze3d.platform.InputConstants.KEY_ESCAPE, 0, 0);
+        String failure = context.computeOnClient(client -> {
+            var original = client.gui.screen();
+            var parent = new net.minecraft.client.gui.screens.Screen(
+                    net.minecraft.network.chat.Component.literal("re-download dialog parent")) { };
+            try {
+                // Confirm: the action runs once and the SAME parent instance is back.
+                var dialog = RedownloadTerrainConfirmScreen.create(parent, scope::get, clear);
+                client.setScreenAndShow(dialog);
+                if (client.gui.screen() != dialog) return "the dialog was not shown";
+                var buttons = dialogButtons(dialog);
+                if (buttons.size() != 2 || !isKey(buttons.get(0), "lss.redownload.confirm")
+                        || !buttons.get(1).getMessage().equals(net.minecraft.network.chat.CommonComponents.GUI_CANCEL)) {
+                    return "expected [Re-download, Cancel], got " + buttons.stream().map(b -> b.getMessage().getString()).toList();
+                }
+                if (dialog.getFocused() != buttons.get(1)) return "Cancel must hold the initial focus, got " + dialog.getFocused();
+                buttons.get(0).onPress(enter);
+                if (client.gui.screen() != parent || runs.get() != 1) {
+                    return "confirm: screen=" + client.gui.screen() + ", runs=" + runs.get();
+                }
+
+                // Enter on a fresh dialog lands on Cancel (a held Enter from Sodium's row must not confirm).
+                dialog = RedownloadTerrainConfirmScreen.create(parent, scope::get, clear);
+                client.setScreenAndShow(dialog);
+                dialog.keyPressed(enter);
+                if (client.gui.screen() != parent || runs.get() != 1) {
+                    return "Enter on the fresh dialog: screen=" + client.gui.screen() + ", runs=" + runs.get();
+                }
+
+                // Escape: a release without its press does nothing; the press is swallowed and the
+                // screen stays; the release returns. The parent never sees this key pair.
+                dialog = RedownloadTerrainConfirmScreen.create(parent, scope::get, clear);
+                client.setScreenAndShow(dialog);
+                dialog.keyReleased(escape);
+                if (client.gui.screen() != dialog) return "an unpaired Escape release closed the dialog";
+                if (!dialog.keyPressed(escape)) return "the Escape press was not swallowed";
+                if (client.gui.screen() != dialog) return "Escape closed the dialog on the press";
+                if (!dialog.keyReleased(escape) || client.gui.screen() != parent || runs.get() != 1) {
+                    return "Escape release: screen=" + client.gui.screen() + ", runs=" + runs.get();
+                }
+
+                // The scope changes while the dialog is open: nothing runs, and it asks again.
+                dialog = RedownloadTerrainConfirmScreen.create(parent, scope::get, clear);
+                client.setScreenAndShow(dialog);
+                scope.set(ClearCacheScope.ALL_SERVERS);
+                dialogButtons(dialog).get(0).onPress(enter);
+                if (!(client.gui.screen() instanceof RedownloadTerrainConfirmScreen again) || again == dialog || runs.get() != 1) {
+                    return "changed scope: screen=" + client.gui.screen() + ", runs=" + runs.get();
+                }
+                dialogButtons(again).get(0).onPress(enter);
+                if (client.gui.screen() != parent || runs.get() != 2) {
+                    return "confirm after the scope changed: screen=" + client.gui.screen() + ", runs=" + runs.get();
+                }
+
+                // Nothing to clear: one Back button, which returns and runs nothing.
+                scope.set(ClearCacheScope.NOT_RECEIVING);
+                dialog = RedownloadTerrainConfirmScreen.create(parent, scope::get, clear);
+                client.setScreenAndShow(dialog);
+                buttons = dialogButtons(dialog);
+                if (buttons.size() != 1 || !buttons.get(0).getMessage().equals(net.minecraft.network.chat.CommonComponents.GUI_BACK)) {
+                    return "not receiving: expected [Back], got " + buttons.stream().map(b -> b.getMessage().getString()).toList();
+                }
+                buttons.get(0).onPress(enter);
+                if (client.gui.screen() != parent || runs.get() != 2) {
+                    return "Back: screen=" + client.gui.screen() + ", runs=" + runs.get();
+                }
+
+                // A clear that throws is reported, not rethrown, and still returns to the parent.
+                scope.set(ClearCacheScope.CURRENT_SERVER);
+                dialog = RedownloadTerrainConfirmScreen.create(parent, scope::get, feedback -> {
+                    runs.incrementAndGet();
+                    throw new IllegalStateException("gametest: the clear failed");
+                });
+                client.setScreenAndShow(dialog);
+                dialogButtons(dialog).get(0).onPress(enter);
+                if (client.gui.screen() != parent || runs.get() != 3) {
+                    return "failing clear: screen=" + client.gui.screen() + ", runs=" + runs.get();
+                }
+                return null;
+            } finally {
+                client.setScreenAndShow(original);
+            }
+        });
+        if (failure != null) {
+            throw new AssertionError("Re-download Terrain dialog: " + failure);
+        }
+    }
+
+    private static List<net.minecraft.client.gui.components.Button> dialogButtons(net.minecraft.client.gui.screens.Screen screen) {
+        var buttons = new java.util.ArrayList<net.minecraft.client.gui.components.Button>();
+        for (var child : screen.children()) {
+            if (child instanceof net.minecraft.client.gui.components.Button button) buttons.add(button);
+        }
+        return buttons;
+    }
+
+    private static boolean isKey(net.minecraft.client.gui.components.Button button, String key) {
+        return button.getMessage().getContents() instanceof net.minecraft.network.chat.contents.TranslatableContents text
+                && text.getKey().equals(key);
     }
 
     private static void runMainFlowTest(ClientGameTestContext context, RecordingColumnConsumer recorder,

@@ -16,11 +16,15 @@ package dev.vox.lss.common;
  * arming {@code requireServicePermission} on its own denies NOBODY.
  *
  * <p>The far-player HIDE nodes (far-player-render-hardening-plan.md WI-7a) are the
- * opposite shape: a grant-model "deny me" lever, default FALSE everywhere ({@code
- * default: false} in plugin.yml, default-false NeoForge resolvers, {@code
- * defaultValue=false} at the snapshot read) — holding EITHER spelling hides the player
- * from far-player rendering. Paper enforced them from the start; since 2026-09-04 Fabric
- * and NeoForge read them through {@code LoaderServices.checkPermission} too.
+ * opposite shape: a grant model, default FALSE everywhere ({@code default: false} in
+ * plugin.yml, default-false NeoForge resolvers, {@code defaultValue=false} at the
+ * snapshot read). Since 0.21.0 (hide-permission plan §2) holding EITHER spelling no
+ * longer hides the player by itself — a wildcard grant resolves every node true, which
+ * hid every admin. The snapshot carries the grant as a fact, and the broadcast service
+ * hides holders only while the server sets
+ * {@code far_players.hide_permission_holders: true}; players hide themselves with Share
+ * My Position. Paper read the nodes from the start; since 2026-09-04 Fabric and NeoForge
+ * read them through {@code LoaderServices.checkPermission} too (Sponge since 0.18.0).
  *
  * <p>The MAP-INGESTION nodes (map-ingestion-permission plan §2) are a grant model like the
  * hide nodes, default FALSE everywhere: while {@code privacy.request_no_map_ingestion} is
@@ -36,7 +40,8 @@ public final class LSSPermissions {
     /** The VSS spelling — survives in BOTH branded jars (release_check pins it). */
     public static final String SERVICE_VSS = "vss.use";
 
-    /** The LSS spelling of the far-player hide node (default false, grant = hidden). */
+    /** The LSS spelling of the far-player hide node (default false; a holder is hidden
+     *  only while {@code far_players.hide_permission_holders} is on). */
     public static final String FARPLAYERS_HIDDEN_LSS = "lss.farplayers.hidden";
 
     /** The VSS spelling of the far-player hide node — declared and honored in BOTH jars. */
