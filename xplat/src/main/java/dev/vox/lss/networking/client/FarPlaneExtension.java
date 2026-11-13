@@ -7,8 +7,9 @@ import dev.vox.lss.config.LSSClientConfig;
 import java.lang.reflect.Method;
 
 /**
- * The client side of {@code far_players.extend_far_plane} (far-plane plan #364 §4-§6). Shared by
- * every loader's hooks and far-player renderer; everything runs on the render thread.
+ * The client side of {@code far_players.extend_far_plane} (far-plane plan #364 §4-§6; on by
+ * default since 0.22.0, decision 0004). Shared by every loader's hooks and far-player renderer;
+ * everything runs on the render thread.
  *
  * <ul>
  *   <li>{@link #frameStart} — once per frame, before the far plane is read: the 26.x
@@ -44,11 +45,23 @@ public final class FarPlaneExtension {
     private static boolean warnedStale, warnedOverride;
     /** The last renderer pass's verdict: null, "hook" (a hook is not running) or "override". */
     private static String conflict;
+    /**
+     * Whether an LOD renderer (Voxy, or another terrain consumer that is not a map) is taking
+     * columns. The option is on by default and only acts while this holds: without distant
+     * terrain a far player past the vanilla plane is fully fogged, so moving the plane would
+     * change every frame for nothing. A field so tests can stand in for the renderer.
+     */
+    static java.util.function.BooleanSupplier lodRenderer = dev.vox.lss.compat.ModCompat::hasNonMapConsumers;
+
+    /** The setting is on and an LOD renderer is there to make the result visible. */
+    private static boolean wanted() {
+        return LSSClientConfig.CONFIG.farPlayersExtendFarPlane() && lodRenderer.getAsBoolean();
+    }
 
     /** Frame start. {@code currentLevel} is the client level (identity only; null = none). */
     public static void frameStart(Object currentLevel) {
         lastFrameStartNanos = System.nanoTime();
-        boolean enabled = LSSClientConfig.CONFIG.farPlayersExtendFarPlane();
+        boolean enabled = wanted();
         if (currentLevel != level) {
             // A new ClientLevel per dimension and per connection: both reset the latch.
             level = currentLevel;
@@ -87,7 +100,7 @@ public final class FarPlaneExtension {
      * hook, so the frame-start stamp is the one that catches a lost {@code renderLevel} hook).
      */
     public static void rendererPass(float planeInUse) {
-        if (!LSSClientConfig.CONFIG.farPlayersExtendFarPlane() || shaderPack) {
+        if (!wanted() || shaderPack) {
             conflict = null;
             return;
         }
@@ -118,6 +131,7 @@ public final class FarPlaneExtension {
     public static String diagFragment() {
         String line = "far_plane=" + Math.round(activeFar) + " (vanilla " + Math.round(vanillaFar) + ")";
         if (!LSSClientConfig.CONFIG.farPlayersExtendFarPlane()) return line + ", extend=off";
+        if (!lodRenderer.getAsBoolean()) return line + ", extend=idle (no LOD renderer)";
         String off = shaderPack ? "shaders" : conflict;
         return off == null ? line : line + ", far_plane_off=" + off;
     }
@@ -135,6 +149,7 @@ public final class FarPlaneExtension {
         lastFrameStartNanos = lastApplyNanos = 0;
         shaderPack = noIris = warnedProbe = false;
         shaderCheckedNanos = 0;
+        lodRenderer = dev.vox.lss.compat.ModCompat::hasNonMapConsumers;
     }
 
     /**

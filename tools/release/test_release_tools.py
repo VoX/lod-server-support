@@ -52,6 +52,15 @@ class LineFacts(unittest.TestCase):
         self.assertEqual(rc.modrinth_version_type('0.22.0-rc.1'), 'beta')
         self.assertEqual(rc.modrinth_version_type('0.22.0-alpha.1'), 'alpha')
 
+    def test_one_rule_for_version_strings(self):
+        # The same forms release.yml accepts; anything else would publish as a prerelease there
+        # and be taken for the previous stable tag later.
+        for good in ('0.22.0', '0.22.0-beta.1', '0.22.0-rc.2', '1.0.0-alpha.10'):
+            self.assertEqual(rc.check_version(good), good)
+        for bad in ('0.22', '0.22.0-pre.1', '0.22.0-beta', '0.22.0-beta1', 'v0.22.0', '0.22.0+mc26.3', ''):
+            with self.assertRaises(SystemExit, msg=bad):
+                rc.check_version(bad)
+
     def test_platforms_follow_ship_flags(self):
         self.assertEqual(rc.platforms({'LINE_SHIP_NEOFORGE': 'true', 'LINE_SHIP_SPONGE': 'true'}),
                          ['fabric', 'paper', 'neoforge', 'sponge'])

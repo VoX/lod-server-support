@@ -1,5 +1,6 @@
 package dev.vox.lss.common.store;
 
+import dev.vox.lss.common.FaultCounters;
 import dev.vox.lss.common.Brand;
 import dev.vox.lss.common.LSSLogger;
 import dev.vox.lss.common.PositionUtil;
@@ -69,6 +70,8 @@ public final class StoreBackfill {
             Path dir = this.store.storeDir();
             return dir == null ? -1L : Files.getFileStore(dir).getUsableSpace();
         } catch (Exception e) {
+            // The walk goes on without its free-space guard: count it so that is visible.
+            FaultCounters.global().record(FaultCounters.Site.BACKFILL_FREE_SPACE, e);
             return -1L;
         }
     }

@@ -1156,4 +1156,146 @@ class ClientSessionGateTest {
         assertEquals(2, handshakesSent.get(), "an established LAN host can resume without reopening LAN");
     }
 
+    // ---- the status' answer to "why is nothing arriving" (0.22.0 plan §1) ----
+
+    private static final dev.vox.lss.common.diagnostics.ClientStatusSnapshot.Discovery AWAITING =
+            dev.vox.lss.common.diagnostics.ClientStatusSnapshot.Discovery.AWAITING_NEGOTIATION;
+    private static final dev.vox.lss.common.diagnostics.ClientStatusSnapshot.Discovery NO_CHANNEL =
+            dev.vox.lss.common.diagnostics.ClientStatusSnapshot.Discovery.NO_CHANNEL;
+    private static final dev.vox.lss.common.diagnostics.ClientStatusSnapshot.Discovery NO_ANSWER =
+            dev.vox.lss.common.diagnostics.ClientStatusSnapshot.Discovery.NO_ANSWER;
+
+    @Test
+    void aServerWithoutTheChannelIsNamedAfterFiveSecondsAndTheClaimIsWithdrawnWhenTheChannelAppears() {
+        var channel = new java.util.concurrent.atomic.AtomicBoolean(false);
+        gate.installChannelProbe(channel::get);
+        gate.onJoin(true, false, true, true);
+        tickDiscovery(ClientSessionGate.NO_CHANNEL_TICKS - 1);
+        assertEquals(AWAITING, gate.discoveryStatus(),
+                "a plugin server registers its channels just after join: the first ticks prove nothing");
+        gate.tickDiscoveryLadder();
+        assertEquals(NO_CHANNEL, gate.discoveryStatus());
+        tickDiscovery(2000);
+        assertEquals(NO_CHANNEL, gate.discoveryStatus(),
+                "the stronger fact wins over 'no answer' for as long as it holds");
+        channel.set(true);
+        gate.tickDiscoveryLadder();
+        assertEquals(NO_ANSWER, gate.discoveryStatus(),
+                "the channel appeared: the claim is withdrawn at once (the ladder ran out long ago)");
+        assertEquals(List.of(V, V19, V16), handshakeVersions, "the status bookkeeping never sends anything");
+    }
+
+    @Test
+    void aSilentServerThatHasTheChannelIsNoAnswerOnlyAfterTheLadderAndOneMoreRungOfSilence() {
+        // No probe installed: the default answers "the channel exists" (a claim needs evidence).
+        gate.onJoin(true, false, true, true);
+        int rung = ClientSessionGate.V16_DISCOVERY_DELAY_TICKS;
+        tickDiscovery(3 * rung - 1);
+        assertEquals(List.of(V, V19, V16), handshakeVersions);
+        assertEquals(AWAITING, gate.discoveryStatus(), "the last rung is still within its own wait");
+        gate.tickDiscoveryLadder();
+        assertEquals(NO_ANSWER, gate.discoveryStatus());
+        tickDiscovery(5000);
+        assertEquals(NO_ANSWER, gate.discoveryStatus(), "never 'no channel' without the probe saying so");
+
+        // A late answer still establishes the session.
+        gate.onSessionConfig(config(V, true), true, true);
+        assertEquals(dev.vox.lss.common.diagnostics.ClientStatusSnapshot.Discovery.NEGOTIATED,
+                gate.discoveryStatus());
+        assertTrue(gate.isServerEnabled());
+    }
+
+    @Test
+    void theStatusNeverBlamesTheServerInThePlayersOwnWorldOrWhileNotAsking() {
+        var local = dev.vox.lss.common.diagnostics.ClientStatusSnapshot.Discovery.LOCAL;
+        var dormant = dev.vox.lss.common.diagnostics.ClientStatusSnapshot.Discovery.DORMANT;
+        gate.installChannelProbe(() -> false);
+        gate.onJoin(true, true, true, true); // the player's own world
+        tickDiscovery(3000);
+        assertEquals(local, gate.discoveryStatus());
+        assertEquals(0, handshakesSent.get());
+
+        // Receiving off on a server that HAS the channel: dormant, however long it lasts.
+        gate.installChannelProbe(() -> true);
+        gate.onJoin(false, false, true, true);
+        tickDiscovery(3000);
+        assertEquals(dormant, gate.discoveryStatus());
+        // No consumer at join: nothing was announced, so silence means nothing.
+        gate.onJoin(true, false, false, true);
+        tickDiscovery(3000);
+        assertEquals(dormant, gate.discoveryStatus());
+
+        // Another source selected (the gate's reception is off) on a server without the
+        // channel: the fact about the server still stands.
+        gate.installChannelProbe(() -> false);
+        gate.onJoin(false, false, true, true);
+        tickDiscovery(ClientSessionGate.NO_CHANNEL_TICKS);
+        assertEquals(NO_CHANNEL, gate.discoveryStatus());
+
+        // A probe that throws is "unknown", which is never "no channel".
+        gate.installChannelProbe(() -> { throw new IllegalStateException("no connection"); });
+        gate.onJoin(true, false, true, true);
+        tickDiscovery(ClientSessionGate.NO_CHANNEL_TICKS + 5);
+        assertEquals(AWAITING, gate.discoveryStatus());
+
+        gate.onDisconnect();
+        assertEquals(dev.vox.lss.common.diagnostics.ClientStatusSnapshot.Discovery.NOT_CONNECTED,
+                gate.discoveryStatus());
+    }
+
+    @Test
+    void aFailedSendIsForgottenOnceALaterAnnounceGoesOutAndAnOpenedWorldStaysTheOwnWorld() {
+        var sendFailed = dev.vox.lss.common.diagnostics.ClientStatusSnapshot.Discovery.SEND_FAILED;
+        var local = dev.vox.lss.common.diagnostics.ClientStatusSnapshot.Discovery.LOCAL;
+        var fail = new java.util.concurrent.atomic.AtomicBoolean(true);
+        var flaky = new ClientSessionGate(processor, v -> {
+            if (fail.get()) throw new IllegalStateException("not in game");
+        }, cfg -> new RecordingManager(events));
+        flaky.onJoin(true, false, true, true);
+        assertEquals(sendFailed, flaky.discoveryStatus(), "the first announce could not be sent");
+        // Receiving is toggled off and on once the client is in the world: the announce goes out.
+        fail.set(false);
+        flaky.reconcileReception(false, true);
+        flaky.reconcileReception(true, true);
+        assertEquals(AWAITING, flaky.discoveryStatus(), "the old failure no longer describes this connection");
+
+        // The player's own world stays "your own world" after Open to LAN, whether or not the
+        // host asks its own server for anything.
+        gate.installChannelProbe(() -> false);
+        gate.onJoin(true, true, false, true);
+        gate.onHostServiceReady();
+        tickDiscovery(3000);
+        assertEquals(local, gate.discoveryStatus());
+        gate.onDisconnect();
+        gate.onJoin(true, false, true, true);
+        assertEquals(AWAITING, gate.discoveryStatus(), "the next connection is a server again");
+    }
+
+    @Test
+    void aNewConnectionStartsTheSilenceCountsAgain() {
+        gate.installChannelProbe(() -> false);
+        gate.onJoin(true, false, true, true);
+        tickDiscovery(ClientSessionGate.NO_CHANNEL_TICKS);
+        assertEquals(NO_CHANNEL, gate.discoveryStatus());
+        gate.onJoin(true, false, true, true); // a reconfiguration fires no disconnect
+        assertEquals(AWAITING, gate.discoveryStatus());
+        tickDiscovery(ClientSessionGate.NO_CHANNEL_TICKS - 1);
+        assertEquals(AWAITING, gate.discoveryStatus());
+    }
+
+    @Test
+    void theStatusProtocolIsTheSessionsOrTheOneARejectedServerAnsweredWith() {
+        gate.onJoin(true, false, true, true);
+        assertEquals(0, gate.statusProtocol());
+        gate.onSessionConfig(config(V + 1, true), true, true); // a newer server
+        assertEquals(dev.vox.lss.common.diagnostics.ClientStatusSnapshot.Discovery.PROTOCOL_REJECTED,
+                gate.discoveryStatus());
+        assertEquals(V + 1, gate.statusProtocol(), "the status can say which side is older");
+        assertEquals(0, gate.getSessionVersion(), "no session was established");
+
+        gate.onJoin(true, false, true, true);
+        assertEquals(0, gate.statusProtocol(), "a new connection forgets the rejected answer");
+        gate.onSessionConfig(config(V, true), true, true);
+        assertEquals(V, gate.statusProtocol());
+    }
 }
