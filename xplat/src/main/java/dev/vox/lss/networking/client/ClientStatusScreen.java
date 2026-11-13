@@ -66,10 +66,10 @@ public final class ClientStatusScreen extends Screen {
     // Modern Sodium closes on Escape RELEASE. Keep the whole key pair here so
     // returning on PRESS cannot deliver that same release to the restored parent.
     @Override public boolean keyPressed(net.minecraft.client.input.KeyEvent event) {
-        return escape.press(event.key() == 256) || super.keyPressed(event);
+        return escape.press(event.isEscape()) || super.keyPressed(event);
     }
     @Override public boolean keyReleased(net.minecraft.client.input.KeyEvent event) {
-        if (escape.release(event.key() == 256)) {
+        if (escape.release(event.isEscape())) {
             onClose();
             return true;
         }

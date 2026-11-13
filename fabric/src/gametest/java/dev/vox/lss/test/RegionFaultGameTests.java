@@ -12,16 +12,18 @@ import net.minecraft.world.level.storage.LevelResource;
 
 import java.nio.ByteBuffer;
 import java.nio.file.Files;
+import java.util.Arrays;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * FP-027: real corrupt-region-file tolerance through the live disk-read pipeline. A region
- * file with a VALID header but garbage zlib chunk data is read by vanilla's
- * {@code RegionFileStorage}. On 26.x the inflate failure is caught upstream and surfaces
- * as an empty/absent chunk (not-found, the label this line normally produces); on the
- * 1.21.x lines vanilla PROPAGATES the ZipException and the SAME read resolves as ERROR —
- * and even ON this line, constrained/WSL2 boxes have produced the errors=1/not_found=0
- * shape environmentally (the CLAUDE.md flake-catalog entry this test used to red on).
+ * file with a VALID header but garbage zlib chunk data is read through the server's own
+ * region storage. On this line the default read fetches the raw record and inflates it on
+ * the reader pool, where the garbage fails ({@code ZipException}) and the read resolves
+ * as ERROR; other read rungs and other Minecraft lines can label the same read not-found.
+ * (Until 2026-11-12 the file was staged under {@code <world>/region}, which 26.1 and later
+ * never read: the "corrupt" read was a missing region, resolved not-found, and exercised
+ * no corruption at all. The not-found label recorded for 26.x came from that.)
  * What FP-027 actually guarantees, and what this test pins, is CONTAINMENT: the corrupt
  * read completes through the pool without going thread-fatal, frees its slot, leaks
  * nothing, and the SAME reader pool then serves a valid disk read. The
@@ -34,6 +36,11 @@ import java.util.concurrent.atomic.AtomicInteger;
  * (region file handles are cached per region; writing under an open handle would race).
  * Requests are seeded as one declared want-set via {@link GameTestSeeding} — the distance
  * guard is not under test.
+ *
+ * <p>The second test stages a VALID region file holding a FULL chunk whose blocks this
+ * server does not know (undecodable-chunks plan, 2026-11-12) and pins the end-to-end
+ * rule: no air answer, no generation ticket, the chunk never loaded and its region file
+ * left byte-identical.
  */
 public class RegionFaultGameTests {
 
@@ -44,6 +51,25 @@ public class RegionFaultGameTests {
     @SuppressWarnings("removal")
     private static net.minecraft.server.level.ServerPlayer placeMockServerPlayer(GameTestHelper helper) {
         return helper.makeMockServerPlayerInLevel();
+    }
+
+    /** How many batch-response statuses of {@code type} for {@code packed} were written
+     *  to the mock player's (embedded) channel. */
+    private static int countStatuses(net.minecraft.server.level.ServerPlayer player, byte type, long packed) {
+        var connection = ((dev.vox.lss.mixin.AccessorServerCommonPacketListener) player.connection)
+                .lss$getConnection();
+        var channel = (io.netty.channel.embedded.EmbeddedChannel)
+                ((dev.vox.lss.mixin.AccessorConnection) connection).lss$getChannel();
+        int count = 0;
+        for (Object message : channel.outboundMessages()) {
+            if (message instanceof net.minecraft.network.protocol.common.ClientboundCustomPayloadPacket packet
+                    && packet.payload() instanceof dev.vox.lss.networking.payloads.BatchResponseS2CPayload batch) {
+                for (int i = 0; i < batch.count(); i++) {
+                    if (batch.responseTypes()[i] == type && batch.packedPositions()[i] == packed) count++;
+                }
+            }
+        }
+        return count;
     }
 
     // Own batch: unrelated generation/save traffic must not consume the disk-read deadline.
@@ -63,7 +89,15 @@ public class RegionFaultGameTests {
         int corruptCz = ((pcz >> 5) + 60) << 5;
         long corruptPacked = PositionUtil.packPosition(corruptCx, corruptCz);
         try {
-            var regionDir = server.getWorldPath(LevelResource.ROOT).resolve("region");
+            // The level's own region folder. (This used to be <world>/region, which is
+            // where the Overworld's regions lived before 26.1 moved them under
+            // dimensions/: on this line the file was then never read, the "corrupt" read
+            // was a plain missing region, and the test pinned nothing about corruption.
+            // The raw-serves assertion below fails if that ever happens again.)
+            var regionDir = net.minecraft.world.level.dimension.DimensionType
+                    .getStorageFolder(level.dimension(),
+                            server.getWorldPath(LevelResource.ROOT).normalize())
+                    .resolve("region");
             Files.createDirectories(regionDir);
             var regionFile = regionDir.resolve(
                     "r." + (corruptCx >> 5) + "." + (corruptCz >> 5) + ".mca");
@@ -113,9 +147,9 @@ public class RegionFaultGameTests {
             service.tick();
             var diskDiag = service.getDiskReader().getDiag();
             // Containment: both reads ran through the same pool to completion; the corrupt one
-            // resolved not-found (vanilla swallowed the inflate failure) WITHOUT erroring or
-            // saturating, and the valid read still served — proof the pool survived the corrupt
-            // read intact. This is the FP-027 guarantee; the not-found vs error label is vanilla's.
+            // resolved empty (error or not-found) without saturating, and the valid read still
+            // served — proof the pool survived the corrupt read intact. This is the FP-027
+            // guarantee; the not-found vs error label depends on the read rung and the line.
             helper.assertTrue(diskDiag.getSubmittedCount() == 2 && diskDiag.getCompletedCount() == 2
                             && diskDiag.getSuccessfulReadCount() == 1 && state.getTotalSectionsSent() == 1
                             && (diskDiag.getNotFoundCount() + diskDiag.getErrorCount()) == 1
@@ -128,6 +162,14 @@ public class RegionFaultGameTests {
                             + " completed=" + diskDiag.getCompletedCount()
                             + " not_found=" + diskDiag.getNotFoundCount()
                             + " saturated=" + diskDiag.getSaturationCount() + ")");
+            // The corrupt record was really READ: the raw-path counter moves only for a
+            // record that is present in the region file, so 2 is the valid chunk plus the
+            // corrupt one. A corrupt file staged where the server does not look leaves it
+            // at 1 while every assertion above still holds.
+            helper.assertTrue(service.getDiskReader().rawServesForTest() == 2,
+                    "both the valid and the CORRUPT record must be fetched from their region"
+                            + " files (raw_serves=" + service.getDiskReader().rawServesForTest()
+                            + "): the corrupt file must sit where the server reads it");
             helper.assertTrue(!state.hasDiskReadDone(corruptCx, corruptCz),
                     "a not-found read must not mark the position done — the client's "
                             + "NOT_GENERATED retry path must stay open");
@@ -135,6 +177,170 @@ public class RegionFaultGameTests {
                     "the contained corrupt read must free its sync slot (no pending leak)");
             helper.assertTrue(service.getDiskReader().getPendingResultCount() == 0,
                     "no undrained results may linger after both resolutions");
+            service.shutdown();
+            playerList.remove(mock);
+        });
+    }
+
+    /**
+     * An undecodable chunk through the live pipeline, generation AVAILABLE: a FULL chunk on
+     * disk whose only block is unknown to this server (a removed mod's block, or a chunk
+     * format this build cannot read). Before the fix the disk path serialized it as air:
+     * booked {@code all_air}, stamped, and answered as an empty column. A plain miss
+     * would be worse: it escalates to a generation ticket, and the vanilla load turns the
+     * unknown block into air and may save the chunk. Pinned here: the read resolves
+     * UNSERVABLE (counted {@code undecodable} under {@code not_found}), the requester is
+     * answered without any column or up_to_date, nothing is generated or left pending,
+     * the chunk is never loaded, and the region file is byte-identical afterwards.
+     * (The gametest tiers run with the LOD store off, so "no store row" is pinned at the
+     * processor in {@code OffThreadProcessorStoreTest}.)
+     */
+    // Own environment, so own batch: the read must not share its ten-second deadline with
+    // another test's generation or save traffic (the reason the test above has one too).
+    @GameTest(environment = "lss:undecodable_chunk", structure = "fabric-gametest-api-v1:empty", maxTicks = 1200)
+    public void undecodableChunkIsNeverServedAsAirNorGenerated(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        var server = level.getServer();
+        var playerList = server.getPlayerList();
+        var mock = placeMockServerPlayer(helper);
+        int pcx = mock.getBlockX() >> 4;
+        int pcz = mock.getBlockZ() >> 4;
+        var chunkSource = level.getChunkSource();
+
+        // Region-aligned (local index 0), in a region nothing else ever opens — two
+        // regions past the corrupt-region test's.
+        int cx = ((pcx >> 5) - 62) << 5;
+        int cz = ((pcz >> 5) + 62) << 5;
+        long packed = PositionUtil.packPosition(cx, cz);
+        java.nio.file.Path regionFile;
+        byte[] staged;
+        try {
+            var chunk = new net.minecraft.nbt.CompoundTag();
+            chunk.putInt("DataVersion",
+                    net.minecraft.SharedConstants.getCurrentVersion().dataVersion().version());
+            chunk.putInt("xPos", cx);
+            chunk.putInt("zPos", cz);
+            chunk.putInt("yPos", level.getMinSectionY());
+            chunk.putString("Status", "minecraft:full");
+            var section = new net.minecraft.nbt.CompoundTag();
+            section.putByte("Y", (byte) 0);
+            var blockStates = new net.minecraft.nbt.CompoundTag();
+            var palette = new net.minecraft.nbt.ListTag();
+            var unknown = new net.minecraft.nbt.CompoundTag();
+            unknown.putString("Name", "lss:removed_mod_block");
+            palette.add(unknown);
+            blockStates.put("palette", palette);
+            section.put("block_states", blockStates);
+            var sections = new net.minecraft.nbt.ListTag();
+            sections.add(section);
+            chunk.put("sections", sections);
+
+            var compressed = new java.io.ByteArrayOutputStream();
+            try (var out = new java.io.DataOutputStream(
+                    new java.util.zip.DeflaterOutputStream(compressed))) {
+                net.minecraft.nbt.NbtIo.write(chunk, out);
+            }
+            byte[] payload = compressed.toByteArray();
+            if (payload.length > 4096 - 5) {
+                helper.fail("staged chunk does not fit one sector: " + payload.length);
+                return;
+            }
+            // 8 KiB header (entry 0: offset sector 2, 1 sector) + one data sector:
+            // length (payload + the compression byte), compression 2 (zlib), payload.
+            var bytes = ByteBuffer.allocate(3 * 4096);
+            bytes.putInt(0, (2 << 8) | 1);
+            bytes.position(2 * 4096);
+            bytes.putInt(payload.length + 1);
+            bytes.put((byte) 2);
+            bytes.put(payload);
+            staged = bytes.array();
+            // The level's own region folder (the Overworld moved under dimensions/ in
+            // 26.1): a file staged anywhere else is never read, and the read would
+            // resolve as a plain missing chunk.
+            var regionDir = net.minecraft.world.level.dimension.DimensionType
+                    .getStorageFolder(level.dimension(),
+                            server.getWorldPath(LevelResource.ROOT).normalize())
+                    .resolve("region");
+            Files.createDirectories(regionDir);
+            regionFile = regionDir.resolve("r." + (cx >> 5) + "." + (cz >> 5) + ".mca");
+            Files.write(regionFile, staged); // replaces a previous run's copy (the run dir persists)
+        } catch (Exception e) {
+            helper.fail("could not stage the undecodable region file: " + e);
+            return;
+        }
+
+        var service = new RequestProcessingService(server);
+        var state = service.registerPlayer(mock, LSSConstants.CAPABILITY_VOXEL_COLUMNS);
+        var step = new AtomicInteger();
+
+        helper.succeedWhen(() -> {
+            helper.assertTrue(service.getGenerationService() != null,
+                    "premise: generation is AVAILABLE — the miss ladder would escalate");
+            if (step.get() == 0) {
+                GameTestSeeding.seedRequest(state, packed, -1L);
+                step.set(1);
+                helper.assertTrue(false, "request queued, awaiting the disk resolution");
+            }
+            service.tick();
+            var diskDiag = service.getDiskReader().getDiag();
+            var diag = service.getOffThreadProcessor().getDiagnostics();
+            if (diskDiag.getCompletedCount() == 0 || step.get() > 1) {
+                // Wall-denominate the waits (the TwoPlayerGameTests fix): an unthrottled
+                // gametest server burns its timeout ticks in well under a second, but the
+                // read is real disk work, and the settle window below must outlast a
+                // (wrong) generation ticket reaching the service.
+                try {
+                    Thread.sleep(50L);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                }
+            }
+            helper.assertTrue(diskDiag.getCompletedCount() == 1 && diskDiag.getUndecodableCount() == 1
+                            && state.getHeldSyncSlots() == 0 && !state.hasPendingRequest(cx, cz),
+                    "waiting for the read to resolve undecodable and its slot to free (completed="
+                            + diskDiag.getCompletedCount()
+                            + " undecodable=" + diskDiag.getUndecodableCount()
+                            + " not_found=" + diskDiag.getNotFoundCount()
+                            + " all_air=" + diskDiag.getAllAirCount()
+                            + " errors=" + diskDiag.getErrorCount()
+                            + " held_sync=" + state.getHeldSyncSlots() + ")");
+            // A few more ticks so a (wrong) generation ticket or follow-up would surface.
+            helper.assertTrue(step.incrementAndGet() > 6, "settling after the resolution");
+
+            helper.assertTrue(diskDiag.getSubmittedCount() == 1 && diskDiag.getNotFoundCount() == 1
+                            && diskDiag.getAllAirCount() == 0 && diskDiag.getSuccessfulReadCount() == 0
+                            && diskDiag.getErrorCount() == 0,
+                    "exactly one read, booked undecodable under not_found: never all-air, never"
+                            + " served, never an error");
+            helper.assertTrue(service.getDiskReader().getDiagnostics().contains("undecodable=1"),
+                    "the disk diag line carries the token: " + service.getDiskReader().getDiagnostics());
+            helper.assertTrue(state.getTotalSectionsSent() == 0 && diag.getTotalUpToDate() == 0,
+                    "no column and no up_to_date: never an air answer (sent="
+                            + state.getTotalSectionsSent() + " up_to_date=" + diag.getTotalUpToDate() + ")");
+            helper.assertTrue(diag.getTotalSuperseded() == 0 && diag.getTotalMissDropped() == 0,
+                    "the miss was ANSWERED (not available), not dropped");
+            // ...and answered exactly once, with exactly that: read off the wire the mock
+            // player's channel recorded (the server keeps no not_generated counter).
+            int notGenerated = countStatuses(mock, LSSConstants.RESPONSE_NOT_GENERATED, packed);
+            int upToDate = countStatuses(mock, LSSConstants.RESPONSE_UP_TO_DATE, packed);
+            helper.assertTrue(notGenerated == 1 && upToDate == 0,
+                    "exactly one NOT_GENERATED status for the position and no up_to_date"
+                            + " (not_generated=" + notGenerated + " up_to_date=" + upToDate + ")");
+            helper.assertTrue(service.getGenerationService().getTotalSubmitted() == 0
+                            && state.getHeldGenSlots() == 0,
+                    "an undecodable chunk must never become a generation ticket (submitted="
+                            + service.getGenerationService().getTotalSubmitted() + ")");
+            helper.assertTrue(!state.hasDiskReadDone(cx, cz), "nothing was served, nothing marked done");
+            helper.assertTrue(chunkSource.getChunkNow(cx, cz) == null,
+                    "the chunk must never be loaded: vanilla would turn its unknown block into air");
+            helper.assertTrue(service.getDiskReader().getPendingResultCount() == 0,
+                    "no undrained results may linger");
+            try {
+                helper.assertTrue(Arrays.equals(staged, Files.readAllBytes(regionFile)),
+                        "the region file on disk is byte-identical: the world was not touched");
+            } catch (java.io.IOException e) {
+                helper.fail("could not re-read the staged region file: " + e);
+            }
             service.shutdown();
             playerList.remove(mock);
         });

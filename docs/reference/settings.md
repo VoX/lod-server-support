@@ -46,6 +46,22 @@ group, so a file created or saved by a newer build loads there only after renami
 exception:** LSS 0.18 and older reject unknown keys, so a server file created by a newer
 build loads there only after deleting that line (or the file).
 
+`far_players.hide_permission_holders` (0.21.0) is applied by a reload. Off (the default),
+the `lss.farplayers.hidden` / `vss.farplayers.hidden` permission hides nobody by itself and
+players choose with Share My Position; on, every holder is hidden, as before 0.21.0. An
+upgraded file gains the key only when the setting is changed. **Server downgrade
+exception:** LSS 0.20 and older reject unknown keys, so a server file that carries the
+key (every file a newer build creates) loads there only after deleting that line (or the
+file).
+
+`far_players.mode` takes four values, applied by a reload: `off` (nobody is shown),
+`opt_in` (only players whose own client shares their position), `on` (the default:
+everyone, and a player can hide with Share My Position) and, new in 0.21.0, `required`
+(everyone is shown and cannot opt out, except holders of `lss.farplayers.hidden` /
+`vss.farplayers.hidden`; a player whose choice is overridden is told so once in chat).
+**Server downgrade exception:** LSS 0.20 and older reject the value `required`, so a
+server file that says `mode: "required"` loads there only after changing it.
+
 ## Fabric / NeoForge / Sponge server
 
 | YAML path | Type | Default | Range / units | Timing | Applicability |
@@ -95,6 +111,7 @@ build loads there only after deleting that line (or the file).
 | far_players.distance.max_blocks | integer | 2048 | 128–16384 blocks | H | all |
 | far_players.send_spectators | boolean | false |  | H | all |
 | far_players.excluded_players | string_list | [] |  | H | all |
+| far_players.hide_permission_holders | boolean | false |  | H | all |
 | paper.update_events | string_list | ["org.bukkit.event.block.BlockPlaceEvent","org.bukkit.event.block.BlockBreakEvent","org.bukkit.event.block.BlockExplodeEvent","org.bukkit.event.entity.EntityExplodeEvent","org.bukkit.event.block.BlockBurnEvent","org.bukkit.event.block.BlockFadeEvent","org.bukkit.event.block.BlockFormEvent","org.bukkit.event.block.BlockGrowEvent","org.bukkit.event.block.BlockSpreadEvent","org.bukkit.event.block.LeavesDecayEvent","org.bukkit.event.block.BlockPistonExtendEvent","org.bukkit.event.block.BlockPistonRetractEvent","org.bukkit.event.entity.EntityChangeBlockEvent","org.bukkit.event.world.StructureGrowEvent"] |  | R | paper |
 
 The generated document includes feature explanations, resource costs and zero meanings.
@@ -262,16 +279,29 @@ privacy:
 # Sends lightweight distant-player snapshots beyond normal entity tracking range.
 # This does not keep distant entities ticking. Larger ranges and more frequent
 # updates can increase server work, traffic and client rendering work.
-# "opt_in" shares only targets whose clients explicitly allow sharing; "on" can
-# also include vanilla players. Exclusions, visibility rules and opt-outs still apply.
+# Modes:
+#   "off"      - nobody is shown.
+#   "opt_in"   - only players whose own client shares their position are shown.
+#   "on"       - everyone is shown, players without the mod too; a player can hide
+#                with Share My Position.
+#   "required" - everyone is shown and cannot opt out, except players who hold the
+#                lss.farplayers.hidden (vss.farplayers.hidden) permission. A player
+#                whose choice is overridden is told so once in chat.
+# Exclusions, spectator and invisibility rules, vanish and disguises apply in every mode.
 far_players:
-  mode: "on" # "off", "opt_in" or "on"; all modes honor exclusions and sharing opt-outs.
+  mode: "on" # "off", "opt_in", "on" (players may opt out) or "required" (only permission holders may).
   update_interval_ticks: 10 # 10 ticks = two updates/second at 20 TPS; range 2–100.
   distance:
     min_blocks: 0 # 0 = no additional inner ring; cannot exceed max_blocks.
     max_blocks: 2048 # Server visibility ceiling; range 128–16384 blocks.
   send_spectators: false # Include spectator targets if other privacy checks allow them.
   excluded_players: [] # Player names or UUIDs never shared; kept out of diagnostic exports.
+  # Hide every player who holds the lss.farplayers.hidden (vss.farplayers.hidden)
+  # permission, in every mode (the behaviour before 0.21.0). A grant of every
+  # permission ("*") includes it, so this can hide all your admins. Off: the
+  # permission hides nobody by itself; players choose with Share My Position
+  # (in mode "required", only holders can).
+  hide_permission_holders: false # Hide every player who holds the far-player hide permission.
 ```
 
 ## Paper / Folia server
@@ -323,6 +353,7 @@ far_players:
 | far_players.distance.max_blocks | integer | 2048 | 128–16384 blocks | H | all |
 | far_players.send_spectators | boolean | false |  | H | all |
 | far_players.excluded_players | string_list | [] |  | H | all |
+| far_players.hide_permission_holders | boolean | false |  | H | all |
 | paper.update_events | string_list | ["org.bukkit.event.block.BlockPlaceEvent","org.bukkit.event.block.BlockBreakEvent","org.bukkit.event.block.BlockExplodeEvent","org.bukkit.event.entity.EntityExplodeEvent","org.bukkit.event.block.BlockBurnEvent","org.bukkit.event.block.BlockFadeEvent","org.bukkit.event.block.BlockFormEvent","org.bukkit.event.block.BlockGrowEvent","org.bukkit.event.block.BlockSpreadEvent","org.bukkit.event.block.LeavesDecayEvent","org.bukkit.event.block.BlockPistonExtendEvent","org.bukkit.event.block.BlockPistonRetractEvent","org.bukkit.event.entity.EntityChangeBlockEvent","org.bukkit.event.world.StructureGrowEvent"] |  | R | paper |
 
 The generated document includes feature explanations, resource costs and zero meanings.
@@ -483,16 +514,29 @@ privacy:
 # Sends lightweight distant-player snapshots beyond normal entity tracking range.
 # This does not keep distant entities ticking. Larger ranges and more frequent
 # updates can increase server work, traffic and client rendering work.
-# "opt_in" shares only targets whose clients explicitly allow sharing; "on" can
-# also include vanilla players. Exclusions, visibility rules and opt-outs still apply.
+# Modes:
+#   "off"      - nobody is shown.
+#   "opt_in"   - only players whose own client shares their position are shown.
+#   "on"       - everyone is shown, players without the mod too; a player can hide
+#                with Share My Position.
+#   "required" - everyone is shown and cannot opt out, except players who hold the
+#                lss.farplayers.hidden (vss.farplayers.hidden) permission. A player
+#                whose choice is overridden is told so once in chat.
+# Exclusions, spectator and invisibility rules, vanish and disguises apply in every mode.
 far_players:
-  mode: "on" # "off", "opt_in" or "on"; all modes honor exclusions and sharing opt-outs.
+  mode: "on" # "off", "opt_in", "on" (players may opt out) or "required" (only permission holders may).
   update_interval_ticks: 10 # 10 ticks = two updates/second at 20 TPS; range 2–100.
   distance:
     min_blocks: 0 # 0 = no additional inner ring; cannot exceed max_blocks.
     max_blocks: 2048 # Server visibility ceiling; range 128–16384 blocks.
   send_spectators: false # Include spectator targets if other privacy checks allow them.
   excluded_players: [] # Player names or UUIDs never shared; kept out of diagnostic exports.
+  # Hide every player who holds the lss.farplayers.hidden (vss.farplayers.hidden)
+  # permission, in every mode (the behaviour before 0.21.0). A grant of every
+  # permission ("*") includes it, so this can hide all your admins. Off: the
+  # permission hides nobody by itself; players choose with Share My Position
+  # (in mode "required", only holders can).
+  hide_permission_holders: false # Hide every player who holds the far-player hide permission.
 
 # Bukkit event hooks invalidate cached LODs after world edits. Adding frequent
 # events can improve coverage but increase work; edits without a matching event

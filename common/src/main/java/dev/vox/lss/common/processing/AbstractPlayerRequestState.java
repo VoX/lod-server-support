@@ -341,6 +341,13 @@ public abstract class AbstractPlayerRequestState<T> {
     // write means an in-progress offer is never mistaken for quiet: the guard errs toward
     // dropping the held batch (a counted supersession, healed by the next 1 Hz
     // declaration), never toward resurrection.
+    //
+    // A held batch is compared under ITS OWN generation — the one its offer stamped into
+    // the envelope, handed out by the same atomic take (HeldIncomingBatch) — never under a
+    // separate read of this counter. A read inside a NEWER offer's bump-to-write window
+    // returns the newer generation while the mailbox still holds the older batch; a hold
+    // labelled that way passes both republish guards once the newer declaration has
+    // passed through (the 2026-11-12 BacklogReplaceTest red).
     private final AtomicLong offerGeneration = new AtomicLong();
     // Cross-thread superseded/range-filtered events accumulate here and are drained into
     // ProcessingDiagnostics by the processing thread each cycle, preserving that class's
@@ -464,6 +471,7 @@ public abstract class AbstractPlayerRequestState<T> {
         // backlog. Existing disk admissions and their one-shot corrections still finish.
         this.activeProbeEnvelope.set(null);
         this.totalRequestsReceived.addAndGet(batch.size());
+        beforeOfferWrite();
         var previous = this.pendingBatch.getAndSet(new IncomingEnvelope(
                 batch, generation, false, Long2ObjectMaps.emptyMap()));
         if (previous != null) {
@@ -471,10 +479,18 @@ public abstract class AbstractPlayerRequestState<T> {
         }
     }
 
-    /** The current offer generation. The Folia pump records this BEFORE taking a batch to
-     *  hold (read-then-take: an offer slipping between the two can only make the eventual
-     *  republish refuse spuriously — a counted, re-declaration-healed drop — never let a
-     *  stale batch resurrect). */
+    /** Test seam: runs inside an offer's bump-to-write window (the generation is bumped,
+     *  the mailbox still holds whatever preceded this offer) — a production no-op. A pump
+     *  hold landing exactly here is the shape {@link #takeFreshIncomingBatchForProbe}
+     *  pairs against, and no external call sequence can reach it. Protected so the Paper
+     *  pump test can drive a tick from inside the window. */
+    protected void beforeOfferWrite() {
+    }
+
+    /** The generation of the most recently STARTED offer, whose mailbox write may still
+     *  be in flight. Never pair it with a separately taken batch: a hold gets its
+     *  generation from {@link #takeFreshIncomingBatchForProbe} (the field comment has the
+     *  interleaving). */
     public long offerGeneration() {
         return this.offerGeneration.get();
     }
@@ -499,7 +515,9 @@ public abstract class AbstractPlayerRequestState<T> {
         this.publishedWantSet = batch;
     }
 
-    /** Consume the pending batch (processing thread; Folia pump during hold-release). */
+    /** Consume the pending batch unconditionally. Production takes go through
+     *  {@link #takeIncomingBatchForRouting} (router) and
+     *  {@link #takeFreshIncomingBatchForProbe} (Folia pump hold). */
     public IncomingBatch takeIncomingBatch() {
         var pending = this.pendingBatch.getAndSet(null);
         return pending == null ? null : pending.batch();
@@ -508,12 +526,18 @@ public abstract class AbstractPlayerRequestState<T> {
     /** Configure Folia ownership BEFORE publishing this registration to other threads. */
     public void requireProbeHandoff() { this.probeHandoffRequired = true; }
 
-    /** Pump only: never steal an already released declaration and its paired probes. */
-    public IncomingBatch takeFreshIncomingBatchForProbe() {
+    /** A fresh declaration taken to hold, with the generation of the offer that wrote it. */
+    public record HeldIncomingBatch(IncomingBatch batch, long offerGeneration) {}
+
+    /** Pump only: never steal an already released declaration and its paired probes. The
+     *  generation comes out of the envelope this take removed, so batch and generation
+     *  belong to one offer — the pairing {@link #republishHeldBatch} compares. */
+    public HeldIncomingBatch takeFreshIncomingBatchForProbe() {
         while (true) {
             var pending = this.pendingBatch.get();
             if (pending == null || pending.released()) return null;
-            if (this.pendingBatch.compareAndSet(pending, null)) return pending.batch();
+            if (this.pendingBatch.compareAndSet(pending, null))
+                return new HeldIncomingBatch(pending.batch(), pending.generation());
         }
     }
 
@@ -581,8 +605,8 @@ public abstract class AbstractPlayerRequestState<T> {
      * the mailbox; the offer-generation guard catches one that passed THROUGH it (offered
      * and taken by the processing thread during the hold) — the CAS alone finds the
      * mailbox empty again and would republish the stale batch over the newer
-     * declaration's already-applied backlog. {@code heldAtGeneration} is the value of
-     * {@link #offerGeneration()} the pump recorded before taking the batch to hold.
+     * declaration's already-applied backlog. {@code heldAtGeneration} is the held batch's
+     * own offer generation ({@link HeldIncomingBatch#offerGeneration()}).
      */
     public boolean republishHeldBatch(IncomingBatch held, long heldAtGeneration) {
         return republishHeldBatch(held, heldAtGeneration, Long2ObjectMaps.emptyMap());

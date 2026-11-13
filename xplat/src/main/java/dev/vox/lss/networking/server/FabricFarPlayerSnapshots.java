@@ -75,25 +75,34 @@ final class FabricFarPlayerSnapshots {
                 pose,
                 delta.x * 20.0, delta.y * 20.0, delta.z * 20.0,
                 p.isSpectator(), p.isInvisible(), p.isAlive() && !p.isRemoved(),
-                // The hide permission, read through the loader seam (fabric-permissions-api
-                // by shape on Fabric, native PermissionNodes on NeoForge) — WI-7a.
-                hiddenFor(node -> LoaderServices.get().checkPermission(p, node, false)),
+                // hidden (the unconditional ladder): nothing on this path sets it — vanish
+                // is per (viewer, target) and rides the service's VanishBridge seam.
+                false,
+                // The hide-permission FACT, read through the loader seam (fabric-permissions-api
+                // by shape on Fabric, native PermissionNodes on NeoForge, the Sponge subject
+                // on Sponge) — WI-7a. The service decides whether it hides (0.21.0).
+                holdsHidePermission(node -> LoaderServices.get().checkPermission(p, node, false)),
                 hash, equipmentIds, equipmentCounts, vehicle);
     }
 
     /**
      * The hide-permission read (far-player-render-hardening-plan.md WI-7a): BOTH brand
-     * spellings, default FALSE — a grant-model "deny me" lever (undefined = visible, matching
-     * plugin.yml's {@code default: false} on Paper; a LuckPerms wildcard grant resolves it
-     * TRUE, so wildcard admins disappear from far-player rendering, as on Paper). Fail
-     * direction is VISIBLE on this seam BY CONTRACT: {@code LoaderServices.checkPermission}
-     * never throws and answers the caller's default on any failure, so {@code false} cannot
-     * express "the backend threw" — and a {@code true} default would hide every player on a
-     * provider-less server. Paper's twin fails HIDDEN only because Folia's cross-region
-     * {@code PermissibleBase} read can race; Fabric and NeoForge read on the single server
-     * tick thread. Pure over a node predicate so JUnit can drive it without a ServerPlayer.
+     * spellings, default FALSE (undefined = not a holder, matching plugin.yml's
+     * {@code default: false} on Paper). It reports a FACT, not a verdict
+     * (hide-permission plan §2, 0.21.0): a holder is hidden only while the server sets
+     * {@code far_players.hide_permission_holders: true}. A LuckPerms wildcard grant
+     * resolves the node TRUE, which is why the permission no longer hides by itself —
+     * wildcard admins used to disappear from far-player rendering on every platform.
+     * A doubtful read answers NOT A HOLDER on this seam BY CONTRACT:
+     * {@code LoaderServices.checkPermission} never throws and answers the caller's default
+     * on any failure, so {@code false} cannot express "the backend threw" — and a
+     * {@code true} default would make every player a holder on a provider-less server
+     * (hiding them all once the setting is on). Paper's twin fails HIDDEN only because
+     * Folia's cross-region {@code PermissibleBase} read can race; Fabric, NeoForge and
+     * Sponge read on the single server tick thread. Pure over a node predicate so JUnit
+     * can drive it without a ServerPlayer.
      */
-    static boolean hiddenFor(java.util.function.Predicate<String> check) {
+    static boolean holdsHidePermission(java.util.function.Predicate<String> check) {
         return check.test(LSSPermissions.FARPLAYERS_HIDDEN_LSS)
                 || check.test(LSSPermissions.FARPLAYERS_HIDDEN_VSS);
     }
