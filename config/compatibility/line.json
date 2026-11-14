@@ -18,7 +18,7 @@
       "purpur"
     ],
     "fabric_client_gametests": true,
-    "sponge_shipping": true
+    "sponge_shipping": false
   },
   "role": "frozen",
   "support_tier": "frozen",
