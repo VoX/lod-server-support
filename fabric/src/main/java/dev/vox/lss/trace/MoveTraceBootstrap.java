@@ -55,9 +55,11 @@ public final class MoveTraceBootstrap {
         ServerTickEvents.END_SERVER_TICK.register(server -> {
             if (MoveDesyncTracer.enabled()) MoveTraceTelemetry.tick(server);
         });
+        // On the server thread, like the tick above: Fabric can fire DISCONNECT from netty.
         ServerPlayConnectionEvents.DISCONNECT.register((handler, server) -> {
             if (MoveDesyncTracer.enabled()) {
-                MoveTraceTelemetry.onDisconnect(handler.getPlayer().getUUID());
+                java.util.UUID uuid = handler.getPlayer().getUUID();
+                server.execute(() -> MoveTraceTelemetry.onDisconnect(uuid));
             }
         });
     }
