@@ -17,6 +17,7 @@ import net.minecraft.server.permissions.Permissions;
  *  contract, plan §1.1). */
 public class LSSServerCommands {
     private static int reload(CommandSourceStack source) {
+        sendSettingsProblems(source);
         var config = LSSServerConfig.CONFIG;
         var service = LSSServerNetworking.getRequestService();
         dev.vox.lss.common.config.SettingsReload.Owner owner = action -> {
@@ -37,9 +38,15 @@ public class LSSServerCommands {
                 ? java.util.concurrent.CompletableFuture.completedFuture(null)
                 : service.reconcileSettings(previous, next, revision)).whenComplete((result, failure) -> {
             if (failure != null) {
-                String message = "Reload failed: " + dev.vox.lss.common.config.SettingsReload.message(failure);
+                String message = "Reload failed: " + dev.vox.lss.common.config.SettingsReload.headline(failure);
+                // Everything wrong with the file, so it is fixed once (0.23.0 plan §1).
+                var problems = dev.vox.lss.common.config.SettingsReload.problemLines(failure);
                 dev.vox.lss.common.LSSLogger.warn(message);
-                source.getServer().execute(() -> source.sendFailure(Component.literal(message)));
+                problems.forEach(line -> dev.vox.lss.common.LSSLogger.warn("  " + line));
+                source.getServer().execute(() -> {
+                    source.sendFailure(Component.literal(message));
+                    problems.forEach(line -> source.sendFailure(Component.literal("  " + line)));
+                });
             } else {
                 var lines = new java.util.ArrayList<>(dev.vox.lss.common.config.ReloadFeedback.lines(config.settingsPath(), result));
                 if (service != null && result.status() != dev.vox.lss.common.config.SettingsReload.Status.UNCHANGED) {
@@ -87,10 +94,30 @@ public class LSSServerCommands {
         return com.mojang.brigadier.Command.SINGLE_SUCCESS;
     }
 
+    private static boolean permissionLevelAllows(CommandSourceStack source) {
+        return source.permissions().hasPermission(Permissions.COMMANDS_GAMEMASTER);
+    }
+
+    /** Whether {@code player} may run this command (the settings-problem chat line's audience). */
+    static boolean mayRun(net.minecraft.server.level.ServerPlayer player) {
+        return dev.vox.lss.platform.LoaderServices.get().mayRunServerCommand(player,
+                permissionLevelAllows(player.createCommandSourceStack()));
+    }
+
+    /** The block about a settings file that did not load at startup; nothing when it loaded.
+     *  Help, diag and a failed reload open with it (0.23.0 plan §1). */
+    private static void sendSettingsProblems(CommandSourceStack source) {
+        var config = LSSServerConfig.CONFIG;
+        if (config.startupProblems().isEmpty()) return;
+        for (String line : dev.vox.lss.common.config.SettingsProblemText.serverBlock(
+                config.settingsFileName(), config.startupProblems()))
+            source.sendFailure(Component.literal(line));
+    }
+
     public static void register(com.mojang.brigadier.CommandDispatcher<CommandSourceStack> dispatcher) {
             dispatcher.register(
                     Commands.literal(Brand.serverCommand())
-                            .requires(source -> source.permissions().hasPermission(Permissions.COMMANDS_GAMEMASTER))
+                            .requires(LSSServerCommands::permissionLevelAllows)
                             // Bare root = help (v0.11.0 stage C; a bare /lsslod used to
                             // be a Brigadier parse error). Review-verified safe: the
                             // .requires gate sits on THIS root literal, so a
@@ -127,6 +154,7 @@ public class LSSServerCommands {
     }
 
     private static int showHelp(CommandSourceStack source) {
+        sendSettingsProblems(source);
         for (var line : dev.vox.lss.common.CommandHelp.lines(Brand.serverCommand(), true)) {
             source.sendSuccess(() -> Component.literal(line), false);
         }
@@ -253,6 +281,7 @@ public class LSSServerCommands {
     }
 
     private static int showDiagnostics(CommandSourceStack source) {
+        sendSettingsProblems(source);
         var service = LSSServerNetworking.getRequestService();
         if (service == null) {
             source.sendFailure(Component.literal(Brand.shortName() + " LOD request processing is not active"));
@@ -360,7 +389,7 @@ public class LSSServerCommands {
             RequestProcessingService service) {
         var fp = service.getFarPlayerService();
         if (fp == null) return null; // partial rigs (mocked service seams)
-        return fp.subscriberCount() > 0 || fp.rosterFramesSent() > 0 ? fp.diagLine() : null;
+        return fp.subscriberCount() > 0 || fp.rosterFramesSent() > 0 || fp.optedOut() > 0 ? fp.diagLine() : null;
     }
 
     /** Region summaries (P2 §6 attributability): present only once a request arrived. */

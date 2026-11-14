@@ -358,6 +358,74 @@ class VoxyCompatTest {
         assertEquals(-1, consumer.pendingIngestBacklog(), "still no-signal — the chain never bound");
     }
 
+    // ---- "is Voxy drawing?" (0.23.0 plan §6) ----
+
+    private static final dev.vox.lss.common.diagnostics.ClientStatusSnapshot.Renderer
+            UNKNOWN = dev.vox.lss.common.diagnostics.ClientStatusSnapshot.Renderer.UNKNOWN,
+            READY = dev.vox.lss.common.diagnostics.ClientStatusSnapshot.Renderer.READY,
+            UNSUPPORTED = dev.vox.lss.common.diagnostics.ClientStatusSnapshot.Renderer.UNSUPPORTED,
+            SWITCHED_OFF = dev.vox.lss.common.diagnostics.ClientStatusSnapshot.Renderer.SWITCHED_OFF;
+
+    @Test
+    void drawStateIsVoxysOwnAnswerReadLive() {
+        initBridge();
+        assertEquals(READY, VoxyCompat.drawState());
+        VoxyConfig.CONFIG.enableRendering = false;
+        assertEquals(SWITCHED_OFF, VoxyCompat.drawState(), "rendering off in Voxy's settings");
+        VoxyConfig.CONFIG.enableRendering = true;
+        VoxyConfig.CONFIG.enabled = false;
+        assertEquals(SWITCHED_OFF, VoxyCompat.drawState(), "Voxy off in Voxy's settings");
+        VoxyConfig.CONFIG.enabled = true;
+        assertEquals(READY, VoxyCompat.drawState(), "re-read on every query, never cached");
+        VoxyCommon.available = false;
+        assertEquals(UNSUPPORTED, VoxyCompat.drawState(), "Voxy switched itself off for this computer");
+    }
+
+    @Test
+    void drawStateNeverLoadsVoxysConfigBeforeVoxySaysItIsAvailable() {
+        // Voxy's config class picks "the player's file" or "a switched-off stand-in" when it
+        // is first loaded, from the availability answer. Loading it early from this mod would
+        // switch a working Voxy off, so an unavailable Voxy must never get its config resolved.
+        var asked = new ArrayList<String>();
+        VoxyCompat.classResolver = name -> { asked.add(name); return Class.forName(name); };
+        initBridge();
+        asked.clear();
+        VoxyCommon.available = false;
+        assertEquals(UNSUPPORTED, VoxyCompat.drawState());
+        assertEquals(UNSUPPORTED, VoxyCompat.drawState());
+        assertFalse(asked.contains("me.cortex.voxy.client.config.VoxyConfig"),
+                "the config class is resolved only after Voxy is available: " + asked);
+        VoxyCommon.available = true;
+        assertEquals(READY, VoxyCompat.drawState());
+        assertTrue(asked.contains("me.cortex.voxy.client.config.VoxyConfig"));
+    }
+
+    @Test
+    void drawStateIsUnknownForAVoxyWithoutTheSurface() {
+        VoxyCompat.classResolver = name -> {
+            if (name.endsWith("VoxyConfig")) throw new ClassNotFoundException(name);
+            return Class.forName(name);
+        };
+        initBridge();
+        assertEquals(UNKNOWN, VoxyCompat.drawState(), "a Voxy without this surface: no answer, never a guess");
+        VoxyCompat.classResolver = Class::forName;
+        VoxyConfig.CONFIG.enabled = false;
+        assertEquals(UNKNOWN, VoxyCompat.drawState(), "and it is not asked again this launch");
+        assertEquals(1, registered.size(), "the ingest bridge is untouched by this failure");
+    }
+
+    @Test
+    void drawStateDoesNotNeedTheIngestBridge() {
+        // A Voxy whose ingest surface changed (the "could not connect" verdict) can still say
+        // that it is switched off, which is the better answer.
+        VoxyCompat.classResolver = name ->
+                name.equals("me.cortex.voxy.common.world.service.VoxelIngestService")
+                        ? BrokenIngestService.class : Class.forName(name);
+        assertFalse(VoxyCompat.init());
+        VoxyCommon.available = false;
+        assertEquals(UNSUPPORTED, VoxyCompat.drawState());
+    }
+
     // ---- distance query (the contract the SpiralScanner min-ladder tests lean on) ----
 
     @Test

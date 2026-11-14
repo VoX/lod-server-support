@@ -160,6 +160,9 @@ final class ClientSessionGate {
     private volatile boolean isV16Server = false;
 
     private volatile boolean serverEnabled = false;
+    /** Why the last accepted answer said "not here": one {@code SESSION_FLAG_OFF_*} bit, or 0
+     *  when the server did not say (0.23.0 plan §3). Status only. */
+    private volatile int serverOffReason;
     /** The server asks this client not to write LOD terrain into map mods (map-policy plan
      *  A4): set ONLY on the SessionConfig accept path (after the foreign-version return and
      *  the downgrade guard, so a Paper v16 re-attach prompt or a raced 19 echo never
@@ -245,6 +248,7 @@ final class ClientSessionGate {
     }
 
     boolean isServerEnabled() { return this.serverEnabled; }
+    int serverOffReason() { return this.serverOffReason; }
     /** Whether the server allows LOD map ingestion on this connection (map-policy plan A4) —
      *  the map backends' write gate. True with no connection and for every server that
      *  never sends the flag. */
@@ -298,13 +302,15 @@ final class ClientSessionGate {
         this.ownWorld = localIntegratedServer;
         this.receiveEnabled = receiveServerLods;
         this.pendingWithdrawal = null;
-        // Defensive: under Fabric's lifecycle DISCONNECT always precedes the next JOIN,
-        // but if a manager ever survived to here, dropping it without teardown would lose
-        // its cache save. Self-sufficiency over the lifecycle assumption.
+        // Defensive: the disconnect cleanup normally precedes the next JOIN, but a proxy
+        // moving the player between servers runs none (play → configuration → play), and
+        // dropping a manager that survived to here without teardown would lose its cache
+        // save. Self-sufficiency over the lifecycle assumption.
         if (this.requestManager != null) {
             teardownManager(this.requestManager);
         }
         this.serverEnabled = false;
+        this.serverOffReason = 0;
         this.sessionConfigReceived = false;
         this.serverLodDistance = 0;
         this.requestManager = null;
@@ -474,6 +480,7 @@ final class ClientSessionGate {
             LSSLogger.warn("Server has incompatible " + Brand.shortName() + " protocol version " + version
                     + " (client: " + primary + "), LOD distribution disabled");
             this.serverEnabled = false;
+            this.serverOffReason = 0;
             return;
         }
 
@@ -587,6 +594,7 @@ final class ClientSessionGate {
         this.statusProtocolRejected = false;
         this.statusHandshakeFailed = false;
         this.serverEnabled = config.enabled();
+        this.serverOffReason = dev.vox.lss.common.SessionOffReason.read(config.enabled(), config.sessionFlags());
         this.sessionConfigReceived = true;
         this.serverLodDistance = config.lodDistanceChunks();
         this.acceptedConfig = config;
@@ -777,6 +785,7 @@ final class ClientSessionGate {
         this.columnProcessor.shutdown();
         this.columnProcessor.resetStats();
         this.serverEnabled = false;
+        this.serverOffReason = 0;
         this.sessionConfigReceived = false;
         this.serverLodDistance = 0;
         this.serverDeniesMapIngestion = false;

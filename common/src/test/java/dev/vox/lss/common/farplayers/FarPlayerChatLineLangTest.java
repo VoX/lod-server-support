@@ -82,9 +82,13 @@ class FarPlayerChatLineLangTest {
         // position with no idea what it refers to.
         for (var locale : locales().entrySet()) {
             String label = locale.getValue().get("lss.config.far_players_share_self").getAsString();
-            String value = locale.getValue().get("lss.settings.privacy_no_channel").getAsString();
-            assertTrue(value.contains(label), locale.getKey() + " must name the option as '" + label + "': " + value);
-            assertTrue(value.indexOf(label) < 3, locale.getKey() + " must open with it: " + value);
+            // 0.23.0: the two lines for an opt-out sent without a session follow saves too.
+            for (String key : List.of("lss.settings.privacy_no_channel", "lss.settings.privacy_opt_out_sent",
+                    "lss.settings.privacy_opt_out_kept")) {
+                String value = locale.getValue().get(key).getAsString();
+                assertTrue(value.contains(label), locale.getKey() + " " + key + " must name the option as '" + label + "': " + value);
+                assertTrue(value.indexOf(label) < 3, locale.getKey() + " " + key + " must open with it: " + value);
+            }
         }
     }
 

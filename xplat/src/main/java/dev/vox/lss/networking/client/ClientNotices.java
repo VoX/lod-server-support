@@ -12,7 +12,8 @@ import java.util.function.Consumer;
 /**
  * Tells the player in chat, a few times ever, why no distant terrain is arriving (0.22.0 plan
  * §1): the server lacks the mod, has it switched off, runs another version, or nothing on this
- * client can show the terrain. When, how often and the counters on disk are
+ * client can show the terrain; and, once per game start, that this mod's own settings file did
+ * not load (0.23.0 plan §1). When, how often and the counters on disk are
  * {@link ClientNoticeBook}'s; this class reads the status verdict each tick and prints the line.
  *
  * <p>The line is grey and starts with the brand in brackets, so it does not read as the server
@@ -40,13 +41,18 @@ public final class ClientNotices {
         if (mc.player == null || mc.getConnection() == null || mc.hasSingleplayerServer()) return;
         var snapshot = ClientStatus.latest();
         if (snapshot == null) return;
-        ClientVerdict announce = BOOK.tick(ClientVerdict.of(snapshot));
+        ClientVerdict announce = BOOK.tick(ClientVerdict.of(snapshot),
+                snapshot.negotiated() && snapshot.serverEnabled());
         if (announce != null) sink.accept(line(announce));
     }
 
     static Component line(ClientVerdict verdict) {
+        String key = "lss.notice." + verdict.key();
         return Component.literal("[" + Brand.shortName() + "] ")
-                .append(Component.translatable("lss.notice." + verdict.key()))
+                // One notice names a command, so it takes the build's own as its argument (a
+                // lang value never spells a command root). The others carry the full text.
+                .append(verdict == ClientVerdict.SETTINGS_BROKEN
+                        ? Component.translatable(key, Brand.clientCommand()) : Component.translatable(key))
                 .withStyle(ChatFormatting.GRAY);
     }
 }

@@ -76,7 +76,7 @@ public final class BenchmarkHook {
         ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> {
             LSSLogger.info("[Benchmark] Client disconnected, exporting metrics");
             Path outputFile = Path.of("benchmark-results", "client.json");
-            // Use the latest snapshot since LSSClientNetworking.DISCONNECT may have already cleared state
+            // Use the latest snapshot: the mod's disconnect cleanup may have already cleared state
             var snapshot = latestClientSnapshot;
             if (snapshot != null) {
                 ClientMetricsExporter.writeClientSnapshot(outputFile, snapshot);
@@ -137,13 +137,27 @@ public final class BenchmarkHook {
         armFrameThrottle(System.getProperty("lss.soak.frameThrottle", ""));
 
         // Snapshot every second (like the benchmark hook) but only WRITE every 5s — the
-        // LSS disconnect handler clears all counters before ours runs, so the disconnect
+        // mod's disconnect cleanup clears all counters, and it can run before Fabric's
+        // DISCONNECT event reaches us (the event comes from netty), so the disconnect
         // row must re-emit the last live snapshot instead of reading zeroed state.
         var latest = new java.util.concurrent.atomic.AtomicReference<Map<String, Object>>();
         final int[] clientTick = {0};
         final int[] enabledSeconds = {0};
         final boolean[] actionFired = {false};
+        // The mod's disconnect cleanup, which queues the cache save, runs on the client thread
+        // inside the game's own disconnect (ClientDisconnectHook), AFTER Fabric's DISCONNECT
+        // event below. So the event only writes the final row; the flush and the exit wait
+        // here for the first tick that finds the level gone, which is after that cleanup.
+        var disconnected = new java.util.concurrent.atomic.AtomicBoolean();
+        final boolean[] exiting = {false};
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
+            if (disconnected.get()) {
+                if (client.level == null && !exiting[0]) {
+                    exiting[0] = true;
+                    flushCacheAndExitSoakClient();
+                }
+                return;
+            }
             clientTick[0]++;
             if (!LSSClientNetworking.hasReceivedSessionConfig()) return;
             if (clientTick[0] % LSSConstants.TICKS_PER_SECOND != 0) return;
@@ -164,29 +178,33 @@ public final class BenchmarkHook {
             LSSLogger.info("[Soak] Client disconnected, writing final snapshot");
             var snapshot = latest.get() != null ? latest.get() : ClientMetricsExporter.buildClientSnapshot();
             appendSoakClientRow(outputFile, "disconnect", snapshot);
-            // The LSS disconnect handler queued the cache save before us in registration
-            // order; this drains the single-threaded IO executor so the write lands.
-            dev.vox.lss.networking.client.ColumnCacheStore.flushPendingIo();
-            long grace = Long.getLong("lss.soak.haltGraceMillis", 0L);
-            if (grace > 0) {
-                // The JourneyMap smoke: JourneyMap saves its map in its own disconnect
-                // handling, which a halt from here would cut short. Halt from a side
-                // thread so this one returns and the client finishes its disconnect.
-                LSSLogger.info("[Soak] Cache flushed, exiting client in " + grace + " ms (halt grace)");
-                var halt = new Thread(() -> {
-                    try {
-                        Thread.sleep(grace);
-                    } catch (InterruptedException ignored) {
-                        Thread.currentThread().interrupt();
-                    }
-                    Runtime.getRuntime().halt(0);
-                }, "LSS-SoakHaltGrace");
-                halt.start();
-                return;
-            }
-            LSSLogger.info("[Soak] Cache flushed, exiting client");
-            Runtime.getRuntime().halt(0);
+            disconnected.set(true);
         });
+    }
+
+    /** Client thread, after the mod's disconnect cleanup queued the cache save. */
+    private static void flushCacheAndExitSoakClient() {
+        // Drains the single-threaded IO executor so the write lands.
+        dev.vox.lss.networking.client.ColumnCacheStore.flushPendingIo();
+        long grace = Long.getLong("lss.soak.haltGraceMillis", 0L);
+        if (grace > 0) {
+            // The JourneyMap smoke: JourneyMap saves its map in its own disconnect
+            // handling, which a halt from here would cut short. Halt from a side
+            // thread so this one returns and the client finishes its disconnect.
+            LSSLogger.info("[Soak] Cache flushed, exiting client in " + grace + " ms (halt grace)");
+            var halt = new Thread(() -> {
+                try {
+                    Thread.sleep(grace);
+                } catch (InterruptedException ignored) {
+                    Thread.currentThread().interrupt();
+                }
+                Runtime.getRuntime().halt(0);
+            }, "LSS-SoakHaltGrace");
+            halt.start();
+            return;
+        }
+        LSSLogger.info("[Soak] Cache flushed, exiting client");
+        Runtime.getRuntime().halt(0);
     }
 
     /**

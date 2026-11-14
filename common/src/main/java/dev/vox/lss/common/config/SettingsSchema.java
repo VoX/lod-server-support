@@ -55,6 +55,10 @@ public final class SettingsSchema<T> {
                 default -> null;
             };
             if (raw==null && spec.path().equals("lod.distance.by_world")) raw=Map.of();
+            // Not in the server templates (a commented line there): a file this version creates
+            // must still load on 0.22.0. Default on (VoX, 2026-11-13, plan §8.1): a player the
+            // permission gate leaves out is told, so they stop debugging their own setup.
+            if (!client && raw==null && spec.path().equals("service.show_permission_refusal")) raw=true;
             if (paper && spec.path().equals("storage.lod_store.resweep_interval_seconds")) raw=300;
             Object value=typed(spec,raw);
             defs.put(spec.path(),value);
@@ -69,6 +73,8 @@ public final class SettingsSchema<T> {
                 case "far_players.extend_far_plane" -> "Draw far players past the game's far clipping plane, out to the farthest far player; it only acts while an LOD mod such as Voxy is drawing and not while a shader pack is on, and fog can still hide very distant players (turn off the LOD mod's fog).";
                 default -> "";
             };
+            if (!client && spec.path().equals("service.show_permission_refusal"))
+                inline="With require_permission on, a player without the permission is told \"distant terrain here needs a permission you don't have\" (the default); false = they see the general \"switched off here\". Courtesy, not secrecy: a player can compare with a friend.";
             if (inline.isEmpty()) inline=inlineComment(resource("server"),spec.path());
             if (inline.isEmpty()) inline=inlineComment(resource("paper"),spec.path());
             descs.put(spec.path(),new Descriptor(spec.path(),spec.legacyKey(),spec.kind(),value,spec.timing(),spec.platform(),spec.sensitive(),group(spec.path()),units(spec.path()),
@@ -222,6 +228,29 @@ public final class SettingsSchema<T> {
                 yield Collections.unmodifiableMap(result);
             }
         };
+    }
+    /** Whether {@code path} (or the old name of it) is a true/false setting: the file reader
+     *  accepts the usual spellings of a boolean there (0.23.0 plan §1). */
+    boolean booleanPath(String path) {
+        Descriptor d=descriptors.get(canonicalPath(path));
+        return d!=null&&d.kind()==Kind.BOOLEAN;
+    }
+    /** What is wrong with {@code value} at a known path, in the strict reader's words; null
+     *  when it is acceptable. For the problem list only. */
+    String valueProblem(String path,Object value) {
+        Descriptor d=descriptors.get(canonicalPath(path));
+        try { typed(new Spec(d.path(),d.legacyKey(),d.kind(),d.timing(),d.platform(),d.sensitive()),value); return null; }
+        catch (SettingsException e) { return e.getMessage(); }
+    }
+    /** Whether {@code path} is a group that holds settings (or an accepted old group name). */
+    boolean knownGroup(String path) {
+        return descriptors.keySet().stream().anyMatch(k->k.startsWith(path+"."))
+                ||aliases.keySet().stream().anyMatch(k->k.startsWith(path+"."));
+    }
+    /** Whether the strict reader accepts {@code path} as a setting (including retired ones). */
+    boolean knownLeaf(String path) {
+        return descriptors.containsKey(path)||aliases.containsKey(path)
+                ||client&&(path.equals("lod.dh.refresh_seconds")||path.equals("lod.dh.profile"));
     }
     private static List<String> stringList(Object value,String p) {
         if (!(value instanceof List<?> list)) throw type(p,"list of strings");

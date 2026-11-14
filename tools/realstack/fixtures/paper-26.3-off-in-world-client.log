@@ -1,0 +1,10 @@
+[11:24:57] [Render thread/INFO]: Registered voxel column consumer: dev.vox.lss.compat.VoxyCompat$1
+[11:24:57] [Render thread/INFO]: Voxy detected — registered raw ingest bridge
+[11:24:57] [Render thread/INFO]: Created settings /home/user/.local/state/lss-realstack/runs/20261113T162440Z-paper-26.3-fabric-client/client/config/lss-client-config.yaml
+[11:24:57] [Render thread/INFO]: Registered voxel column consumer: dev.vox.lss.compat.XaeroSession$2
+[11:24:57] [Render thread/INFO]: Xaero's World Map detected — LOD map bridge active
+[11:25:00] [Render thread/INFO]: Connecting to 127.0.0.1, 25901
+[11:25:03] [Render thread/INFO]: [System] [CHAT] RealStack joined the game
+[11:25:03] [Render thread/INFO]: Server session config received (protocol v20, LOD distance: 0 chunks, enabled: false)
+[11:25:23] [Render thread/INFO]: [System] [CHAT] [LSS] Distant terrain is switched off in this world on this server. Nothing is wrong with your game.
+[11:26:06] [Render thread/WARN]: Client disconnected with reason: Kicked by an operator

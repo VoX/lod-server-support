@@ -999,6 +999,9 @@ FABRIC_ONLY_CLASS_PREFIXES = (
     "dev/vox/lss/config/menu/SodiumConfigScreens",
     "dev/vox/lss/networking/client/LSSClientCommands",
     "dev/vox/lss/mixin/IntegratedServerLanHook",
+    # The client disconnect cleanup's hook (0.23.0 plan §12): Fabric's own event fires on a
+    # network thread; NeoForge's logged-out event is already on the client thread.
+    "dev/vox/lss/mixin/ClientDisconnectHook",
     # The far-plane extension hook (far-plane plan #364): fabric-only where NeoForge draws no
     # far players (only 1.21.1 ships a NeoForge renderer and its twin hook).
     "dev/vox/lss/mixin/FarPlaneHook",
@@ -1370,10 +1373,12 @@ def check_vss_pair_paper(lss_jar, vss_jar, problems):
 
 # Expected runtime-branding values per jar brand. The VSS repackage rewrites lss-brand.properties
 # (the ONLY thing Brand.java reads); everything it changes is display + LOCAL command text.
+# alsoClientCommand (0.23.0, decision 0005): the VSS client also answers to /lss; the LSS
+# build has no second name (None = the key must be absent).
 _BRAND_LSS = {"shortName": "LSS", "displayName": "LOD Server Support",
-              "clientCommand": "lss", "serverCommand": "lsslod"}
+              "clientCommand": "lss", "serverCommand": "lsslod", "alsoClientCommand": None}
 _BRAND_VSS = {"shortName": "VSS", "displayName": "Voxy Server Side",
-              "clientCommand": "vss", "serverCommand": "vsslod"}
+              "clientCommand": "vss", "serverCommand": "vsslod", "alsoClientCommand": "lss"}
 
 
 def _brand_props(jar):
@@ -2702,7 +2707,7 @@ def _selftest_fixtures():
         BRAND_LSS_TXT = ("shortName=LSS\ndisplayName=LOD Server Support\n"
                          "clientCommand=lss\nserverCommand=lsslod\n")
         BRAND_VSS_TXT = ("shortName=VSS\ndisplayName=Voxy Server Side\n"
-                         "clientCommand=vss\nserverCommand=vsslod\n")
+                         "clientCommand=vss\nserverCommand=vsslod\nalsoClientCommand=lss\n")
         brand_lss = os.path.join(td, "brand-lss.jar")
         _make_jar(brand_lss, {"lss-brand.properties": BRAND_LSS_TXT})
         brand_vss = os.path.join(td, "brand-vss.jar")
@@ -3136,7 +3141,7 @@ def _selftest_fixtures():
         BRAND_LSS = ("shortName=LSS\ndisplayName=LOD Server Support\n"
                      "clientCommand=lss\nserverCommand=lsslod\n")
         BRAND_VSS = ("shortName=VSS\ndisplayName=Voxy Server Side\n"
-                     "clientCommand=vss\nserverCommand=vsslod\n")
+                     "clientCommand=vss\nserverCommand=vsslod\nalsoClientCommand=lss\n")
         pap_manifest = "Manifest-Version: 1.0\npaperweight-mappings-namespace: mojang\n"
 
         def _write_tree_fabric(name, meta, brand, extra=None, drop=()):

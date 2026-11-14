@@ -254,7 +254,7 @@ tasks.register('vssJar') {
                     } else if (e.name == 'lss-brand.properties') {
                         // Runtime display branding (Brand.java). Display values only — the
                         // wire surface (channels, protocol, payloads) is untouched.
-                        def props = 'shortName=VSS\ndisplayName=Voxy Server Side\nclientCommand=vss\nserverCommand=vsslod\n'
+                        def props = 'shortName=VSS\ndisplayName=Voxy Server Side\nclientCommand=vss\nserverCommand=vsslod\nalsoClientCommand=lss\n'
                         def ne = new ZipEntry('lss-brand.properties')
                         zos.putNextEntry(ne)
                         zos.write(props.getBytes('UTF-8'))

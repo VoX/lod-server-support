@@ -75,6 +75,10 @@ class VoxyCompat {
         if(vanillaCoverage!=null)vanillaCoverage.clear();
         vanillaCoverage=null;
         classResolver = Class::forName;
+        voxyIsAvailable = null;
+        voxyDrawConfig = null;
+        voxyRenderingEnabled = null;
+        drawStateUnknown = false;
         reportSink = LSSApi::reportIngestFailure;
         consumerRegistrar = LSSApi::registerColumnConsumer;
     }
@@ -154,6 +158,59 @@ class VoxyCompat {
         }
     }
     public static boolean dhFailed() { return dhBridgeDead.get(); }
+
+    // "Is Voxy drawing?" (0.23.0 plan §6). Its own failure domain: a Voxy that renames this
+    // surface costs only this answer, which then stays UNKNOWN and changes no verdict.
+    private static volatile MethodHandle voxyIsAvailable;      // VoxyCommon.isAvailable()
+    private static volatile MethodHandle voxyDrawConfig;       // VoxyConfig.CONFIG
+    private static volatile MethodHandle voxyRenderingEnabled; // VoxyConfig#isRenderingEnabled()
+    private static volatile boolean drawStateUnknown;
+
+    /**
+     * What Voxy says about itself: UNSUPPORTED when it switched itself off for this computer
+     * (its graphics requirements are not met), SWITCHED_OFF when the player turned it or its
+     * rendering off in Voxy's settings, READY otherwise. Ask only in a world: before the
+     * game's renderer exists Voxy has not decided yet and reads as unsupported.
+     *
+     * <p>Order matters. Voxy's config class decides, when it is first loaded, whether to read
+     * the player's file or to hand out a switched-off stand-in, from this same availability
+     * answer. So the config is touched only after Voxy has said it is available: loading it
+     * earlier from here would switch a working Voxy off for the whole game.
+     */
+    static dev.vox.lss.common.diagnostics.ClientStatusSnapshot.Renderer drawState() {
+        var unknown = dev.vox.lss.common.diagnostics.ClientStatusSnapshot.Renderer.UNKNOWN;
+        if (drawStateUnknown) return unknown;
+        try {
+            var available = voxyIsAvailable;
+            if (available == null) {
+                available = MethodHandles.lookup().findStatic(
+                        classResolver.resolve("me.cortex.voxy.commonImpl.VoxyCommon"), "isAvailable",
+                        MethodType.methodType(boolean.class));
+                voxyIsAvailable = available;
+            }
+            if (!(boolean) available.invokeExact())
+                return dev.vox.lss.common.diagnostics.ClientStatusSnapshot.Renderer.UNSUPPORTED;
+            var enabled = voxyRenderingEnabled;
+            if (enabled == null) {
+                var lookup = MethodHandles.lookup();
+                Class<?> config = classResolver.resolve("me.cortex.voxy.client.config.VoxyConfig");
+                voxyDrawConfig = lookup.unreflectGetter(config.getField("CONFIG"))
+                        .asType(MethodType.methodType(Object.class));
+                enabled = lookup.findVirtual(config, "isRenderingEnabled", MethodType.methodType(boolean.class))
+                        .asType(MethodType.methodType(boolean.class, Object.class));
+                voxyRenderingEnabled = enabled; // last: it is the guard
+            }
+            Object config = (Object) voxyDrawConfig.invokeExact();
+            if (config == null) return unknown;
+            return (boolean) enabled.invokeExact(config)
+                    ? dev.vox.lss.common.diagnostics.ClientStatusSnapshot.Renderer.READY
+                    : dev.vox.lss.common.diagnostics.ClientStatusSnapshot.Renderer.SWITCHED_OFF;
+        } catch (Throwable e) {
+            if (e instanceof Error err && !(e instanceof LinkageError) && !(e instanceof AssertionError)) throw err;
+            drawStateUnknown = true;
+            return unknown;
+        }
+    }
     static void vanillaChunkLoaded(net.minecraft.client.multiplayer.ClientLevel level,net.minecraft.world.level.chunk.LevelChunk chunk) {
         if(vanillaCoverage!=null)vanillaCoverage.loaded(level,chunk);
     }

@@ -923,7 +923,34 @@ public class RequestProcessingService {
     private final dev.vox.lss.common.config.UnservedWorldsLog unservedWorldsLog =
             new dev.vox.lss.common.config.UnservedWorldsLog();
 
+    /** Why a REGISTERED session is told "not here" (0.23.0 plan §3): the service is switched
+     *  off, or this world's distance is 0. Never the permission reason: a player the gate
+     *  denies is not registered. */
+    private static int registeredOffReason(LSSServerConfig config, int worldDistance) {
+        return dev.vox.lss.common.SessionOffReason.of(config.enabled(), false,
+                config.showPermissionRefusal(), worldDistance <= 0);
+    }
+
+    private final dev.vox.lss.common.config.SettingsProblemAnnouncer settingsProblems =
+            new dev.vox.lss.common.config.SettingsProblemAnnouncer();
+
+    /** A settings file that did not load leaves the service disabled, so this runs before the
+     *  "disabled" return (0.23.0 plan §1). Costs one empty-list check when the file loaded. */
+    private void announceSettingsProblems() {
+        this.settingsProblems.tick(serviceConfig.startupProblems(), serviceConfig.settingsFileName(),
+                dev.vox.lss.common.Brand.shortName(), dev.vox.lss.common.Brand.serverCommand(),
+                this.server.isDedicatedServer(), () -> {
+                    var admins = new java.util.ArrayList<dev.vox.lss.common.config.SettingsProblemAnnouncer.Recipient>();
+                    for (var player : this.server.getPlayerList().getPlayers())
+                        if (LSSServerCommands.mayRun(player))
+                            admins.add(new dev.vox.lss.common.config.SettingsProblemAnnouncer.Recipient(player.getUUID(),
+                                    line -> player.sendSystemMessage(net.minecraft.network.chat.Component.literal(line))));
+                    return admins;
+                }, dev.vox.lss.common.LSSLogger::error);
+    }
+
     public void tick() {
+        announceSettingsProblems();
         if (!serviceConfig.enabled()) return;
         this.unservedWorldsLog.note(serviceConfig);
 
@@ -1260,7 +1287,8 @@ public class RequestProcessingService {
                             .dataVersion().version(),
                     // Map-policy plan A2: decided at send time, per player — the
                     // arm/disarm re-push is how a capable session learns the new flags.
-                    state.getCapabilities(), denyMapIngestion);
+                    state.getCapabilities(), denyMapIngestion)
+                    .withOffReason(registeredOffReason(config, dist));
             try {
                 this.sessionConfigPusher.push(player, payload);
                 gateState.noteMapFlagsSent(state.getPlayerUUID(), payload.protocolVersion(),
@@ -1348,7 +1376,12 @@ public class RequestProcessingService {
                                     lodDistanceFor(player), generationEnabledForSession(),
                                     net.minecraft.SharedConstants.getCurrentVersion()
                                             .dataVersion().version(),
-                                    state.getCapabilities(), denyMapIngestion));
+                                    state.getCapabilities(), denyMapIngestion)
+                                    // The permission gate took the service away: say so when
+                                    // the operator allows it, and nothing otherwise (never the
+                                    // world: this player gets no later pushes to correct it).
+                                    .withOffReason(dev.vox.lss.common.SessionOffReason.of(
+                                            config.enabled(), true, config.showPermissionRefusal(), false)));
                     gateState.noteMapFlagsSent(uuid, LSSConstants.PROTOCOL_VERSION,
                             state.getCapabilities(), denyMapIngestion);
                 } catch (Exception e) {
@@ -1561,7 +1594,10 @@ public class RequestProcessingService {
                         lodDistanceFor(player), generationEnabledForSession(),
                         net.minecraft.SharedConstants.getCurrentVersion()
                                 .dataVersion().version(),
-                        capabilities, true));
+                        capabilities, true)
+                        // A session without the map-policy bit: its frame has no flags field,
+                        // so there is nowhere to put a reason.
+                        .withOffReason(0));
             } catch (Exception e) {
                 LSSLogger.error("Map-policy disable push failed for " + name, e);
             }
@@ -1605,7 +1641,8 @@ public class RequestProcessingService {
                         generationEnabledForSession(),
                         net.minecraft.SharedConstants.getCurrentVersion()
                                 .dataVersion().version(),
-                        capabilities, denyMapIngestion));
+                        capabilities, denyMapIngestion)
+                        .withOffReason(registeredOffReason(config, dist)));
                 gateState.noteMapFlagsSent(uuid, LSSConstants.PROTOCOL_VERSION, capabilities,
                         denyMapIngestion);
             } catch (Exception e) {
@@ -1742,7 +1779,8 @@ public class RequestProcessingService {
                                                 .dataVersion().version(),
                                         // Map-policy plan A2: every Nether trip at stock
                                         // settings pushes — the flags must ride it.
-                                        capabilities, denyMapIngestion));
+                                        capabilities, denyMapIngestion)
+                                        .withOffReason(registeredOffReason(config, newDist)));
                         // The last-sent flags live on the gate state, not on this
                         // per-dimension request state (map-ingestion permission plan §3.3).
                         this.serviceGateState.noteMapFlagsSent(player.getUUID(),

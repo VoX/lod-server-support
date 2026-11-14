@@ -367,6 +367,13 @@ public class LSSClientGameTests implements FabricClientGameTest {
             // end-to-end through the production receive glue on the live client.
             runIngestFallbackTest(context, recorder);
         }
+        // Leaving the world closed the play connection on the client thread, and the mod's
+        // disconnect cleanup ran inside the game's own disconnect (ClientDisconnectHook, 0.23.0
+        // plan §12). Nothing else cleans up before the next join, so a hook that no longer
+        // fires leaves the session standing here.
+        if (LSSClientNetworking.isServerEnabled() || LSSClientNetworking.getRequestManager() != null) {
+            throw new AssertionError("the disconnect cleanup did not run when the client closed its connection");
+        }
     }
 
     /** Injects a v20 column whose every block identity is unknown (a real corpus body

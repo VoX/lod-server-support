@@ -257,7 +257,10 @@ class MapPolicyWiringContractTest {
             assertFalse(code.contains("encodeSessionConfig("),
                     f + " encodes a SessionConfig outside PaperPayloadHandler — use sendSessionConfig");
             for (var args : callArgs(code, "PaperPayloadHandler.sendSessionConfig(")) {
-                assertEquals(7, args.size(), f + ": " + args);
+                // 0.23.0 plan §3: the reason follows `enabled`; capabilities and the decision
+                // stay last.
+                assertEquals(8, args.size(), f + ": " + args);
+                assertEquals("offReason", args.get(3), f + ": the reason the answer says \"not here\", got " + args);
                 assertCapabilitiesThenPolicy(f, args);
                 sends++;
             }
@@ -271,11 +274,19 @@ class MapPolicyWiringContractTest {
         assertCapabilitiesThenPolicy(Path.of("PaperRequestProcessingService"), senderCalls.getFirst());
         var wrapped = callArgs(service.replace("private void sendSessionConfig(", "private void DECL("),
                 " sendSessionConfig(");
-        assertTrue(wrapped.size() >= 5, "repush, gate revocation, map revocation, flags push, dimension change");
+        assertTrue(wrapped.size() >= 4, "repush, map revocation, flags push, dimension change");
         for (var args : wrapped) {
             assertEquals(4, args.size(), args.toString());
             assertCapabilitiesThenPolicy(Path.of("PaperRequestProcessingService"), args);
         }
+        // 0.23.0 plan §3: the permission gate's revocation has its own wrapper (it is the one
+        // send to a session that is about to be unregistered, and the one with the permission
+        // reason).
+        var revocations = callArgs(service.replace("private void sendGateRevocation(", "private void DECL("),
+                " sendGateRevocation(");
+        assertEquals(1, revocations.size(), "the gate sweep's revocation push");
+        assertEquals(3, revocations.getFirst().size(), revocations.toString());
+        assertCapabilitiesThenPolicy(Path.of("PaperRequestProcessingService"), revocations.getFirst());
     }
 
     @Test

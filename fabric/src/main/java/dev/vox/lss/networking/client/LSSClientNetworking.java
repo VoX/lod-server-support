@@ -154,9 +154,23 @@ public class LSSClientNetworking {
     private static void registerConnectionLifecycle() {
         ClientPlayConnectionEvents.JOIN.register(
                 (handler, sender, client) -> ClientNetGlue.onJoin());
+        // No ClientPlayConnectionEvents.DISCONNECT: Fabric fires it from a network thread
+        // whenever the socket closes first. The cleanup runs from ClientDisconnectHook.
+    }
 
-        ClientPlayConnectionEvents.DISCONNECT.register(
-                (handler, client) -> ClientNetGlue.onDisconnect());
+    /**
+     * The client is leaving its server or world ({@code ClientDisconnectHook}, at the head of
+     * the game's own disconnect): the disconnect cleanup, on the client thread, before the
+     * level is torn down. Also called when there was no session; the cleanup is a no-op then.
+     * Contained, because it runs inside the game's disconnect: a failure here is logged and
+     * the player still gets out; the next join's defensive teardown covers what was left.
+     */
+    public static void onConnectionClosing() {
+        try {
+            ClientNetGlue.onDisconnect();
+        } catch (Throwable t) {
+            dev.vox.lss.common.LSSLogger.error("The disconnect cleanup failed; the next join cleans up", t);
+        }
     }
 
     private static void registerTickHandler() {

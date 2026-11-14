@@ -74,9 +74,12 @@ class ClientStatusTextTest {
             assertTrue(snapshot.lines().contains("Far players sent by this server: "+count),snapshot.lines().toString());
             var json=JsonParser.parseString(DiagnosticExport.clientJson(snapshot)).getAsJsonObject();
             assertEquals(count,json.get("farPlayersFromServer").getAsInt(),"a count only, in the export");
-            assertEquals(6,json.get("schemaVersion").getAsInt());
+            assertEquals(7,json.get("schemaVersion").getAsInt());
+            // The export writes the whole record: the 0.23.0 fields are in it.
+            assertEquals(0,json.get("serverOffReason").getAsInt());
+            assertEquals("UNKNOWN",json.get("renderer").getAsString());
         }
-        assertEquals(6,ClientStatusSnapshot.SCHEMA_VERSION,"a new exported field is a schema bump");
+        assertEquals(7,ClientStatusSnapshot.SCHEMA_VERSION,"a new exported field is a schema bump");
         // Callers with no far-player observation read 0, never a stale or negative count.
         var unobserved=new ClientStatusSnapshot(ClientStatusSnapshot.SCHEMA_VERSION,1,100,true,true,true,true,true,true,
                 20,512,128,0,0,0,0,0,0,0,0,ClientStatusSnapshot.Discovery.NEGOTIATED,
@@ -96,6 +99,21 @@ class ClientStatusTextTest {
     }
     /** The wording fix of the same plan: "the server does not acknowledge delivery" read
      *  like a failure. All three locales say it was sent, and nothing else. */
+    @Test void aBacklogNobodyReportsIsNotShownAsTheNumberMinusOne() {
+        // -1 is "nothing reports a backlog" (no LOD renderer, or the world is switched off).
+        // The visual pass of 0.22.0 found "ingest=-1" in the status details.
+        for (int backlog : new int[]{-1, 0, 7}) {
+            var snapshot=new ClientStatusSnapshot(ClientStatusSnapshot.SCHEMA_VERSION,1,100,true,true,true,true,true,true,
+                    20,512,128,0,0,0,backlog,0,0,0,0,ClientStatusSnapshot.Discovery.NEGOTIATED,
+                    ClientStatusSnapshot.Availability.ABSENT,null,DiagnosticVersions.unknown(),null);
+            var queues=ClientStatusText.lines(snapshot,200).stream()
+                    .filter(m->m.key().equals("lss.status.queues")).findFirst().orElseThrow();
+            Object shown=queues.arguments().get(1);
+            if (backlog<0) assertEquals(new ClientStatusText.Message("lss.status.unknown",List.of()),shown);
+            else assertEquals(backlog,shown);
+        }
+    }
+
     @Test void theSharingPreferenceMessageNoLongerReadsLikeAFailure() throws Exception {
         Path root=Path.of("").toAbsolutePath();
         while (!Files.isDirectory(root.resolve("fabric/src/main/resources/assets/lss/lang"))) root=root.getParent();

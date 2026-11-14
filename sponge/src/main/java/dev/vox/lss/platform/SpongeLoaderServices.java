@@ -72,6 +72,17 @@ public class SpongeLoaderServices implements LoaderServices {
         throw new IllegalStateException("sendToServer on the Sponge (dedicated-server) LoaderServices impl");
     }
 
+    /** The Sponge command is gated on the build's admin node (SpongeCommands.canExecute). */
+    @Override
+    public boolean mayRunServerCommand(ServerPlayer player, boolean permissionLevelAllows) {
+        try {
+            return ((org.spongepowered.api.entity.living.player.server.ServerPlayer) (Object) player)
+                    .hasPermission(dev.vox.lss.common.Brand.lowerShortName() + ".admin");
+        } catch (RuntimeException e) {
+            return false;
+        }
+    }
+
     @Override
     public boolean checkPermission(ServerPlayer player, String node, boolean defaultValue) {
         try {

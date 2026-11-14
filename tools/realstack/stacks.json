@@ -82,6 +82,77 @@
       ]
     },
     {
+      "id": "paper-26.3-fabric-client",
+      "status": "ready",
+      "minecraft": "26.3",
+      "notes": "A Paper server with the plugin build of the mod and no other plugin, and the same Fabric client stack as fabric-26.3-sodium-voxy-xaero. The Paper build is the newest STABLE one of 2026-11-13 (realstack.py pin --paper 26.3).",
+      "server": {
+        "platform": "paper",
+        "paper": {
+          "build": 249,
+          "file": "paper-26.3-249.jar",
+          "sha256": "4c734aeb4da98845934af1e5481f0df7c80ad3ca50d272319ffe2b0e8a187c8a"
+        },
+        "lss": {
+          "loader": "paper",
+          "jar_prefix": "lod-server-support-paper"
+        },
+        "mods": []
+      },
+      "client": {
+        "loader": "fabric",
+        "loader_version": "0.20.1",
+        "lss": {
+          "loader": "fabric",
+          "jar_prefix": "lod-server-support-fabric"
+        },
+        "jvm_args": [
+          "-XX:StackShadowPages=32"
+        ],
+        "mods": [
+          {
+            "slug": "fabric-api",
+            "project_id": "P7dR8mSH",
+            "version_id": "Zns5SSRA",
+            "version_number": "0.166.2+26.3",
+            "file": "fabric-api-0.166.2+26.3.jar",
+            "sha512": "fb686a9fa923248328107a12498229d6951e316257f18b7d0e4cbd6885ba447ed50a44076a8a5ba47cfe2043b329db3587ab000aeab1face26b2587a5d4ba6b5"
+          },
+          {
+            "slug": "sodium",
+            "project_id": "AANobbMI",
+            "version_id": "bAZQdGpg",
+            "version_number": "mc26.3-0.9.2-fabric",
+            "file": "sodium-fabric-0.9.2+mc26.3.jar",
+            "sha512": "f3f260f204b8ce5e8777c2c73f537956755ec61f3817b0b78b5e5568e8aa40f14891f146475075109747665c7c88a45ca0ca9a8df3c68d79c58ecdaa8d8c4b93"
+          },
+          {
+            "slug": "voxy",
+            "project_id": "fxxUqruK",
+            "version_id": "iIrM8ZKQ",
+            "version_number": "0.2.20-beta",
+            "file": "voxy-0.2.20-beta.jar",
+            "sha512": "ab502017b3241e1307717ca426ba564f1450ddb7d9d37e95759e57ee5edc7cb014aa48628f51f6010ffd2a410dadf1f4eea7ba86c0da6233059c0a6120157a01"
+          },
+          {
+            "slug": "xaeros-world-map",
+            "project_id": "NcUtCpym",
+            "version_id": "VM8lNSSM",
+            "version_number": "fabric-26.3-1.47.2",
+            "file": "xaeroworldmap-fabric-26.3-1.47.2.jar",
+            "sha512": "cac3c0fb3121ddebc7f073571dcbce5f1811ca001ea94ef03c1da667e8a3413144f570c4b593f632358eff98fa138631ed7907fd1bd5da7d43c037ea782125fb"
+          }
+        ]
+      },
+      "checks": [
+        "server_started",
+        "handshake",
+        "columns_sent",
+        "client_clean",
+        "screenshot"
+      ]
+    },
+    {
       "id": "neoforge-1.21.1-c2me-scalablelux",
       "status": "ready",
       "minecraft": "1.21.1",
@@ -141,6 +212,131 @@
             "version_number": "neoforge-1.21.1-1.47.0",
             "file": "xaeroworldmap-neoforge-1.21.1-1.47.0.jar",
             "sha512": "4d2d78bc85afa002f682ef344b7284cf1baa4903cc5a11cd1d7bd260ac63952580ae717bab47079540ead633cdd5d8e4fdf230dc99a68bcb7a269500e7dada13"
+          }
+        ]
+      },
+      "checks": [
+        "server_started",
+        "handshake",
+        "columns_sent",
+        "client_clean",
+        "screenshot"
+      ]
+    },
+    {
+      "id": "neoforge-client-fabric-server-1.21.1",
+      "status": "ready",
+      "minecraft": "1.21.1",
+      "notes": "A NeoForge client on a Fabric server: the two loaders learn each other's channels differently, and a handshake sent before the client knows the server's channels is dropped by NeoForge. The handshake check fails if the session is not the current protocol.",
+      "server": {
+        "platform": "fabric",
+        "loader_version": "0.20.1",
+        "lss": {
+          "loader": "fabric",
+          "jar_prefix": "lod-server-support-fabric"
+        },
+        "mods": [
+          {
+            "slug": "fabric-api",
+            "project_id": "P7dR8mSH",
+            "version_id": "5SwzqWUu",
+            "version_number": "0.116.18+1.21.1",
+            "file": "fabric-api-0.116.18+1.21.1.jar",
+            "sha512": "9f721c253ae2e9823cb548e8ec132c9928f80a65184e9b8dcfc489a8d632df20cbfea1e65ff8a4333bdb295c41fbe2228b43e4d41c7355d42ed4637a785840a1"
+          }
+        ]
+      },
+      "client": {
+        "loader": "neoforge",
+        "neoforge": {
+          "version": "21.1.266",
+          "installer_sha256": "4f312ec39ff935c661f4053ef398056a8f946057b04be1c1eebf0518a18b2ba2"
+        },
+        "lss": {
+          "loader": "neoforge",
+          "jar_prefix": "lod-server-support-neoforge"
+        },
+        "mods": [
+          {
+            "slug": "sodium",
+            "project_id": "AANobbMI",
+            "version_id": "uMOpc5uV",
+            "version_number": "mc1.21.1-0.8.13-neoforge",
+            "file": "sodium-neoforge-0.8.13+mc1.21.1.jar",
+            "sha512": "4f537696af95411e9daf15795fb5fcbc49913d488a96fa912fa8f1d7db408710995e8a1461190f3cd0f8217bf9e35e9539176592428ed587ca2d7aa84450a390"
+          },
+          {
+            "slug": "xaeros-world-map",
+            "project_id": "NcUtCpym",
+            "version_id": "SnQ4SoDe",
+            "version_number": "neoforge-1.21.1-1.47.0",
+            "file": "xaeroworldmap-neoforge-1.21.1-1.47.0.jar",
+            "sha512": "4d2d78bc85afa002f682ef344b7284cf1baa4903cc5a11cd1d7bd260ac63952580ae717bab47079540ead633cdd5d8e4fdf230dc99a68bcb7a269500e7dada13"
+          }
+        ]
+      },
+      "checks": [
+        "server_started",
+        "handshake",
+        "columns_sent",
+        "client_clean",
+        "screenshot"
+      ]
+    },
+    {
+      "id": "fabric-1.21.1-sodium-xaero",
+      "status": "ready",
+      "minecraft": "1.21.1",
+      "notes": "The Fabric client on 1.21.1: this line has no client gametest, so this row is the only automated start, join and kick of a Fabric 1.21.1 client. Xaero's World Map is the terrain consumer (no Voxy release targets Fabric 1.21.1 with this Sodium).",
+      "server": {
+        "platform": "fabric",
+        "loader_version": "0.20.1",
+        "lss": {
+          "loader": "fabric",
+          "jar_prefix": "lod-server-support-fabric"
+        },
+        "mods": [
+          {
+            "slug": "fabric-api",
+            "project_id": "P7dR8mSH",
+            "version_id": "5SwzqWUu",
+            "version_number": "0.116.18+1.21.1",
+            "file": "fabric-api-0.116.18+1.21.1.jar",
+            "sha512": "9f721c253ae2e9823cb548e8ec132c9928f80a65184e9b8dcfc489a8d632df20cbfea1e65ff8a4333bdb295c41fbe2228b43e4d41c7355d42ed4637a785840a1"
+          }
+        ]
+      },
+      "client": {
+        "loader": "fabric",
+        "loader_version": "0.20.1",
+        "lss": {
+          "loader": "fabric",
+          "jar_prefix": "lod-server-support-fabric"
+        },
+        "mods": [
+          {
+            "slug": "fabric-api",
+            "project_id": "P7dR8mSH",
+            "version_id": "5SwzqWUu",
+            "version_number": "0.116.18+1.21.1",
+            "file": "fabric-api-0.116.18+1.21.1.jar",
+            "sha512": "9f721c253ae2e9823cb548e8ec132c9928f80a65184e9b8dcfc489a8d632df20cbfea1e65ff8a4333bdb295c41fbe2228b43e4d41c7355d42ed4637a785840a1"
+          },
+          {
+            "slug": "sodium",
+            "project_id": "AANobbMI",
+            "version_id": "SMxNOGZ6",
+            "version_number": "mc1.21.1-0.8.13-fabric",
+            "file": "sodium-fabric-0.8.13+mc1.21.1.jar",
+            "sha512": "8614a374593698069a80ac74de8cd9c28f3928d16819a0e0d6320b538e823f7e54e8be06d5ea5a9c268beb0e02073209d1f831a02dede851588b972367680853"
+          },
+          {
+            "slug": "xaeros-world-map",
+            "project_id": "NcUtCpym",
+            "version_id": "XIR7GzC3",
+            "version_number": "fabric-1.21.1-1.47.0",
+            "file": "xaeroworldmap-fabric-1.21.1-1.47.0.jar",
+            "sha512": "7bdf96a45ab729ad5b8c56b1de421ab8c94006a65e62f21e45a4733a38a7a1655b8be03ef3bdfcdc52401c66894b9f4f80fc28b41d47a787a9fa45094629f5c7"
           }
         ]
       },

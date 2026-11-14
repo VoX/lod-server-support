@@ -7,6 +7,7 @@ local server in offline mode.
 """
 from __future__ import annotations
 
+import re
 import uuid
 from pathlib import Path
 
@@ -36,6 +37,10 @@ CLIENT_OPTIONS = {
     'simulationDistance': '5', 'soundCategory_master': '0.0', 'soundCategory_music': '0.0',
     'enableVsync': 'false', 'menuBackgroundBlurriness': '0', 'panoramaScrollSpeed': '0.0',
 }
+# A Paper plugin keeps its settings in a folder named after the plugin, and the Voxy Server
+# Side build of the plugin has its own name.
+PAPER_PLUGIN_FOLDERS = {'lss': 'LodServerSupport', 'vss': 'VoxyServerSide'}
+PLAIN_FILE = re.compile(r'^[A-Za-z0-9][A-Za-z0-9._+-]*$')
 
 
 class LaunchError(RuntimeError):
@@ -96,6 +101,25 @@ def server_properties(port: int, minecraft: str) -> str:
     return ''.join(f'{key}={value}\n' for key, value in values.items())
 
 
+def mods_folder(platform: str) -> str:
+    """Where a server platform loads the mod under test and its companions from."""
+    return 'plugins' if platform == 'paper' else 'mods'
+
+
+def server_settings_path(platform: str, brand: str) -> Path:
+    """The mod's server settings file, relative to the server directory. The file exists only
+    after the first start has created it."""
+    name = f'{brand}-server-config.yaml'
+    if platform == 'paper':
+        return Path('plugins') / PAPER_PLUGIN_FOLDERS[brand] / name
+    return Path('config') / name
+
+
+def client_settings_path(brand: str) -> Path:
+    """The mod's client settings file, relative to the game directory."""
+    return Path('config') / f'{brand}-client-config.yaml'
+
+
 def client_options() -> str:
     """options.txt for an unattended client: no tutorial, no narrator, small render distance."""
     return ''.join(f'{key}:{value}\n' for key, value in CLIENT_OPTIONS.items())
@@ -153,6 +177,28 @@ def fabric_server_command(java: Path, tag: str, classpath: list[Path], server_ja
     return [str(java), tag, *SERVER_MEMORY, *jvm_args, f'-Dfabric.gameJarPath={server_jar}',
             '-cp', ':'.join(str(path) for path in classpath),
             'net.fabricmc.loader.impl.launch.knot.KnotServer', 'nogui']
+
+
+def paper_server_command(java: Path, tag: str, paper_jar: Path, jvm_args: list[str]) -> list[str]:
+    """A Paper server: the pinned server jar, which unpacks itself into the working directory
+    on its first start. Plugins come from ./plugins."""
+    return [str(java), tag, *SERVER_MEMORY, *jvm_args, '-jar', str(paper_jar), 'nogui']
+
+
+def paperclip_downloads(context: str) -> list[dict]:
+    """The files a Paper server jar would download on its first start, from the jar's
+    META-INF/download-context: one line per file with its sha256, its URL and the name it gets
+    in ./cache. A run puts its own verified copy there, so the server downloads nothing."""
+    wanted = []
+    for line in context.splitlines():
+        parts = line.split('\t')
+        if not line.strip():
+            continue
+        if len(parts) != 3 or not re.fullmatch(r'[0-9a-f]{64}', parts[0]) \
+                or not PLAIN_FILE.match(parts[2]):
+            raise LaunchError(f'unexpected line in the Paper jar\'s download list: {line!r}')
+        wanted.append({'sha256': parts[0], 'url': parts[1], 'name': parts[2]})
+    return wanted
 
 
 def neoforge_server_command(java: Path, tag: str, neoforge_version: str,

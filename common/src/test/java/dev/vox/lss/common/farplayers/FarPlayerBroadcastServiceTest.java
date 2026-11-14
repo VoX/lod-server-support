@@ -795,6 +795,26 @@ class FarPlayerBroadcastServiceTest {
     }
 
     @Test
+    void theDiagLineCountsKeptOptOutsSessionOrNot() {
+        // 0.23.0 plan §2: a client with no session still delivers "do not share my position",
+        // and an operator (and the real-stack run) can see that it arrived.
+        var svc = new FarPlayerBroadcastService(null);
+        assertFalse(svc.diagLine().contains("opted_out="), svc.diagLine());
+        svc.onPrefs(T1, prefs(true, false));     // never subscribed
+        assertEquals(1, svc.optedOut());
+        assertTrue(svc.diagLine().endsWith(", opted_out=1"), svc.diagLine());
+        svc.subscribeViewer(VIEWER);
+        svc.onPrefs(VIEWER, prefs(true, true));  // shares: not counted
+        assertEquals(1, svc.optedOut());
+        svc.onPrefs(T1, prefs(true, true));      // changed their mind (with a session)
+        assertEquals(0, svc.optedOut());
+        assertFalse(svc.diagLine().contains("opted_out="), svc.diagLine());
+        svc.onPrefs(T1, prefs(true, false));
+        svc.onDisconnect(T1);                    // gone with the connection
+        assertEquals(0, svc.optedOut());
+    }
+
+    @Test
     void disconnectForgetsTheRetainedPrefs() {
         var svc = new FarPlayerBroadcastService(null);
         svc.subscribeViewer(T1);

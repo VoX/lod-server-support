@@ -1,0 +1,6 @@
+[11:23:18] [Render thread/INFO]: Registered voxel column consumer: dev.vox.lss.compat.VoxyCompat$1
+[11:23:18] [Render thread/INFO]: Voxy detected — registered raw ingest bridge
+[11:23:18] [Render thread/INFO]: Registered voxel column consumer: dev.vox.lss.compat.XaeroSession$2
+[11:23:18] [Render thread/INFO]: Xaero's World Map detected — LOD map bridge active
+[11:23:23] [Render thread/INFO]: Connecting to 127.0.0.1, 25900
+[11:24:28] [Render thread/WARN]: Client disconnected with reason: Kicked by an operator
