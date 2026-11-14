@@ -1,5 +1,7 @@
 # Contributor guide
 
+**Frozen (decision 0001, 2026-11-13).** This line is frozen at 0.21.x: crash and security fixes only, made on this branch and released as a patch of 0.21 (`v0.21.<n>+mc1.21.10`) with `LSS_RELEASE_LINES=1.21.10 tools/release/tag_chain.sh` from a main checkout. It is no longer synced or re-pinned with the other lines: `config/compatibility/line.json` says `"role": "frozen"`, `tools/compat/ci.py` compares nothing, and CI has no cross-line step. The six-line re-pin rules below describe the time before the freeze.
+
 This checkout is the Minecraft **1.21.10** support line (`support/mc1.21.10`; releases tag `v<x.y.z>+mc1.21.10`; NeoForge builds but does not ship). Use **Java 21** for the platform build and **Java 21** for common tests. Folia has no 1.21.10 build, so this line ships Paper/Purpur only (`plugin.yml` pins `folia-supported: false`). Actual platform MC targets, shipping and renderer availability are checked by [the compatibility catalog](docs/compatibility.md), with `.github/line.env` and build definitions authoritative. Run client gametests explicitly alongside the Fabric build; preserve this line’s loader and rendering adaptations.
 
 ## To the agent reading this

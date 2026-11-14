@@ -1,5 +1,7 @@
 # LOD Server Support
 
+> **This branch (Minecraft 1.21.10) is frozen at 0.21.x**: it gets crash and security fixes only. New features ship for Minecraft 26.3, 26.2, 1.21.11 and 1.21.1 ([decision 0001](https://github.com/VoX/lod-server-support/blob/main/docs/decisions/0001-line-tiers.md)).
+
 Enables players with [Voxy](https://modrinth.com/mod/voxy) to see fully rendered terrain out to hundreds of chunks on multiplayer servers without needing to explore the world first. Also includes **Far Players**: players far beyond normal render distance appear in the LOD terrain with name tags, equipment, and mounts.
 
 **Try it live**: join `lod-server-support.modrinth.gg` with Voxy and this mod installed. Supports Minecraft 26.3, 26.2, 26.1, 1.21.11, 1.21.10, and 1.21.1.
