@@ -16,4 +16,4 @@
 ### Support
 
 - **Platforms** — Fabric, Paper/Purpur/Folia (experimental), NeoForge and Sponge (experimental) for Minecraft 26.3.
-- **Minecraft 26.1 and 1.21.10** — These two stay on 0.21.0 and get no new versions; 26.2, 1.21.11 and 1.21.1 are released alongside this one.
+- **Minecraft 26.1 and 1.21.10** — These two now get crash and security fixes only; 0.21.1 brings them the Fabric server crash fix. 26.2, 1.21.11 and 1.21.1 are released alongside this one.
