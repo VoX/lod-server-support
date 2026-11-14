@@ -20,7 +20,8 @@
     "fabric_client_gametests": true,
     "sponge_shipping": true
   },
-  "support_tier": "correct-not-perfect",
+  "role": "frozen",
+  "support_tier": "frozen",
   "capability_states": [
     "available",
     "unsupported",
