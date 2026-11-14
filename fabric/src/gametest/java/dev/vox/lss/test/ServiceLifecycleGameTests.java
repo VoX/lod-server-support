@@ -3033,7 +3033,7 @@ public class ServiceLifecycleGameTests {
     @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = 200)
     public void aDisconnectFiredOffTheServerThreadIsCleanedUpOnIt(GameTestHelper helper) {
         var server = helper.getLevel().getServer();
-        helper.assertTrue(LSSServerNetworking.getRequestService() != null,
+        Gt.assertTrue(helper, LSSServerNetworking.getRequestService() != null,
                 "live service required: the event handler cleans it");
         var mock = placeMockServerPlayer(helper);
         var uuid = mock.getUUID();
@@ -3041,7 +3041,7 @@ public class ServiceLifecycleGameTests {
         try {
             // Connection-scoped state the cleanup drops: what the client said about itself.
             dev.vox.lss.networking.server.ServerReceiverGlue.recordClientInfo(uuid, 4242);
-            helper.assertTrue(Integer.valueOf(4242).equals(LSSServerNetworking.clientDataVersion(uuid)),
+            Gt.assertTrue(helper, Integer.valueOf(4242).equals(LSSServerNetworking.clientDataVersion(uuid)),
                     "premise: the fact is kept");
 
             var failure = new java.util.concurrent.atomic.AtomicReference<Throwable>();
@@ -3059,9 +3059,9 @@ public class ServiceLifecycleGameTests {
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
             }
-            helper.assertTrue(!otherThread.isAlive() && failure.get() == null, "the event returned: " + failure.get());
+            Gt.assertTrue(helper, !otherThread.isAlive() && failure.get() == null, "the event returned: " + failure.get());
             // The server thread is right here, inside this test: the cleanup cannot have run yet.
-            helper.assertTrue(LSSServerNetworking.clientDataVersion(uuid) != null,
+            Gt.assertTrue(helper, LSSServerNetworking.clientDataVersion(uuid) != null,
                     "the cleanup must not run on the thread that fired the event");
             handedOver = true;
         } finally {
@@ -3073,7 +3073,7 @@ public class ServiceLifecycleGameTests {
         }
         helper.runAfterDelay(3, () -> {
             try {
-                helper.assertTrue(LSSServerNetworking.clientDataVersion(uuid) == null,
+                Gt.assertTrue(helper, LSSServerNetworking.clientDataVersion(uuid) == null,
                         "…and it runs on the server thread with its next tasks");
             } finally {
                 server.getPlayerList().remove(mock);
