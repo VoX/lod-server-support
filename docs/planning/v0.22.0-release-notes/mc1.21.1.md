@@ -9,6 +9,10 @@
 - **Chat notice** — The first few times you join a server where distant terrain can't work, one grey line in chat says why. Each kind of line is shown at most three times ever, and there is nothing to configure.
 - **Server diagnostics** — `/lsslod diag` now lists errors the mod recovered from and how many sessions used each protocol version.
 
+### Bug Fixes
+
+- **Fabric server crash** — A Fabric server could crash when a player was kicked or timed out while distant terrain was still being generated for them. This fix was added after the beta and did not go through its three-day test.
+
 ### Support
 
 - **Platforms** — Fabric, Paper/Purpur and NeoForge for Minecraft 1.21.1.
