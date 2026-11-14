@@ -62,7 +62,12 @@ A release ships a follower only when its sync point is the release commit on mai
 26.1 and 1.21.10 keep their 0.21.0 branches, tags and published files. They are not synced. A
 crash or security fix is made on the frozen branch itself. Those branches still carry the tooling
 of their time; the first fix on one removes the old cross-line step from its `catalog.yml` and
-sets `"role": "frozen"`, `"support_tier": "frozen"` in its `line.json`.
+sets `"role": "frozen"`, `"support_tier": "frozen"` in its `line.json`; its old `ci.py` then says
+"frozen line" and compares nothing, so main's `gate.sh` runs on it unchanged. Such a fix ships as a
+patch of that line's own version (0.21.1), tagged `v<x.y.z>+mc<line>` on the frozen branch's merge
+commit and pushed with `LSS_RELEASE_LINES=<line>[,<line>] tools/release/tag_chain.sh <x.y.z>`: the
+release tools skip the in-step check for frozen lines, so a release of frozen lines only needs no
+tag on main. The line's own `release.yml` publishes it (`LINE_MAKE_LATEST=false`, never Latest).
 
 ## Other tools
 
