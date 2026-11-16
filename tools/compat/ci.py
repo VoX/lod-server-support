@@ -8,6 +8,10 @@ from lines import check
 
 def main():
  p=argparse.ArgumentParser(description=__doc__);p.add_argument('--fetch',action='store_true');p.add_argument('--report',type=Path,default=Path('compatibility-candidate-report.json'));a=p.parse_args()
+ # A frozen line (decision 0001: crash and security fixes only) is no longer kept in step
+ # with the other lines, so there is nothing to compare it with. Its own checks still run.
+ if load(ROOT/'config/compatibility/line.json').get('role')=='frozen':
+  print('compat CI: frozen line, no cross-line comparison (decision 0001)');return
  try:
   sources=load(ROOT/'config/compatibility/source-refs.json')['sources']
   for source in sources.values():

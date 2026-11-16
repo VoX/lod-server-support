@@ -42,10 +42,3 @@ jobs:
           python3 -m unittest discover -s tools/verify
           python3 -m unittest discover -s tools/tests
           python3 -m unittest discover -s test-fixtures/client-preset-tools
-      - name: Exact sources and candidate comparison
-        run: python3 tools/compat/ci.py --fetch
-      - uses: actions/upload-artifact@v5
-        if: always()
-        with:
-          name: compatibility-candidate-report
-          path: compatibility-candidate-report.json
