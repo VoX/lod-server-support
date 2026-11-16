@@ -117,6 +117,27 @@ class ReleaseSync(unittest.TestCase):
             self.assertEqual(list(problems), ['1.21.1'])
             self.assertIn('shared.txt', problems['1.21.1'])
 
+    def test_frozen_lines_are_not_compared_and_need_no_main_tag(self):
+        with tempfile.TemporaryDirectory() as scratch:
+            root = Path(scratch)
+            repository(root)
+            table = json.dumps({'schema_version': 2, 'reference': '26.3', 'lines': {
+                '26.3': {'tier': 'full'}, '1.21.1': {'tier': 'full'}, '26.1': {'tier': 'frozen'}}})
+            first = commit(root, {'config/lines/lines.json': table, 'shared.txt': 'one\n'}, 'main 1')
+            commit(root, {'shared.txt': 'two\n'}, 'main 2')
+            # A frozen branch has the old tooling: no sync.json, and it never took 'main 2'.
+            run(root, 'checkout', '-q', '-b', 'frozen', first)
+            commit(root, {'fix.txt': 'crash fix\n', 'config/lines/lines.json': None}, 'frozen fix')
+            run(root, 'tag', 'v0.21.1+mc26.1')
+            run(root, 'checkout', '-q', 'main')
+            self.assertEqual(rc.frozen_lines(root), {'26.1'})
+            # A release of the frozen line alone: nothing to compare, no tag on main needed.
+            self.assertEqual(rc.release_lines('0.21.1', root), [('26.1', 'v0.21.1+mc26.1')])
+            self.assertEqual(rc.unsynced('0.21.1', root), {})
+            # A support line that is not frozen still needs main's tag.
+            run(root, 'tag', 'v0.21.1+mc1.21.1', 'frozen')
+            self.assertEqual(list(rc.unsynced('0.21.1', root)), ['1.21.1'])
+
 
 if __name__ == '__main__':
     unittest.main()

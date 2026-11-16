@@ -77,6 +77,16 @@ def parse_env(text):
     return out
 
 
+def frozen_lines(repo=REPO_ROOT, ref='HEAD'):
+    """The lines config/lines/lines.json at ref marks frozen (decision 0001). A frozen line is no
+    longer kept in step with main: it releases crash and security fixes from its own branch."""
+    shown = subprocess.run(['git', '-C', str(repo), 'show', ref + ':config/lines/lines.json'],
+                           capture_output=True, text=True)
+    if shown.returncode:
+        return set()
+    return {line for line, row in json.loads(shown.stdout)['lines'].items() if row.get('tier') == 'frozen'}
+
+
 def known_lines(repo=REPO_ROOT, ref='HEAD'):
     """(lines oldest first, reference line) from config/lines/lines.json at ref."""
     shown = subprocess.run(['git', '-C', str(repo), 'show', ref + ':config/lines/lines.json'],
@@ -202,12 +212,16 @@ def resolve(args):
 def unsynced(version, repo=REPO_ROOT, only=None):
     """{line: reason} for every support line of the release that is not in step with the release
     commit on main. In step means: the line's recorded sync point and main's tag differ only in
-    line-local paths (docs, per-line config)."""
+    line-local paths (docs, per-line config). Frozen lines are not compared: they are not kept in
+    step, and a release of frozen lines only (a crash fix on them) needs no tag on main."""
     import fnmatch
     import sys
     sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'lines'))
     from lines import EXEMPT
-    rows = release_lines(version, repo, only)
+    frozen = frozen_lines(repo)
+    rows = [row for row in release_lines(version, repo, only) if row[0] not in frozen]
+    if not rows:
+        return {}
     _, reference = known_lines(repo)
     main_tags = [tag for line, tag in rows if line == reference]
     if not main_tags:
