@@ -118,6 +118,15 @@ def validate_side(side, label: str, kind_key: str, kinds: tuple[str, ...]) -> li
             problems.append(f'{label}.neoforge.version must pin the NeoForge build')
         elif not is_hex(neoforge.get('installer_sha256'), 64):
             problems.append(f'{label}.neoforge.installer_sha256 must be the installer sha256')
+    if kind == 'paper':
+        paper = side.get('paper')
+        if not isinstance(paper, dict) or not isinstance(paper.get('build'), int) \
+                or isinstance(paper.get('build'), bool):
+            problems.append(f'{label}.paper.build must pin the Paper build number')
+        elif not isinstance(paper.get('file'), str) or not JAR_NAME.match(paper['file']):
+            problems.append(f'{label}.paper.file must be the plain .jar file name of that build')
+        elif not is_hex(paper.get('sha256'), 64):
+            problems.append(f'{label}.paper.sha256 must be the server jar sha256')
     selector = side.get('lss')
     if not isinstance(selector, dict) or not isinstance(selector.get('loader'), str) \
             or not isinstance(selector.get('jar_prefix'), str):

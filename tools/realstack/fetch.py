@@ -13,6 +13,7 @@ Cache layout (LSS_REALSTACK_CACHE, default ~/.cache/lss-realstack):
   assets/indexes, assets/objects        vanilla assets (an object's name is its sha1)
   fabric/<mc>-<loader>-<side>.json      Fabric loader profiles
   neoforge/<version>/                   installer jar and the client and server installs
+  paper/<mc>/<file>                     pinned Paper server jars
 """
 from __future__ import annotations
 
@@ -33,6 +34,8 @@ MOJANG_MANIFEST = 'https://piston-meta.mojang.com/mc/game/version_manifest_v2.js
 FABRIC_META = 'https://meta.fabricmc.net/v2'
 FABRIC_MAVEN = 'https://maven.fabricmc.net/'
 NEOFORGE_MAVEN = 'https://maven.neoforged.net/releases'
+PAPER_API = 'https://fill.papermc.io/v3/projects/paper'
+PAPER_DOWNLOAD = 'server:default'
 ASSET_BASE = 'https://resources.download.minecraft.net'
 SAFE_FILE = re.compile(r'^[A-Za-z0-9][A-Za-z0-9._+-]*\.jar$')
 SAFE_ID = re.compile(r'^[A-Za-z0-9]{6,16}$')
@@ -42,6 +45,7 @@ ALLOWED_HOSTS = frozenset({
     'resources.download.minecraft.net',
     'meta.fabricmc.net', 'maven.fabricmc.net',
     'maven.neoforged.net',
+    'fill.papermc.io', 'fill-data.papermc.io',
 })
 
 
@@ -425,3 +429,55 @@ def neoforge_published_sha256(version: str) -> str:
     name = f'neoforge-{version}-installer.jar'
     url = f'{NEOFORGE_MAVEN}/net/neoforged/neoforge/{version}/{name}.sha256'
     return http_get(url).decode('ascii').split()[0].strip().lower()
+
+
+# --------------------------------------------------------------------------- Paper
+
+def paper_builds(minecraft: str) -> list[dict]:
+    """The builds PaperMC publishes for one Minecraft version, newest first (the fill v3 API)."""
+    listing = http_json(f'{PAPER_API}/versions/{urllib.parse.quote(minecraft)}/builds')
+    builds = listing if isinstance(listing, list) else listing.get('builds', [])
+    return sorted(builds, key=lambda build: build['id'], reverse=True)
+
+
+def choose_paper_build(builds: list[dict], wanted: int | None = None) -> dict:
+    """The build to pin: the one asked for, otherwise the newest STABLE build, otherwise (a
+    version PaperMC has not called stable yet) the newest of any channel."""
+    if wanted is not None:
+        builds = [build for build in builds if build['id'] == wanted]
+    stable = [build for build in builds if build.get('channel') == 'STABLE']
+    if not (stable or builds):
+        raise FetchError('PaperMC lists no such build')
+    return (stable or builds)[0]
+
+
+def paper_pin_from_build(build: dict) -> dict:
+    """The stacks.json `paper` entry that pins one build's server jar. The file name becomes
+    part of a cache path, so anything but a plain jar name is refused."""
+    download = build['downloads'][PAPER_DOWNLOAD]
+    sha256 = download['checksums']['sha256']
+    if not SAFE_FILE.match(download['name']) or not isinstance(build['id'], int) \
+            or not re.fullmatch(r'[0-9a-f]{64}', sha256):
+        raise FetchError(f'unexpected Paper build id, file name or hash: {build["id"]!r}, '
+                         f'{download["name"]!r}')
+    return {'build': build['id'], 'file': download['name'], 'sha256': sha256}
+
+
+def fetch_paper_server(minecraft: str, pin: dict, cache: Path) -> tuple[Path, str]:
+    """Put the pinned Paper server jar in the cache and return (path, how).
+
+    The pin's sha256 is the authority: a cached file that matches needs no network at all, and
+    a download is refused when PaperMC publishes a different file or hash for that build.
+    """
+    dest = cache / 'paper' / minecraft / pin['file']
+    if file_matches(dest, 'sha256', pin['sha256']):
+        return dest, 'cached'
+    build = http_json(f'{PAPER_API}/versions/{urllib.parse.quote(minecraft)}/builds/{pin["build"]}')
+    published = paper_pin_from_build(build)
+    if published != {key: pin[key] for key in ('build', 'file', 'sha256')}:
+        raise FetchError(f'Paper {minecraft} build {pin["build"]}: PaperMC publishes '
+                         f'{published["file"]} sha256 {published["sha256"][:16]}…, the pin says '
+                         f'{pin["file"]} {pin["sha256"][:16]}…')
+    url = build['downloads'][PAPER_DOWNLOAD]['url']
+    write_verified(dest, http_get(url, timeout=600), 'sha256', pin['sha256'], url)
+    return dest, 'downloaded'

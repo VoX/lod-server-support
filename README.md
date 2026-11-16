@@ -51,7 +51,7 @@ For a Voxy player on an existing DH server, ask the admin to add LSS alongside D
 
 LOD Server Support is backwards and forwards compatible from v0.4.0 through the current version. Server operators can freely update to take advantage of improvements without breaking clients on older versions (unless the server turns on `privacy.request_no_map_ingestion`, which needs 0.19.0 or newer clients), and clients can update without breaking compatibility with older servers. One local exception: once this version saves the client settings file with `integrations.map_ingestion` in it, LSS 0.17 and older cannot read that file and start without LODs; before downgrading, rename `map_ingestion:` back to `xaero_map:` under `integrations:` (or delete the file).
 
-**Far players.** Players beyond your normal render distance are drawn as player models in the LOD terrain (Fabric client), lit as if under open sky (or at full brightness, mounts included, with the "Full Bright Far Players" option / `far_players.full_bright` in `lss-client-config.yaml`), with their name tags (also drawn over players still in normal range once they are past the game's own name-tag distance) and, within about 80 blocks, their skin overlay layers (farther out the depth buffer cannot separate that thin shell from the body). Two limits worth knowing: players past the game's far plane (your render distance × 64 blocks, or the cloud distance when that is larger) are not drawn unless you turn on "Extend Far Player Draw Range" (`far_players.extend_far_plane`, kept in `lss-client-experimental.yaml`), which is only visible with an LOD mod such as Voxy and is not used while a shader pack is on (fog can still hide very distant players: if they fade out, turn off your LOD mod's fog); and with Iris shaders, packs whose Voxy integration keeps LOD depth out of the vanilla depth buffer (Complementary, for one) draw far players on top of LOD terrain instead of behind it.
+**Far players.** Players beyond your normal render distance are drawn as player models in the LOD terrain (Fabric client), lit as if under open sky (or at full brightness, mounts included, with the "Full Bright Far Players" option / `far_players.full_bright` in `lss-client-config.yaml`), with their name tags (also drawn over players still in normal range once they are past the game's own name-tag distance) and, within about 80 blocks, their skin overlay layers (farther out the depth buffer cannot separate that thin shell from the body). Two limits worth knowing: players past the game's far plane (your render distance × 64 blocks, or the cloud distance when that is larger) are not drawn unless "Extend Draw Range" is on (it was called "Extend Far Player Draw Range" before 0.23.0) (`far_players.extend_far_plane`, kept in `lss-client-experimental.yaml`), which is only visible with an LOD mod such as Voxy and is not used while a shader pack is on (fog can still hide very distant players: if they fade out, turn off your LOD mod's fog); and with Iris shaders, packs whose Voxy integration keeps LOD depth out of the vanilla depth buffer (Complementary, for one) draw far players on top of LOD terrain instead of behind it.
 
 *Who is shown.* The server's `far_players.mode` decides:
 
@@ -64,6 +64,8 @@ Never sent, in any mode: spectators (unless `far_players.send_spectators` is on)
 
 *How a player hides.* Turn off "Share My Position" on the Far Players page of the LSS options (`far_players.sharing.enabled` in `lss-client-config.yaml`); `far_players.sharing.max_distance_blocks` limits how far away others may see you instead of hiding you completely. The server honors both for every player in modes `on` and `opt_in`. In mode `required` it honors them only for players who hold the hide permission. Anyone else who has Share My Position off or a share distance set is told so in chat, once per connection: "This server requires position sharing: other players can see where you are from far away, and your Share My Position setting does not apply here." The server sends that line itself, so it also reaches older versions of the mod, and it sends it once the player can be shown to someone (not while they are vanished, invisible, dead or a spectator the server does not send). Clients on 0.21.0 or newer show it in their own language (English, Simplified Chinese, Traditional Chinese); every other client shows the English text.
 
+*"Off" always reaches the server (0.23.0).* Before 0.23.0 the client sent Share My Position only once it had a terrain session, so a player with Receive Server LODs off, with nothing installed that shows terrain, or on a server that gave them no session stayed visible in mode `on` although their option said off. From 0.23.0 the client sends "off" as soon as it joins, session or not, and the message after a settings save says that it was sent. "On" still waits for a session. If you switch it back on without one, the server keeps your earlier "off" until you reconnect, and the client says so. Servers on 0.11.0 to 0.13.1 ignore the early "off". Operators see these players on the `FarPlayers:` line of `/lsslod diag` as `opted_out=<n>` (online players whose kept preference is "off").
+
 *Players without the mod cannot hide themselves.* Share My Position is a setting of the LSS client mod. In mode `on` the server also shows players who do not have the mod, and they have no way to opt out. If that matters on your server, use `mode: opt_in` (only players whose own client shares are shown) or list those players in `far_players.excluded_players`.
 
 *Changed in 0.21.0: the hide permission.* The `lss.farplayers.hidden` (`vss.farplayers.hidden`) permission no longer hides a player by itself. A grant of every permission (`*`) includes it, so it used to hide every admin from everyone without saying so. The permission now means "may be hidden": automatically if the server sets `far_players.hide_permission_holders: true` (every holder is hidden in every mode, as before 0.21.0), by the player's own choice on a `required` server, and with no effect in mode `on`, where everyone may hide. Both settings apply with `/lsslod reload` (no restart). While `hide_permission_holders` is off, the server logs one warning after each start, the first time it sees a player who holds the permission during a far-player update (so only while at least one player who receives far players is online); it names both ways to hide players again, `hide_permission_holders: true` and `far_players.excluded_players`. A server whose settings file is from before 0.21.0 and has never set `hide_permission_holders` also tells each holder it shows, in chat and once per connection: "You have the lss.farplayers.hidden permission. Since 0.21.0 it no longer hides you from far players by itself: turn off Share My Position to hide. Server owners: set far_players.hide_permission_holders in the server config (true hides holders as before, false keeps this) to stop this message." Writing the key into the file with either value and running `/lsslod reload` stops that message for everyone; a file 0.21.0 created already has the key, so a new server never sends it. The server sends it only after two updates in a row read the player as a holder, and not to a holder who already has Share My Position off or is listed in `excluded_players`. An upgraded settings file gains the `hide_permission_holders` key only when you change the setting or write it yourself. A file that carries the key (every file 0.21.0 or newer creates) or says `mode: "required"` loads on LSS 0.20 and older only after deleting that line or changing the mode.
@@ -72,10 +74,10 @@ Never sent, in any mode: spectators (unless `far_players.send_spectators` is on)
 
 1. **Server mode and range.** `far_players.mode` is `on` or `required` (with `opt_in` the other player must be sharing), you are in the same dimension, and the other player is within `far_players.distance.max_blocks` and beyond `min_blocks`.
 2. **The other player's Share My Position** is on (it is by default; on a `required` server it only matters for players who hold the hide permission), and they are not a spectator, invisible, vanished, disguised or in `excluded_players`.
-3. **The setting and the permission.** With `far_players.hide_permission_holders: true`, everyone who holds the hide permission is hidden, and admins with `*` hold it. On the server, the `FarPlayers:` line of `/lsslod diag` adds `hidden=<n>` (players withheld by vanish, a disguise or that setting in the last update), `perm_holders=<n>` (holders online while the setting is off, including ones hidden for another reason or in another dimension) and `overridden=<n>` (players whose own sharing choice a `required` server is overriding).
+3. **The setting and the permission.** With `far_players.hide_permission_holders: true`, everyone who holds the hide permission is hidden, and admins with `*` hold it. On the server, the `FarPlayers:` line of `/lsslod diag` adds `hidden=<n>` (players withheld by vanish, a disguise or that setting in the last update), `perm_holders=<n>` (holders online while the setting is off, including ones hidden for another reason or in another dimension) `overridden=<n>` (players whose own sharing choice a `required` server is overriding) and, from 0.23.0, `opted_out=<n>` (online players who have Share My Position off).
 4. **What your client receives.** `/lss status` shows "Far players sent by this server". 0 means the server sends you nobody, so the cause is one of the three above. Any other number means they arrive and your client is not drawing them:
 5. **Fog.** On Minecraft 26.x, with your LOD mod's fog on (Voxy's default), far players past about 900 blocks fade into the fog. Turn the LOD mod's fog off.
-6. **Draw range.** Players past the game's far plane are drawn while "Extend Far Player Draw Range" is on (the default since 0.22.0) and an LOD mod such as Voxy is drawing; also check that "Show Far Players" is on, that "Far Player Render Limit" is 0 or large enough, and that `/lss status` does not say the far-player renderer is unavailable on your loader.
+6. **Draw range.** Players past the game's far plane are drawn while "Extend Draw Range" is on (the default since 0.22.0) and an LOD mod such as Voxy is drawing; also check that "Show Far Players" is on, that "Far Player Render Limit" is 0 or large enough, and that `/lss status` does not say the far-player renderer is unavailable on your loader.
 
 [Voxy Server Side](https://modrinth.com/plugin/voxy-server-side) is the same mod. Voxy Server Side clients are compatible with LOD Server Support servers and vice versa.
 
@@ -87,7 +89,7 @@ NeoForge ships on MC 1.21.1, 26.1, 26.2 and 26.3; the 1.21.10/1.21.11 modules re
 
 On SpongeVanilla, put the Sponge jar in the server's `mods/` folder. At startup Sponge prints a notice that the plugin uses Mixins; that is expected.
 
-**Nothing loading?** Run `/lss status` on the client. Since 0.22.0 its first line says whether distant terrain is working here and, if not, why: the server doesn't run the mod, has it switched off (for everyone, for this world or for you), runs a different version, or nothing you have installed can show the terrain. The first few times this happens the client also says so once in chat, in grey (each kind at most three times ever). Pack makers who want no such lines can ship a `notices.properties` containing `no_support=3`, `nothing_to_show=true`, `server_off=3` and `version_mismatch=3`. It goes beside the mod's `cache` folder: `.lss` in the game directory (`.vss` for Voxy Server Side), or `config/lss` in an instance that still has its cache there.
+**Nothing loading?** Run `/lss status` on the client. Since 0.22.0 its first line says whether distant terrain is working here and, if not, why: the server doesn't run the mod, has it switched off, runs a different version, or nothing you have installed can show the terrain. Since 0.23.0 it also says which "switched off" it is when the server is on 0.23.0 or newer (on the whole server, in this world, or a permission you don't have, unless the server owner keeps that last reason private), that Voxy is installed but not drawing (Voxy switched itself off because it cannot run on this computer's graphics, or it is switched off in Voxy's own settings), and that the mod's own settings file has a mistake. The first few times this happens the client also says so once in chat, in grey (each kind at most three times ever). "Voxy cannot run on this computer" is said once ever. A settings file with a mistake is different: it is said once every game start until the file is fixed, and nothing silences it. Pack makers who want none of the other lines can ship a `notices.properties` containing `no_support=3`, `nothing_to_show=true`, `server_off=3`, `version_mismatch=3` and `renderer_unsupported=true`. It goes beside the mod's `cache` folder: `.lss` in the game directory (`.vss` for Voxy Server Side), or `config/lss` in an instance that still has its cache there.
 
 ## Commands
 
@@ -101,6 +103,8 @@ On SpongeVanilla, put the Sponge jar in the server's `mods/` folder. At startup 
 - `/lsslod help` - List all commands
 
 ### Client (Fabric and supported NeoForge clients)
+
+Voxy Server Side names its commands `/vsslod` (server) and `/vss` (client). From 0.23.0 its client also answers to `/lss`, so instructions written for either build work; on a server that has its own `/lss` command, that one is used.
 
 - `/lss status` - Say whether distant terrain is working here and, if not, why; then the details (connection, map mods, far players)
 - `/lss reload` - Read saved client YAML and apply supported changes; report reconnect requirements
@@ -132,8 +136,34 @@ reload command. The menus support English, Simplified Chinese and Traditional Ch
 Invalid files leave active settings unchanged. Reload reports values that require a
 restart or reconnect; it does not rewrite comments or normalized values.
 
+**A mistake in a settings file.** The mod does not guess what a mistake meant: a file with a
+misspelled or unknown setting, or a wrong value, does not load, and the mod stays switched
+off until it is fixed (on a server nobody gets LODs; a client downloads nothing and asks
+servers not to share its position). From 0.23.0 it is hard to miss and quick to fix:
+
+- The mistakes are listed together, each with its line number and, for a near miss, the
+  name that was probably meant (`line 4: unknown setting service.require_permision. Did you mean
+  service.require_permission?`). A setting of the other side, a name from the old JSON file,
+  a name written twice and a line written by a newer version are each named as such. Values
+  from the file are never printed.
+- Server: the list is in the console at startup and again once the server has finished
+  starting. `/lsslod`, `/lsslod diag` and `/lsslod reload` show it, and each player who may
+  run `/lsslod` gets one chat line the first time they are online: "Switched off: the
+  settings file has 2 problems. Run /lsslod to see them."
+- Client: one chat line per game start, and `/lss status` lists the problems under its
+  first line.
+- `true` and `false` may also be written `yes`/`no` and `on`/`off`, in any capitalization,
+  for settings that are a switch. Nothing else is accepted in place of the documented
+  values.
+
+**Going back from 0.23.0 to an older version.** Versions before 0.23.0 know neither the
+extra spellings nor `service.show_permission_refusal`: write switches as `true`/`false`
+again and take that line out if you added it, or the older version refuses the file (it
+names one problem at a time). A file 0.23.0 created and you did not edit loads as it is.
+
 | Setting group | Purpose |
 | --- | --- |
+| `service` | Switch the LOD service on or off (restart), and `require_permission` to serve only players who hold `lss.use` (`vss.use`). With that on, a refused player's client says "distant terrain here needs a permission you don't have" (0.23.0); `show_permission_refusal: false` (a commented line in the file) makes it say the general "switched off here" instead. |
 | `lod.distance` | Server distance defaults and dimension overrides; Paper adds exact world-name overrides. |
 | `generation` | Enable generation, bound concurrent work, and set ticket timeouts in ticks. Disabling stops new admissions while existing work drains. |
 | `network` | Bandwidth limits in MiB/s before compression, queues, pacing and yielding to vanilla traffic. |
@@ -209,7 +239,7 @@ lod:
       "minecraft:the_end": 512
 ```
 
-The client cache uses `cache.use_world_sub_buckets` to separate remote worlds and
+The client cache uses `cache.split_by_world` to separate remote worlds and
 `cache.address_aliases` to group equivalent addresses. With Voxy, aliases also need
 matching LoD Mirror/storage corroboration; otherwise LSS retains separate address
 caches. Changes take effect on the next physical connection. `/lss diag` shows the

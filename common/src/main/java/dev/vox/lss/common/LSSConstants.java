@@ -372,6 +372,20 @@ public final class LSSConstants {
      *  appended after {@code serverDataVersion} ONLY for a version-20, non-v16 frame to a
      *  session that declared {@link #CAPABILITY_MAP_POLICY}. Unknown bits are ignored. */
     public static final int SESSION_FLAG_DENY_MAP_INGESTION = 0x1;
+    /** Why an answer says {@code enabled=false} (0.23.0 plan §3). At most one of the three is
+     *  set, only together with {@code enabled=false}, and none means "not said" (an older
+     *  server, or an operator who keeps the permission reason private). Clients from 0.19.0
+     *  to 0.22.0 test bit 0 only, so these are invisible to them.
+     *  This one: the service is switched off on this server. */
+    public static final int SESSION_FLAG_OFF_SERVER = 0x2;
+    /** This world's distance is 0 (the session is registered; other worlds may serve). */
+    public static final int SESSION_FLAG_OFF_WORLD = 0x4;
+    /** The server requires a permission this player does not hold, and its operator lets the
+     *  player be told ({@code service.show_permission_refusal}). */
+    public static final int SESSION_FLAG_OFF_PERMISSION = 0x8;
+    /** The three reason bits. */
+    public static final int SESSION_FLAG_OFF_REASONS =
+            SESSION_FLAG_OFF_SERVER | SESSION_FLAG_OFF_WORLD | SESSION_FLAG_OFF_PERMISSION;
     /** {@code sessionFlags} sentinel: the field is absent from the frame (the encoder omits
      *  it; the client decodes absence as "unchanged" and keeps the connection's value). */
     public static final int SESSION_FLAGS_ABSENT = -1;

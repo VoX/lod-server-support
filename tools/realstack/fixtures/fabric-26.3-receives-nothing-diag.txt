@@ -1,0 +1,13 @@
+[11:24:26] [Server thread/INFO]: System chat: === LSS LOD Diagnostics ===
+[11:24:26] [Server thread/INFO]: System chat: Config: enabled=true, lodDist=512, bw/player=25.0 MB/s, bw/global=75.0 MB/s
+[11:24:26] [Server thread/INFO]: System chat: Throughput: sent=0 (0 B), rate=0 sections/s (0 B/s), uptime=1m 18s
+[11:24:26] [Server thread/INFO]: System chat: Sources (total): in_mem=0, disk=0, up_to_date=0, gen=0, re_resolved=0, grace_skipped=0
+[11:24:26] [Server thread/INFO]: System chat: Sources (tick): sent=0, disk=0/0, utd=0, gen=0, in_mem=0, skipped=0, bytes=0 B, qpeak=0/1024
+[11:24:26] [Server thread/INFO]: System chat: DiskReader: submitted=0, completed=0, not_found=0, all_air=0, errors=0, saturated=0, header_hits=0, avg_read=0.0ms, pending=0, read_gate=0/2, gate_parked=0, gate_stops=0, gated=0, read_path=bg-split, raw_serves=1, sel=on, sel_fallbacks=0, direct_v20=1, memo_hits=0, store=full h=0 m=0 dep=1 drop=0 err=0 q=0 avg_read=0us
+[11:24:26] [Server thread/INFO]: System chat: Generation: submitted=0, completed=0, active=0, timeouts=0, removed=0, order_gated=0, inversions=0
+[11:24:26] [Server thread/INFO]: System chat: Dialects: v20=0, v19=0, v18=0, v16=0, started=0/0/0/0, ended=0/0/0/0 in 1m
+[11:24:26] [Server thread/INFO]: System chat: Xray: active=off, masked_sections=0
+[11:24:26] [Server thread/INFO]: System chat: Yield: armed=true, ticks_total=0, bytes_withheld=0 B
+[11:24:26] [Server thread/INFO]: System chat: FarPlayers: subs=0, rosters=0, updates=0, entries=0, suppressed=0, bytes=0, opted_out=1
+[11:24:26] [Server thread/INFO]: System chat: Dirty: marked=588, suppressed=26, seeded_load=1, entries=225
+[11:24:26] [Server thread/INFO]: System chat: Bandwidth: 0 B/s / 75.0 MB/s global (0 B total, 0 B wire, cols zstd=0 raw=0)

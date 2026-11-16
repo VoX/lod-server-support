@@ -9,6 +9,9 @@ final class SettingsSchemaSpecs {
         var server = new ArrayList<Spec>(); var client = new ArrayList<Spec>();
         server.add(new Spec("service.enabled", "enabled", Kind.BOOLEAN, Timing.R, Platform.ALL, false));
         server.add(new Spec("service.require_permission", "requireServicePermission", Kind.BOOLEAN, Timing.H, Platform.ALL, false));
+        // 0.23.0 plan §3. Commented out in the template with its default in SettingsSchema, so
+        // a file created by this version still loads on 0.22.0, which rejects unknown keys.
+        server.add(new Spec("service.show_permission_refusal", "showPermissionRefusal", Kind.BOOLEAN, Timing.H, Platform.ALL, false));
         server.add(new Spec("lod.distance.default_chunks", "lodDistanceChunks", Kind.INTEGER, Timing.H, Platform.ALL, false));
         server.add(new Spec("lod.distance.by_dimension", "lodDistanceChunksByWorld", Kind.INTEGER_MAP, Timing.H, Platform.ALL, false));
         server.add(new Spec("lod.distance.by_world", "lodDistanceChunksByWorld", Kind.INTEGER_MAP, Timing.H, Platform.PAPER, false));

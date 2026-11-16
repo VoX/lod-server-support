@@ -54,6 +54,14 @@ gradle_private_display() {
 }
 step gradle-clean bash tools/verify/run-gradle.sh clean
 step gradle gradle_private_display
+# The NeoForge gametest server and the Fabric one must each have run tests: a server that fails
+# to boot can exit 0, and Gradle is then green over nothing.
+step gametests-ran python3 -c 'import pathlib, sys
+sys.path.insert(0, "tools/release")
+import release_common as rc
+problem = rc.gametests_problem(pathlib.Path(sys.argv[1]).read_text(errors="replace"), 2)
+print(problem or "gametest servers ran: %s" % rc.gametest_counts(pathlib.Path(sys.argv[1]).read_text(errors="replace"))[0])
+sys.exit(1 if problem else 0)' "$out/gradle.log"
 step release-check python3 scripts/release_check.py --version "$version"
 step release-check-selftest python3 scripts/release_check.py --selftest
 step check-artifacts python3 tools/tests/check_artifacts.py
@@ -104,8 +112,11 @@ for module in ("fabric", "paper", "neoforge", "sponge"):
             continue
         jars[jar.name] = hashlib.sha256(jar.read_bytes()).hexdigest()
         shutil.copy2(jar, out / "jars" / jar.name)
-(out / "summary.json").write_text(json.dumps({"junit": totals, "jars": jars}, indent=2))
-print(json.dumps({"junit": totals, "jar_count": len(jars)}))
+sys.path.insert(0, str(root / "tools/release"))
+import release_common
+gametests = release_common.gametest_counts((out / "gradle.log").read_text(errors="replace"))[0]
+(out / "summary.json").write_text(json.dumps({"junit": totals, "gametests_passed": gametests, "jars": jars}, indent=2))
+print(json.dumps({"junit": totals, "gametests_passed": gametests, "jar_count": len(jars)}))
 PY
 # A retried step counts by its last result.
 failed="$(awk '{split($2,r,"="); last[$1]=r[2]} END{n=0; for (k in last) if (last[k]!="0") n++; print n}' "$out/steps.txt")"

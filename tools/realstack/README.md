@@ -35,7 +35,9 @@ Each run has its own directory, `<runs>/<UTC time>-<row>/`:
 
 - `verdict.json`: `passed`, and for every check its message and the log lines it relied on.
 - `evidence/`: server console log, client log, the final `lsslod diag`, `client.png`, the staged
-  jar list with hashes, and what was left running (nothing).
+  jar list with hashes, the server's settings file, and what was left running (nothing). A
+  scenario that changes the server's settings also keeps the file as the server generated it.
+  A scenario that stages client settings also keeps that file.
 - `facts.json`: port, display, timings, command lines, the diag polls.
 
 `realstack.py replay <run directory>` judges a saved run again from its evidence.
@@ -57,10 +59,41 @@ handshake check must go red.
 
 ## Scenarios and the other brand
 
-`run <row> --scenario server-without-lss` stages the server without LSS and judges what the client
-tells the player: the server started, the player joined, the client spoke its chat notice exactly
-once and in the expected words, stayed up, and a screenshot was saved. A scenario brings its own
-checks; the row's are not run.
+`run <row> --scenario <name>` stages a situation a player meets and judges what the client and the
+server say about it. A scenario brings its own checks; the row's are not run. Every scenario also
+runs `client_clean` and `screenshot`.
+
+| Scenario | Stages | Checks |
+| --- | --- | --- |
+| `server-without-lss` | the server without LSS | `server_ready`, `client_joined`, `client_notice` (the "this server doesn't seem to have this mod" notice) |
+| `off-in-world` | the server setting `lod.distance.by_dimension."minecraft:overworld": 0` | `server_started`, `server_settings`, `client_joined`, `handshake_off`, `no_columns`, `client_notice` (the "switched off in this world" notice) |
+| `client-receives-nothing` | a client settings file with `lod.receive: false` and `far_players.sharing.enabled: false` | `server_started`, `client_joined`, `no_handshake`, `opted_out` |
+
+| Scenario check | Passes when |
+| --- | --- |
+| `server_ready` | the server logged `Done` |
+| `client_joined` | the server logged the player's join during the observation window |
+| `client_notice` | the client spoke its chat notice exactly once, with the build's short name in front and in exactly the expected words |
+| `server_settings` | the saved settings file holds each value the scenario set, and the server logged that a reload applied a setting (and no line that says the setting was not applied) |
+| `handshake_off` | the server logged the join and the handshake on the current protocol, and every session config the client logged says that protocol and `enabled: false` |
+| `no_columns` | the final diag, taken at the end of the window with the player online, says `sent=0` server-wide, and for the player where the server lists the player |
+| `no_handshake` | the server logged the join and no handshake from the player, and the final diag's `Dialects` line counts no session, live or started |
+| `opted_out` | the `FarPlayers` line of the final diag says `opted_out=1` (the server prints the field only above zero) |
+
+Server settings: the settings file (`plugins/LodServerSupport/lss-server-config.yaml` on Paper,
+`config/lss-server-config.yaml` elsewhere) exists only after the first start has created it. So
+the tool starts the server once, changes the one line that holds the value (as text, so every
+comment stays), sends `lsslod reload`, and lets the client join only after the server has
+answered `Reloaded ...: N active setting(s) applied.` This is what the file's own header tells an
+operator to do, it needs one start instead of two, and the server's answer is the proof that it
+took the value. A key that is missing, commented out or a block, a reload that fails or changes
+nothing, and a setting that needs a restart all end the run with the reason. On Paper a
+world-name entry under `lod.distance.by_world` would win over the dimension entry, so
+`off-in-world` also refuses to run when the generated file has one.
+
+Client settings: `client-receives-nothing` writes `config/lss-client-config.yaml` before the
+client starts. The file holds only the keys the scenario sets; the mod takes its defaults for the
+rest.
 
 `--brand vss` takes the Voxy Server Side build of the same jars from a gate's `jars/` directory
 (`--lss dir:` only). The server is then asked for `vsslod diag`, and the notice check expects
@@ -71,6 +104,8 @@ that build's short name as the prefix.
 1. `realstack.py pin <modrinth project> --minecraft <version> --loader <loader>` prints the entry
    for the newest published file (project, version id, file name, sha512) and its dependencies.
    `realstack.py pin --neoforge-installer <version>` prints a NeoForge pin.
+   `realstack.py pin --paper <minecraft version>` prints a Paper pin (build, file name, sha256)
+   for the newest stable build, or for `--build <number>`.
 2. Add the row to `stacks.json`: id, Minecraft version, server platform and client loader with
    their loader pins, the pinned mods of both sides, the LSS jar of each side and the checks.
 3. `realstack.py run <row> --lss published:<current version>`. If it cannot be made to work, keep
@@ -79,9 +114,16 @@ that build's short name as the prefix.
 The client needs a terrain consumer (Voxy or a map mod); without one it requests no terrain and
 `columns_sent` has nothing to witness.
 
+Server platforms: `fabric`, `neoforge` and `paper`. A Paper row pins the server jar from the
+PaperMC download API (`"paper": {"build", "file", "sha256"}`); the mod under test and the pinned
+`mods` of the server side go into `plugins/`. The Paper jar unpacks itself in the run's server
+directory on every start. It would download the game's server jar for that; the tool puts its own
+verified copy where the Paper jar looks, when the hash is the one the Paper jar asks for. A Paper
+console names no thread and prints `[LSS]` in front of the mod's lines; the checks read both forms.
+
 ## Rules the tool keeps
 
-- Official sources only (Modrinth, Mojang, Fabric and NeoForge), every file hash-checked, a
+- Official sources only (Modrinth, Mojang, Fabric, NeoForge and PaperMC), every file hash-checked, a
   generic User-Agent, no account, token or credential of any kind. Clients start with
   `--accessToken 0` against an offline server.
 - Private Xvfb display only, never `:0`; `WAYLAND_DISPLAY` and `XAUTHORITY` are removed.

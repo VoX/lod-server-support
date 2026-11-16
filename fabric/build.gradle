@@ -561,7 +561,7 @@ tasks.register('vssJar') {
                         // the DISPLAY values only — the mod id, channels, protocol and payloads
                         // are untouched, so LSS and VSS stay wire-compatible. Command literals
                         // here are LOCAL (client /vss, server /vsslod), never on the wire.
-                        def props = 'shortName=VSS\ndisplayName=Voxy Server Side\nclientCommand=vss\nserverCommand=vsslod\n'
+                        def props = 'shortName=VSS\ndisplayName=Voxy Server Side\nclientCommand=vss\nserverCommand=vsslod\nalsoClientCommand=lss\n'
                         def ne = new ZipEntry('lss-brand.properties')
                         zos.putNextEntry(ne)
                         zos.write(props.getBytes('UTF-8'))

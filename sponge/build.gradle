@@ -298,7 +298,7 @@ tasks.register('vssJar') {
                         p.links = (p.links ?: [:]) + [homepage: 'https://modrinth.com/plugin/voxy-server-side']
                         replaced = JsonOutput.prettyPrint(JsonOutput.toJson(meta)).getBytes('UTF-8')
                     } else if (e.name == 'lss-brand.properties') {
-                        replaced = 'shortName=VSS\ndisplayName=Voxy Server Side\nclientCommand=vss\nserverCommand=vsslod\n'
+                        replaced = 'shortName=VSS\ndisplayName=Voxy Server Side\nclientCommand=vss\nserverCommand=vsslod\nalsoClientCommand=lss\n'
                                 .getBytes('UTF-8')
                     }
                     def ne = new ZipEntry(e.name)

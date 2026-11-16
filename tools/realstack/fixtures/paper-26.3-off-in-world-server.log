@@ -1,0 +1,27 @@
+[11:24:47 INFO]: Starting minecraft server version 26.3
+[11:24:47 WARN]: **** SERVER IS RUNNING IN OFFLINE/INSECURE MODE!
+[11:24:49 INFO]: [LSS] Created settings /home/user/.local/state/lss-realstack/runs/20261113T162440Z-paper-26.3-fabric-client/server/plugins/LodServerSupport/lss-server-config.yaml
+[11:24:49 INFO]: [LSS] Inactive on this platform: serialization.selective_nbt_parse
+[11:24:49 INFO]: [LSS] LOD store active (driver=private/3.49.1.0). It stores served LOD bytes under <world>/lss-lod/ and, once fully warmed, occupies roughly as much space as the region files themselves. It is DERIVED data — deleting lss-lod/ is always safe. Set storage.lod_store.enabled to false and restart to disable; storage.lod_store.max_size_mib bounds its size after reload.
+[11:24:49 INFO]: [LSS] Effective config: useNbtTranscode=true, diskReaderThreads=8, useCompressedColumns=true, useBackgroundReadSplit=true, useSelectiveNbtParse=true, maxConcurrentDiskReads=4
+[11:24:49 INFO]: [LSS] Starting LSS LOD request processing service
+[11:24:49 INFO]: [LSS] Registered dirty chunk listener for org.bukkit.event.block.BlockPlaceEvent
+[11:24:49 INFO]: [LSS] LOD Server Support (Paper) enabled
+[11:24:50 INFO]: Done (6.784s)! For help, type "help"
+[11:24:50 INFO]: Reading /home/user/.local/state/lss-realstack/runs/20261113T162440Z-paper-26.3-fabric-client/server/plugins/LodServerSupport/lss-server-config.yaml…
+[11:24:50 INFO]: [LSS] Reloaded lss-server-config.yaml: 1 active setting(s) applied.
+[11:24:50 INFO]: [LSS] Inactive on this platform: serialization.selective_nbt_parse
+[11:24:50 INFO]: [LSS] LOD service is off (distance 0) in: world world (minecraft:overworld)
+[11:24:50 INFO]: Reloaded lss-server-config.yaml: 1 active setting(s) applied.
+[11:24:50 INFO]: Inactive on this platform: serialization.selective_nbt_parse
+[11:25:00 INFO]: UUID of player RealStack is 7b4c5c2d-25c6-3ffa-80d4-899be6f20c8a
+[11:25:01 INFO]: System chat: [38;5;11mRealStack joined the game[0m
+[11:25:01 INFO]: RealStack[/127.0.0.1:52182] logged in with entity id 10 at ([minecraft:overworld]138.5, 63.0, 190.5)
+[11:25:03 INFO]: [LSS] LSS handshake received from RealStack (protocol v20, capabilities=15)
+[11:25:03 INFO]: [LSS] Player RealStack registered for LSS LOD request processing (caps=15)
+[11:26:05 INFO]: System chat: Kicked RealStack: Kicked by an operator
+[11:26:05 INFO]: RealStack lost connection: Kicked by an operator
+[11:26:05 INFO]: System chat: [38;5;11mRealStack left the game[0m
+[11:26:09 INFO]: System chat: Stopping the server
+[11:26:09 INFO]: Stopping server
+[11:26:09 INFO]: [LSS] Stopping LSS LOD request processing service
