@@ -1,5 +1,7 @@
 # Contributor guide
 
+**Frozen (decision 0001, 2026-11-13).** This line is frozen at 0.21.x: crash and security fixes only, made on this branch and released as a patch of 0.21 (`v0.21.<n>+mc26.1`) with `LSS_RELEASE_LINES=26.1 tools/release/tag_chain.sh` from a main checkout. It is no longer synced or re-pinned with the other lines: `config/compatibility/line.json` says `"role": "frozen"`, `tools/compat/ci.py` compares nothing, and CI has no cross-line step. The six-line re-pin rules below describe the time before the freeze.
+
 This checkout is the Minecraft **26.1** support line (`support/mc26.1-v0.14`; releases tag `v<x.y.z>+mc26.1`). Folia ships on this line (experimental). Use **Java 25** for the platform build and **Java 21** for common tests. Actual platform MC targets, shipping and renderer availability are checked by [the compatibility catalog](docs/compatibility.md), with `.github/line.env` and build definitions authoritative. Run client gametests explicitly alongside the Fabric build; preserve this line’s loader and rendering adaptations.
 
 ## To the agent reading this

@@ -1,0 +1,138 @@
+{
+  "schema_version": 1,
+  "version": "0.21.1",
+  "prepared": "2026-11-14",
+  "kind": "frozen-line crash fix (decision 0001); no beta (decision 0002 crash clause)",
+  "reference_fix": {
+    "main_commit": "92e4dd7a5",
+    "released_in": "0.22.0"
+  },
+  "lines": {
+    "26.1": {
+      "base_branch": "support/mc26.1-v0.14",
+      "base_commit": "70c099b591ea17a6b53d0651f4b664bb596a062d",
+      "gated_head": "79ea2720747a195af54394e0955595b923f46222",
+      "tag": "v0.21.1+mc26.1",
+      "notes": "docs/planning/v0.21.1-release-notes/mc26.1.md",
+      "gate_steps": 14,
+      "gate_failed_steps": 0,
+      "junit": {
+        "common": {
+          "tests": 1283,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        },
+        "fabric": {
+          "tests": 2258,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 5
+        },
+        "paper": {
+          "tests": 614,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        },
+        "neoforge": {
+          "tests": 25,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        },
+        "sponge": {
+          "tests": 26,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        }
+      },
+      "gametests_passed": [
+        8,
+        97
+      ],
+      "jars_sha256": {
+        "lod-server-support-fabric-0.21.1+26.1.2.jar": "5556e6b9cd5d2e7cfc286c82b6f07ef3f4dac4d7453105265021c4b203686b5d",
+        "voxy-server-side-fabric-0.21.1+26.1.2.jar": "ef5a5321295e8cd675c35dc05d7e1bd1865625c9c6f1023fc18361106bb5faaa",
+        "lod-server-support-paper-0.21.1+26.1.2.jar": "b4e16d3bda93a0dd1b839949350d6bbb75bbde730cac0afa595e85983c5e5792",
+        "paper-0.21.1.jar": "4b7664c98a0174a34949815064f112cf6ccc4162255e053264b1b3c9acf1c8f2",
+        "voxy-server-side-paper-0.21.1+26.1.2.jar": "7a6a33f84bab89fcb10e48f4f130eae83ddec8bd7bde021690ddff21a0924c12",
+        "lod-server-support-neoforge-0.21.1+26.1.2.jar": "1c2c1822741cef98b9a2b9ae4c9a3143306298fe52f34e01b5a57dfa796de5f5",
+        "voxy-server-side-neoforge-0.21.1+26.1.2.jar": "f1e6a393dff4ca7b9376e2c5fca5bd0fc9bc91195aafcea9acd21ace9c0f5441",
+        "lod-server-support-sponge-0.21.1+26.1.2.jar": "412a1447801b5577814147f437a619634c137dd5243e1b567a66998ed9cb84f0",
+        "voxy-server-side-sponge-0.21.1+26.1.2.jar": "69a68e075a72907b0f6948a4e0ad2f5c7cb77da4e82ba182716e506865e499c0"
+      }
+    },
+    "1.21.10": {
+      "base_branch": "support/mc1.21.10",
+      "base_commit": "3e36d7897f459bf7ea8f518eca593a528d0ad143",
+      "gated_head": "0054c1c5bbc55e51da2330b685d59e764731a444",
+      "tag": "v0.21.1+mc1.21.10",
+      "notes": "docs/planning/v0.21.1-release-notes/mc1.21.10.md",
+      "gate_steps": 14,
+      "gate_failed_steps": 0,
+      "junit": {
+        "common": {
+          "tests": 1283,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        },
+        "fabric": {
+          "tests": 2242,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 7
+        },
+        "paper": {
+          "tests": 614,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        },
+        "neoforge": {
+          "tests": 21,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        },
+        "sponge": {
+          "tests": 26,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        }
+      },
+      "gametests_passed": [
+        8,
+        98
+      ],
+      "jars_sha256": {
+        "lod-server-support-fabric-0.21.1+1.21.10.jar": "011ce1d9cc125fb46f99039ebd812ec0c7a896358fc97afd19ae842f86806256",
+        "voxy-server-side-fabric-0.21.1+1.21.10.jar": "1641400a7b3837492e105179d40e823077b1e839fd1b8c766a82d0d794d49e3f",
+        "lod-server-support-paper-0.21.1+1.21.10.jar": "9dd0f07198c0670ae09a41c24e3666a61d6aa33725f6101040949f653879ec9e",
+        "paper-0.21.1.jar": "b41476d8f7a532793ebcfce4a575c4d9c155be0d748bc1040504509f75bceecc",
+        "voxy-server-side-paper-0.21.1+1.21.10.jar": "7470492e5931c6a11fe2ef32f1e94220244fc2be0f9cf9f06f63796bb742ddd7",
+        "lod-server-support-neoforge-0.21.1+1.21.10.jar": "2e7fa5b80a6d7ddcb76b00b7dce935e92c82cf7fb9638a193a7190a3a6eeea97",
+        "voxy-server-side-neoforge-0.21.1+1.21.10.jar": "d8dc9a7becb6bea73bca10009496989b7e5cf849572088b291251484c82d2462",
+        "lod-server-support-sponge-0.21.1+1.21.10.jar": "365e456395b7c0250825be71a660b9da025c359a807cef4af131a94d477efa35",
+        "voxy-server-side-sponge-0.21.1+1.21.10.jar": "79b0d80cc738f29f6321e4bd15c62ab764d1d62fd243dd9e43ad17e12abecac2"
+      }
+    }
+  },
+  "first_attempts": {
+    "26.1": "attempt1-26.1: 14/15, unittest-tools_rig red (no WSL_DISTRO_NAME in the cron session; the storage guard could not find the VHD). Sponge still on.",
+    "1.21.10": "attempt1-1.21.10: 11/15, the new gametest did not compile (GameTestHelper.assertTrue takes a Component on 1.21.10) and its dependants; same tools_rig red."
+  },
+  "mutation_checks": {
+    "1.21.10": "handoff removed: DisconnectCleanupThreadContractTest 1/3 red, server gametests 1 required test failed (the new one)",
+    "26.1": "handoff removed: DisconnectCleanupThreadContractTest 1/3 red"
+  },
+  "real_stacks": "not run: tools/realstack has no row for a frozen line; the Fabric gametest server is the server check",
+  "astra": "skipped: nothing a player sees changes (server-thread handoff only)",
+  "reviews": [
+    "correctness/failure cases (1 Opus): no defect in the port; Sponge to drop, tooling order, VSS manifest",
+    "decisions critic (1 Opus): 0.22.0 notes said frozen lines get no new versions (fixed in #418); drop Sponge; say only Fabric servers need it"
+  ]
+}

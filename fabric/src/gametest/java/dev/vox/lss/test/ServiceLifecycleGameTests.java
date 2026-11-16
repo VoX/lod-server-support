@@ -3018,4 +3018,65 @@ public class ServiceLifecycleGameTests {
         }
         helper.succeed();
     }
+
+    /**
+     * Found 2026-11-13 by a real-stack run that crashed the server. Fabric fires its DISCONNECT
+     * event from whichever comes first: netty's channelInactive (the other end closed, or a
+     * kick's close went through) or the server thread's own disconnect handling. The cleanup
+     * touches state only the server thread may touch; run where the event fired it raced the
+     * tick ({@code ConcurrentModificationException} in {@code ChunkGenerationService.tick}). So
+     * the event may fire anywhere and the cleanup still happens on the server thread, a moment
+     * later.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = 200)
+    public void aDisconnectFiredOffTheServerThreadIsCleanedUpOnIt(GameTestHelper helper) {
+        var server = helper.getLevel().getServer();
+        helper.assertTrue(LSSServerNetworking.getRequestService() != null,
+                "live service required: the event handler cleans it");
+        var mock = placeMockServerPlayer(helper);
+        var uuid = mock.getUUID();
+        boolean handedOver = false;
+        try {
+            // Connection-scoped state the cleanup drops: what the client said about itself.
+            dev.vox.lss.networking.server.ServerReceiverGlue.recordClientInfo(uuid, 4242);
+            helper.assertTrue(Integer.valueOf(4242).equals(LSSServerNetworking.clientDataVersion(uuid)),
+                    "premise: the fact is kept");
+
+            var failure = new java.util.concurrent.atomic.AtomicReference<Throwable>();
+            var otherThread = new Thread(() -> {
+                try {
+                    net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents.DISCONNECT.invoker()
+                            .onPlayDisconnect(mock.connection, server);
+                } catch (Throwable t) {
+                    failure.set(t);
+                }
+            }, "lss-test-network-thread");
+            otherThread.start();
+            try {
+                otherThread.join(10_000);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+            helper.assertTrue(!otherThread.isAlive() && failure.get() == null, "the event returned: " + failure.get());
+            // The server thread is right here, inside this test: the cleanup cannot have run yet.
+            helper.assertTrue(LSSServerNetworking.clientDataVersion(uuid) != null,
+                    "the cleanup must not run on the thread that fired the event");
+            handedOver = true;
+        } finally {
+            if (!handedOver) {
+                // A failed assertion must not leave the mock or its fact in the shared server.
+                dev.vox.lss.networking.server.ServerReceiverGlue.sweepClientInfo(uuid);
+                server.getPlayerList().remove(mock);
+            }
+        }
+        helper.runAfterDelay(3, () -> {
+            try {
+                helper.assertTrue(LSSServerNetworking.clientDataVersion(uuid) == null,
+                        "…and it runs on the server thread with its next tasks");
+            } finally {
+                server.getPlayerList().remove(mock);
+            }
+            helper.succeed();
+        });
+    }
 }

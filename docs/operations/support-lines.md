@@ -1,5 +1,7 @@
 # Compatibility and support-line maintenance
 
+> **Frozen line.** Since 2026-11-13 this branch is frozen (decision 0001 on main): it is not kept in step with the other lines, and `tools/compat/ci.py` makes no cross-line comparison. The rest of this page describes the six-line process before the freeze; main's copy describes the current one.
+
 Run from the repository root with Python 3.11 or newer:
 
 ```sh
