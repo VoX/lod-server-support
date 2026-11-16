@@ -69,6 +69,16 @@ public interface LoaderServices {
     }
 
     /**
+     * Whether {@code player} may run the server command: the audience of the chat line about
+     * a settings file that did not load (0.23.0 plan §1). Fabric and NeoForge gate the command
+     * on the vanilla permission level, which the caller passes in; Sponge gates it on the
+     * build's admin node and overrides this.
+     */
+    default boolean mayRunServerCommand(ServerPlayer player, boolean permissionLevelAllows) {
+        return permissionLevelAllows;
+    }
+
+    /**
      * The diag token naming this loader's permission backend for the {@code Gate:}
      * line — a loader fact {@code DiagnosticsFormatter} (common) cannot compute.
      * "none" = the default-only fallback above.

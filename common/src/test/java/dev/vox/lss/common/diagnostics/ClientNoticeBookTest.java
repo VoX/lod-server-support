@@ -32,6 +32,29 @@ class ClientNoticeBookTest {
     }
 
     @Test
+    void aSettingsFileThatDidNotLoadIsSaidOncePerGameStartWithNoCounter(@TempDir Path dir) {
+        // 0.23.0 plan §1: the mod is off on every server and the player can fix it. A lifetime
+        // cap would make the fourth breakage silent; saying it on every join would nag.
+        var reads = new AtomicInteger();
+        Path file = dir.resolve("notices.properties");
+        var book = new ClientNoticeBook(() -> { reads.incrementAndGet(); return file; });
+        book.onJoin();
+        assertEquals(ClientVerdict.SETTINGS_BROKEN, run(book, ClientVerdict.SETTINGS_BROKEN, SETTLE + 5));
+        for (int join = 0; join < 5; join++) {
+            book.onDisconnect();
+            book.onJoin();
+            assertNull(run(book, ClientVerdict.SETTINGS_BROKEN, SETTLE + 5), "once per game start");
+        }
+        assertEquals(0, reads.get(), "no counters file is read");
+        assertFalse(Files.exists(file), "and none is written");
+        // The next game start (a new book) says it again, however often it was said before.
+        var next = new ClientNoticeBook(() -> file);
+        next.onJoin();
+        assertEquals(ClientVerdict.SETTINGS_BROKEN, run(next, ClientVerdict.SETTINGS_BROKEN, SETTLE + 5));
+        assertEquals(Caps.NONE, Caps.NONE.after(ClientVerdict.SETTINGS_BROKEN), "nothing is counted");
+    }
+
+    @Test
     void aSessionThatWorksNeverReadsTheCountersFile(@TempDir Path dir) {
         var reads = new AtomicInteger();
         var book = new ClientNoticeBook(() -> {
@@ -112,5 +135,25 @@ class ClientNoticeBookTest {
         book.onJoin();
         assertEquals(ClientVerdict.NO_SUPPORT, run(book, ClientVerdict.NO_SUPPORT, SETTLE + 50));
         assertTrue(Files.exists(file));
+    }
+
+    @Test
+    void aGameServerThatServesCountsForTheLobbyRuleWhateverTheRendererSays(@TempDir Path dir) {
+        // 0.23.0 review: "the LOD renderer is not drawing" replaces "Working" although the
+        // server answered and serves. The network has the mod, so its lobby is still not
+        // called a server without it.
+        Path file = dir.resolve("notices.properties");
+        var book = new ClientNoticeBook(() -> file);
+        book.onJoin();                                       // the game server: served, Voxy off
+        for (int i = 0; i < 200; i++) assertNull(book.tick(ClientVerdict.RENDERER_OFF, true));
+        book.onJoin();                                       // the lobby
+        assertNull(run(book, ClientVerdict.NO_SUPPORT, 5000));
+        assertEquals(Caps.NONE, ClientNoticeCapsFile.load(file));
+        // Not served (the client was not even asking): the rule does not apply.
+        book.onDisconnect();
+        book.onJoin();
+        for (int i = 0; i < 200; i++) assertNull(book.tick(ClientVerdict.RENDERER_OFF, false));
+        book.onJoin();
+        assertEquals(ClientVerdict.NO_SUPPORT, run(book, ClientVerdict.NO_SUPPORT, SETTLE + 50));
     }
 }

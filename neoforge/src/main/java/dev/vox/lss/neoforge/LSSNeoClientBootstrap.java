@@ -74,33 +74,15 @@ public final class LSSNeoClientBootstrap {
 
     private static void registerClientCommands(RegisterClientCommandsEvent event) {
         var dispatcher = event.getDispatcher();
-        dispatcher.register(Commands.literal(Brand.clientCommand())
-                .then(Commands.literal("clearcache")
-                        .executes(context -> {
-                            ClientCommandActions.clearCache(feedback(context.getSource()));
-                            return Command.SINGLE_SUCCESS;
-                        })
-                )
-                // Issue #4: the reset subtree (incl. `voxy-force`) is BUILT IN
-                // xplat and shared with Fabric — do not re-hand-roll it here.
-                .then(ClientCommandActions.resetSubtree(
-                        Commands::literal, LSSNeoClientBootstrap::feedback))
-                .then(ClientCommandActions.reloadSubtree(Commands::literal, LSSNeoClientBootstrap::feedback))
-                .then(ClientCommandActions.statusSubtree(Commands::literal))
-                .then(ClientCommandActions.diagnosticsSubtree(Commands::literal, LSSNeoClientBootstrap::feedback))
-                .then(Commands.literal("diag")
-                        .executes(context -> {
-                            ClientCommandActions.showDiagnostics(feedback(context.getSource()));
-                            return Command.SINGLE_SUCCESS;
-                        })
-                )
-                .then(Commands.literal("trace")
-                        .executes(context -> {
-                            ClientCommandActions.toggleTrace(feedback(context.getSource()));
-                            return Command.SINGLE_SUCCESS;
-                        })
-                )
-        );
+        // The tree is built once, in xplat, and registered under every name the build answers to.
+        for (String root : Brand.clientCommands()) {
+            // 0.23.0 plan §4: the Voxy Server Side client's extra /lss never hides a server
+            // command of that name. NeoForge posts this event each time the server's command
+            // list arrives, before it merges the client commands into it, so the list is still
+            // the server's own here and the extra name is simply not registered against it.
+            if (!root.equals(Brand.clientCommand()) && ClientCommandActions.commandListHas(root)) continue;
+            dispatcher.register(ClientCommandActions.tree(root, Commands::literal, LSSNeoClientBootstrap::feedback));
+        }
     }
 
     /** The source adapter (plan §1.1 item 5): NeoForge client commands dispatch over

@@ -200,6 +200,13 @@ public final class SettingsStore<T> {
         var oldKeys=LegacySettingsMigration.readJson(original).keySet();
         // Fresh platform templates omit inactive groups; migration need not invent absent ones.
         if(!schema.isClient()) {
+            // A key the templates only show commented out (0.22 and older reject it) must not
+            // be written by a migration either: the migrated file would not load on those
+            // versions, and following the template's "delete the #" would then duplicate it.
+            // (The commented line sits above a key in the template, not at the end of its
+            // group: this output is re-emitted, and a comment block that ends a group comes
+            // out at column 0, where deleting the "#" would make a top-level key.)
+            if(!oldKeys.contains("showPermissionRefusal"))emitted.remove("service.show_permission_refusal");
             if(!schema.isPaper()) {if(!oldKeys.contains("updateEvents"))emitted.remove("paper.update_events");if(((Map<?,?>)emitted.get("lod.distance.by_world")).isEmpty())emitted.remove("lod.distance.by_world");}
             if(schema.isPaper()) {
                 if(!oldKeys.contains("lodStoreBackfill"))emitted.remove("storage.lod_store.backfill.enabled");

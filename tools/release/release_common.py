@@ -77,6 +77,16 @@ def parse_env(text):
     return out
 
 
+def frozen_lines(repo=REPO_ROOT, ref='HEAD'):
+    """The lines config/lines/lines.json at ref marks frozen (decision 0001). A frozen line is no
+    longer kept in step with main: it releases crash and security fixes from its own branch."""
+    shown = subprocess.run(['git', '-C', str(repo), 'show', ref + ':config/lines/lines.json'],
+                           capture_output=True, text=True)
+    if shown.returncode:
+        return set()
+    return {line for line, row in json.loads(shown.stdout)['lines'].items() if row.get('tier') == 'frozen'}
+
+
 def known_lines(repo=REPO_ROOT, ref='HEAD'):
     """(lines oldest first, reference line) from config/lines/lines.json at ref."""
     shown = subprocess.run(['git', '-C', str(repo), 'show', ref + ':config/lines/lines.json'],
@@ -114,6 +124,40 @@ def line_env(tag, repo=REPO_ROOT):
 
 def tag_notes(tag, repo=REPO_ROOT):
     return git('for-each-ref', '--format=%(contents)', 'refs/tags/' + tag, repo=repo).strip()
+
+
+def paper_display(env):
+    """The Paper platform's name in a Modrinth version title, derived from the loader list
+    exactly as release.yml does ("paper purpur folia" -> "Paper/Purpur/Folia")."""
+    return '/'.join(loader[:1].upper() + loader[1:] for loader in env.get('LINE_PAPER_LOADERS', 'paper purpur').split())
+
+
+_ANSI = re.compile(r'\x1b\[[0-9;]*m')
+_GAMETESTS_PASSED = re.compile(r'All (\d+) required tests passed')
+_GAMETESTS_FAILED = re.compile(r'\d+ required tests failed')
+
+
+def gametest_counts(log_text):
+    """The gametest servers' own summaries in a Gradle log: (counts that passed, any failed).
+
+    A gametest server that fails to boot can exit 0 (seen on NeoForge 1.21.1, 2026-08-21: a
+    step that ran nothing stayed green for a release), so a green Gradle step is not proof
+    that tests ran. The summary line is.
+    """
+    text = _ANSI.sub('', log_text)
+    return [int(n) for n in _GAMETESTS_PASSED.findall(text)], bool(_GAMETESTS_FAILED.search(text))
+
+
+def gametests_problem(log_text, expected):
+    """None when `expected` gametest servers each ran at least one test and none failed;
+    otherwise what is wrong, as one sentence."""
+    passed, failed = gametest_counts(log_text)
+    if failed:
+        return 'a gametest server reported failed required tests'
+    if len(passed) < expected or 0 in passed:
+        return ('expected %d gametest servers to run tests, found summaries: %s'
+                % (expected, ', '.join(map(str, passed)) or 'none'))
+    return None
 
 
 def platforms(env):
@@ -202,12 +246,16 @@ def resolve(args):
 def unsynced(version, repo=REPO_ROOT, only=None):
     """{line: reason} for every support line of the release that is not in step with the release
     commit on main. In step means: the line's recorded sync point and main's tag differ only in
-    line-local paths (docs, per-line config)."""
+    line-local paths (docs, per-line config). Frozen lines are not compared: they are not kept in
+    step, and a release of frozen lines only (a crash fix on them) needs no tag on main."""
     import fnmatch
     import sys
     sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'lines'))
     from lines import EXEMPT
-    rows = release_lines(version, repo, only)
+    frozen = frozen_lines(repo)
+    rows = [row for row in release_lines(version, repo, only) if row[0] not in frozen]
+    if not rows:
+        return {}
     _, reference = known_lines(repo)
     main_tags = [tag for line, tag in rows if line == reference]
     if not main_tags:

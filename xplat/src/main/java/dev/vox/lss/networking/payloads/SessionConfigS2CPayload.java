@@ -87,6 +87,22 @@ public record SessionConfigS2CPayload(
                         : LSSConstants.SESSION_FLAGS_ABSENT);
     }
 
+    /**
+     * This answer with the reason it says "not here" (0.23.0 plan §3): one
+     * {@code SESSION_FLAG_OFF_*} bit from {@code SessionOffReason.of}, or 0 for "not said".
+     * Unchanged when the answer is enabled, when the frame has no flags field (a session that
+     * did not declare {@code CAPABILITY_MAP_POLICY}, or an echo of an older version), or when
+     * there is no reason: the bit only ever rides a frame that already carries flags, so a
+     * client that would be kicked by a trailing byte never gets one.
+     */
+    public SessionConfigS2CPayload withOffReason(int offReason) {
+        int reason = offReason & LSSConstants.SESSION_FLAG_OFF_REASONS;
+        if (this.enabled || this.sessionFlags < 0 || reason == 0) return this;
+        return new SessionConfigS2CPayload(this.protocolVersion, this.enabled, this.lodDistanceChunks,
+                this.generationEnabled, this.legacySyncCap, this.legacyGenCap, this.v16Wire,
+                this.serverDataVersion, this.sessionFlags | reason);
+    }
+
     /** The flags value for a session: absent unless it declared the capability. */
     public static int sessionFlagsFor(int sessionCapabilities, boolean denyMapIngestion) {
         if ((sessionCapabilities & LSSConstants.CAPABILITY_MAP_POLICY) == 0) {
