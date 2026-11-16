@@ -1,6 +1,6 @@
 {
   "schema_version": 2,
-  "reference_commit": "1c8e86e6cf3b494d3793e96ca6b1968dbbb5f73f",
+  "reference_commit": "b463b352a03d5743ab4e6683eda113839890157f",
   "adapted": [
     ".github/line.env",
     ".github/workflows/build.yml",
@@ -32,6 +32,7 @@
     "fabric/src/main/java/dev/vox/lss/compat/ScopedCarrier.java",
     "fabric/src/main/java/dev/vox/lss/config/LSSConfigMenu.java",
     "fabric/src/main/java/dev/vox/lss/mixin/ChunkSaveDataHook.java",
+    "fabric/src/main/java/dev/vox/lss/mixin/ClientDisconnectHook.java",
     "fabric/src/main/java/dev/vox/lss/mixin/FarPlaneHook.java",
     "fabric/src/main/java/dev/vox/lss/mixin/IntegratedServerLanHook.java",
     "fabric/src/main/java/dev/vox/lss/mixin/trace/MovementRejectHook.java",

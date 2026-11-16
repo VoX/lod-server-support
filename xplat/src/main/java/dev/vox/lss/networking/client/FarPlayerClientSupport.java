@@ -38,6 +38,16 @@ public final class FarPlayerClientSupport {
         return listener == null ? null : listener.getConnection();
     }
 
+    /**
+     * JOIN (0.23.0 plan §2): "do not share my position" goes to the server as soon as its
+     * preference channel exists, with or without a session; every other preference waits
+     * for the session answer. Not in the player's own world.
+     */
+    static void onJoin(boolean ownWorld) {
+        PREFERENCES.joined(connectionIdentity(), !ownWorld);
+        maybeSendPrefs();
+    }
+
     static void onSessionReady() {
         PREFERENCES.sessionReady(connectionIdentity());
         maybeSendPrefs();
@@ -47,8 +57,16 @@ public final class FarPlayerClientSupport {
         PREFERENCES.tick(connectionIdentity(), FarPlayerClientSupport::enqueuePreference);
     }
 
-    public static dev.vox.lss.platform.LoaderServices.EnqueueOutcome preferenceOutcome() {
-        return dev.vox.lss.platform.LoaderServices.EnqueueOutcome.valueOf(PREFERENCES.outcome().name());
+    /** The translation key of the line that follows a settings save: what the server now
+     *  knows about "Share My Position". */
+    public static String preferenceMessageKey() {
+        return switch (PREFERENCES.report(currentPrefs())) {
+            case SENT -> "lss.settings.privacy_sent";
+            case OPT_OUT_SENT -> "lss.settings.privacy_opt_out_sent";
+            case OPT_OUT_KEPT -> "lss.settings.privacy_opt_out_kept";
+            case NOT_SENT -> "lss.settings.privacy_no_channel";
+            case RETRYING -> "lss.settings.privacy_pending";
+        };
     }
 
     private static FarPlayerPreferenceDelivery.Outcome enqueuePreference(FarPlayerWire.Prefs prefs) {
@@ -102,11 +120,16 @@ public final class FarPlayerClientSupport {
      */
     static void maybeSendPrefs() {
         if (capabilityBit() == 0) return;
+        PREFERENCES.accept(connectionIdentity(), currentPrefs(), FarPlayerClientSupport::enqueuePreference);
+    }
+
+    /** The preference frame the settings now ask for. A settings file that failed to load
+     *  reads as "do not share" (the inactive settings), which is the safe side. */
+    private static FarPlayerWire.Prefs currentPrefs() {
         var config = LSSClientConfig.CONFIG.snapshot().farPlayers();
-        var prefs = new FarPlayerWire.Prefs(config.enabled(),
+        return new FarPlayerWire.Prefs(config.enabled(),
                 config.distance().maxBlocks(), config.distance().minBlocks(),
                 config.sharing().enabled(), config.sharing().maxDistanceBlocks());
-        PREFERENCES.accept(connectionIdentity(), prefs, FarPlayerClientSupport::enqueuePreference);
     }
 
     /** Roster frame, main client thread (the receiver hops before calling). */

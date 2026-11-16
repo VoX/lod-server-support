@@ -266,6 +266,48 @@ public final class ClientCommandActions {
         }
     }
 
+    /**
+     * The whole client command tree under {@code root} (0.23.0 plan §4): one builder for both
+     * loaders and for every name the build answers to. Each name gets its own tree; a
+     * Brigadier redirect would skip the root's requirement and has no bare form.
+     */
+    public static <S> LiteralArgumentBuilder<S> tree(String root,
+            Function<String, LiteralArgumentBuilder<S>> literal,
+            Function<S, Consumer<Component>> feedback) {
+        return literal.apply(root)
+                .then(literal.apply("clearcache").executes(context -> {
+                    clearCache(feedback.apply(context.getSource()));
+                    return Command.SINGLE_SUCCESS;
+                }))
+                // Issue #4: the reset subtree (incl. `voxy-force`) is built once, here.
+                .then(resetSubtree(literal, feedback))
+                .then(reloadSubtree(literal, feedback))
+                .then(statusSubtree(literal))
+                .then(diagnosticsSubtree(literal, feedback))
+                .then(literal.apply("diag").executes(context -> {
+                    showDiagnostics(feedback.apply(context.getSource()));
+                    return Command.SINGLE_SUCCESS;
+                }))
+                .then(literal.apply("trace").executes(context -> {
+                    toggleTrace(feedback.apply(context.getSource()));
+                    return Command.SINGLE_SUCCESS;
+                }));
+    }
+
+    /** Whether the server's command list, as this client holds it now, has a root called
+     *  {@code name}. Loaders merge client commands into that list, so the answer is only the
+     *  server's own before the merge (see {@code ExtraCommandRootGuard}). */
+    public static boolean commandListHas(String name) {
+        var connection = net.minecraft.client.Minecraft.getInstance().getConnection();
+        return connection != null && connection.getCommands().getRoot().getChild(name) != null;
+    }
+
+    /** The identity of the server's command list this client holds now; null when not connected. */
+    public static Object commandList() {
+        var connection = net.minecraft.client.Minecraft.getInstance().getConnection();
+        return connection == null ? null : connection.getCommands();
+    }
+
     public static <S> LiteralArgumentBuilder<S> reloadSubtree(
             Function<String, LiteralArgumentBuilder<S>> literal,
             Function<S, Consumer<Component>> feedback) {

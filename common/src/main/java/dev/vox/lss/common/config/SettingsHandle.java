@@ -29,6 +29,7 @@ public final class SettingsHandle<T> implements AutoCloseable {
      *  reload), as opposed to values that come from the schema default. Published with
      *  the commit, also when no value changed: writing a default explicitly is a choice. */
     private volatile Set<String> declaredPaths;
+    private volatile boolean experimentalFileIgnored;
     private long lifecycle=1,sequence,activeRequest;
     private boolean closed;
     private Object connection;
@@ -36,7 +37,10 @@ public final class SettingsHandle<T> implements AutoCloseable {
         this.store=store;schema=store.schema();var initial=store.initialize();
         T active=initial.normalized();state=new State<>(initial.configured(),active,active,active,0,Set.of(),Set.of());
         declaredPaths=initial.declaredPaths(schema.descriptorsByPath().keySet());
+        experimentalFileIgnored=initial.sidecarIgnored();
     }
+    /** Whether the accepted document came with an experimental file that could not be used. */
+    public boolean experimentalFileIgnored(){return experimentalFileIgnored;}
     /** Whether the accepted settings file itself sets {@code path} (see {@link #declaredPaths}). */
     public boolean declares(String path){return declaredPaths.contains(path);}
     public SettingsStore<T> store(){return store;}
@@ -81,6 +85,7 @@ public final class SettingsHandle<T> implements AutoCloseable {
             boolean unchanged=Objects.equals(old.configured(),requested)&&changed.isEmpty()&&old.pendingRestart().equals(restart)&&old.pendingReconnect().equals(reconnect);
             if(!unchanged)state=new State<>(requested,next,old.boot(),connection==null?next:old.session(),old.revision()+1,restart,reconnect);
             declaredPaths=prepared.document().declaredPaths(schema.descriptorsByPath().keySet());
+            experimentalFileIgnored=prepared.document().sidecarIgnored();
             // Publication is not an acknowledgement. Keep failed/partial owner work even when
             // the file is identical, or a newer candidate reverts some already-adopted values.
             T previous = pendingAdoption == null ? old.effective() : pendingAdoption.previous();

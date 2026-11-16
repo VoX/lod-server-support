@@ -57,7 +57,21 @@ public final class PaperPayloadHandler {
                                              boolean generationEnabled,
                                              int sessionCapabilities,
                                              boolean denyMapIngestion) {
-        int flags = sessionFlagsFor(sessionCapabilities, denyMapIngestion);
+        return encodeSessionConfig(protocolVersion, enabled, 0, lodDistanceChunks, generationEnabled,
+                sessionCapabilities, denyMapIngestion);
+    }
+
+    /** With the reason an answer says "not here" (0.23.0 plan §3): the hand-mirror of the
+     *  Fabric codec's {@code withOffReason}. The reason bit joins the flags only when the
+     *  frame already carries them and the answer is {@code enabled=false}; otherwise the bytes
+     *  are exactly the six-argument form's. */
+    public static byte[] encodeSessionConfig(int protocolVersion, boolean enabled, int offReason,
+                                             int lodDistanceChunks,
+                                             boolean generationEnabled,
+                                             int sessionCapabilities,
+                                             boolean denyMapIngestion) {
+        int base = sessionFlagsFor(sessionCapabilities, denyMapIngestion);
+        int flags = base >= 0 && !enabled ? base | (offReason & LSSConstants.SESSION_FLAG_OFF_REASONS) : base;
         return encodeToBytes(buf -> {
             buf.writeVarInt(protocolVersion);
             buf.writeBoolean(enabled);
@@ -97,13 +111,13 @@ public final class PaperPayloadHandler {
     /** Every production send passes the SESSION's capabilities and the policy read at
      *  send time (map-policy plan A2's site census). */
     public static void sendSessionConfig(Player player,
-                                          int protocolVersion, boolean enabled,
+                                          int protocolVersion, boolean enabled, int offReason,
                                           int lodDistanceChunks,
                                           boolean generationEnabled,
                                           int sessionCapabilities,
                                           boolean denyMapIngestion) {
         sendRawNmsPayload(player, ID_SESSION_CONFIG, encodeSessionConfig(
-                protocolVersion, enabled, lodDistanceChunks, generationEnabled,
+                protocolVersion, enabled, offReason, lodDistanceChunks, generationEnabled,
                 sessionCapabilities, denyMapIngestion));
     }
 
