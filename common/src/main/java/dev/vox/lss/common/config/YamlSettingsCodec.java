@@ -43,11 +43,12 @@ public final class YamlSettingsCodec<T> {
 
     /** {@code bytes} is the main file; {@code sidecar} is null when no sidecar file exists. */
     public record Document<T>(T configured, T normalized, List<SettingsSchema.Normalization> normalizations,
-                              List<String> inactivePaths, String hash, byte[] bytes, byte[] sidecar) {
+                              List<String> inactivePaths, String hash, byte[] bytes, byte[] sidecar,
+                              boolean sidecarIgnored) {
         public Document { normalizations = List.copyOf(normalizations); inactivePaths = List.copyOf(inactivePaths); bytes = bytes.clone(); sidecar = sidecar == null ? null : sidecar.clone(); }
         public Document(T configured, T normalized, List<SettingsSchema.Normalization> normalizations,
                         List<String> inactivePaths, String hash, byte[] bytes) {
-            this(configured, normalized, normalizations, inactivePaths, hash, bytes, null);
+            this(configured, normalized, normalizations, inactivePaths, hash, bytes, null, false);
         }
         @Override public byte[] bytes() { return bytes.clone(); }
         @Override public byte[] sidecar() { return sidecar == null ? null : sidecar.clone(); }
@@ -73,20 +74,34 @@ public final class YamlSettingsCodec<T> {
         @Override public byte[] sidecar() { return sidecar == null ? null : sidecar.clone(); }
     }
     public Document<T> parse(byte[] bytes) { return parse(bytes, null); }
+    /** The strict read decides whether a file loads. Only when it has refused the file is
+     *  the list of everything wrong with it collected, for the people who must fix it. */
     public Document<T> parse(byte[] bytes, byte[] sidecar) {
-        Map<String,Object> tree = readTree(bytes);
+        try { return parseStrict(bytes, sidecar); }
+        catch (SettingsException refused) {
+            if (!refused.problems().isEmpty()) throw refused;
+            throw new SettingsException(refused.getMessage(), refused.getCause(),
+                    SettingsProblems.collect(schema, bytes, refused));
+        }
+    }
+    private Document<T> parseStrict(byte[] bytes, byte[] sidecar) {
+        Map<String,Object> tree = readTree(bytes, schema::booleanPath);
         SettingsSchema.Decoded<T> result = null;
+        // The experimental file exists and could not be used: its settings are back at their
+        // defaults, and the status says so (0.23.0 plan §1).
+        boolean sidecarIgnored = false;
         if (sidecar != null) {
             if (!schema.isClient()) throw new SettingsException("Only client settings have an experimental sidecar");
             // The experimental file must never take the main settings down: an unreadable
             // or invalid sidecar (e.g. written by a newer build) falls back to defaults.
-            try { result = schema.decode(merge(tree, sidecarTree(sidecar))); }
+            try { result = schema.decode(merge(tree, sidecarTree(sidecar, schema::booleanPath))); }
             catch (RuntimeException e) { // SettingsException, YAML syntax errors, wrong value types
+                sidecarIgnored = true;
                 dev.vox.lss.common.LSSLogger.warn("Experimental client settings file ignored: " + e.getMessage());
             }
         }
         if (result == null) result = schema.decode(tree);
-        return new Document<>(result.configured(), result.normalized(), result.normalizations(), result.inactivePaths(), hash(bytes, sidecar), bytes, sidecar);
+        return new Document<>(result.configured(), result.normalized(), result.normalizations(), result.inactivePaths(), hash(bytes, sidecar), bytes, sidecar, sidecarIgnored);
     }
     public byte[] defaults() {
         String template = schema.template();
@@ -214,13 +229,16 @@ public final class YamlSettingsCodec<T> {
     }
     /** A sidecar may be empty (comments only). Paths other than {@link #SIDECAR_PATHS}
      *  (retired keys, or keys of a newer build) are dropped with a warning, never fatal. */
-    static Map<String,Object> sidecarTree(byte[] bytes) {
+    static Map<String,Object> sidecarTree(byte[] bytes) { return sidecarTree(bytes, null); }
+    /** @param booleanPath the settings that are switches: the experimental file accepts the same
+     *                    spellings of true and false as the main file (0.23.0 review) */
+    static Map<String,Object> sidecarTree(byte[] bytes, java.util.function.Predicate<String> booleanPath) {
         var node = composeOptional(bytes);
         // A comments-only document composes to nothing, an implicit null scalar, or (with
         // comment parsing on) an empty comment-tagged mapping.
         if (node.isEmpty() || node.get() instanceof ScalarNode scalar && Tag.NULL.equals(scalar.getTag())
                 || node.get() instanceof MappingNode map && map.getValue().isEmpty() && Tag.COMMENT.equals(map.getTag())) return Map.of();
-        Object value = value(node.get(), "");
+        Object value = value(node.get(), "", booleanPath);
         if (!(value instanceof Map<?,?> map)) throw new SettingsException("Experimental settings sidecar must be a mapping");
         @SuppressWarnings("unchecked") var tree = (Map<String,Object>) map;
         return knownSidecar(tree, "");
@@ -277,6 +295,13 @@ public final class YamlSettingsCodec<T> {
     private static Node compose(byte[] bytes) {
         return composeOptional(bytes).orElseThrow(() -> new SettingsException("Settings file is empty"));
     }
+    /** For {@link SettingsProblems}: the composed document with its marks. Throws what the
+     *  strict read throws for a document that cannot be composed. */
+    static Node composeForProblems(byte[] bytes) { return compose(bytes); }
+    /** For {@link SettingsProblems}: the file reader's scalar and collection conversion. */
+    static Object valueForProblems(Node node, String path, java.util.function.Predicate<String> booleanPath) {
+        return value(node, path, booleanPath);
+    }
     private static Optional<Node> composeOptional(byte[] bytes) {
         String input = utf8(bytes);
         try {
@@ -297,14 +322,26 @@ public final class YamlSettingsCodec<T> {
         } catch (SettingsException e) { throw e; }
         catch (RuntimeException e) { throw new SettingsException("Invalid YAML syntax; check indentation, keys and scalar values", e); }
     }
-    public static Map<String,Object> readTree(byte[] bytes) {
-        Object value = value(compose(bytes), "");
+    public static Map<String,Object> readTree(byte[] bytes) { return readTree(bytes, null); }
+    /**
+     * The one spelling tolerance (0.23.0 plan §1, decision 0009). This reader uses YAML's JSON
+     * schema, which keeps {@code True}, {@code yes} and {@code on} as text, and every Bukkit
+     * configuration file spells booleans that way. Where {@code booleanPath} says the setting
+     * is true/false, an unquoted word of that kind is read as the boolean it plainly means.
+     * A quoted {@code "true"} is still text, and settings of other types are untouched
+     * ({@code far_players.mode: on} stays the word "on").
+     */
+    static Map<String,Object> readTree(byte[] bytes, java.util.function.Predicate<String> booleanPath) {
+        Object value = value(compose(bytes), "", booleanPath);
         if (!(value instanceof Map<?,?>)) throw new SettingsException("Settings document must be a nonempty mapping");
         @SuppressWarnings("unchecked") var map = (Map<String,Object>)value;
         if (map.isEmpty()) throw new SettingsException("Settings document must be a nonempty mapping");
         return map;
     }
-    private static Object value(Node node, String path) {
+    private static final Map<String,Boolean> BOOLEAN_SPELLINGS = Map.of(
+            "true",true,"yes",true,"on",true,"false",false,"no",false,"off",false);
+    private static Object value(Node node, String path) { return value(node, path, null); }
+    private static Object value(Node node, String path, java.util.function.Predicate<String> booleanPath) {
         if (node instanceof MappingNode map) {
             if (!Tag.MAP.equals(node.getTag())) throw new SettingsException("Invalid mapping tag at " + path);
             var result = new LinkedHashMap<String,Object>();
@@ -312,18 +349,24 @@ public final class YamlSettingsCodec<T> {
                 if (!(pair.getKeyNode() instanceof ScalarNode key) || !Tag.STR.equals(key.getTag())) throw new SettingsException("Mapping keys must be strings at " + path);
                 if (key.getValue().equals("<<")) throw new SettingsException("YAML merge keys are not allowed");
                 if (result.containsKey(key.getValue())) throw new SettingsException("Duplicate mapping key at " + path);
-                result.put(key.getValue(), value(pair.getValueNode(), path.isEmpty() ? key.getValue() : path + "." + key.getValue()));
+                result.put(key.getValue(), value(pair.getValueNode(), path.isEmpty() ? key.getValue() : path + "." + key.getValue(), booleanPath));
             }
             return Collections.unmodifiableMap(result);
         }
         if (node instanceof SequenceNode sequence) {
             if (!Tag.SEQ.equals(node.getTag())) throw new SettingsException("Invalid sequence tag at " + path);
             var result = new ArrayList<Object>();
-            for (int i=0;i<sequence.getValue().size();i++) result.add(value(sequence.getValue().get(i), path + "[" + i + "]"));
+            for (int i=0;i<sequence.getValue().size();i++) result.add(value(sequence.getValue().get(i), path + "[" + i + "]", booleanPath));
             return List.copyOf(result);
         }
         if (!(node instanceof ScalarNode scalar)) throw new SettingsException("Unsupported YAML node at " + path);
-        if (Tag.STR.equals(scalar.getTag())) return scalar.getValue();
+        if (Tag.STR.equals(scalar.getTag())) {
+            if (booleanPath != null && scalar.getScalarStyle() == ScalarStyle.PLAIN && booleanPath.test(path)) {
+                Boolean spelt = BOOLEAN_SPELLINGS.get(scalar.getValue().toLowerCase(Locale.ROOT));
+                if (spelt != null) return spelt;
+            }
+            return scalar.getValue();
+        }
         if (Tag.BOOL.equals(scalar.getTag()) && (scalar.getValue().equals("true") || scalar.getValue().equals("false"))) return Boolean.valueOf(scalar.getValue());
         if (Tag.INT.equals(scalar.getTag()) || Tag.FLOAT.equals(scalar.getTag())) {
             if(scalar.getValue().length()>128)throw new SettingsException("Numeric scalar is too large at " + path);

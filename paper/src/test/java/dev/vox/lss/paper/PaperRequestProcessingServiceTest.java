@@ -1680,6 +1680,39 @@ class PaperRequestProcessingServiceTest {
     // ---- v0.11.0 stage C: runtime settings (/lsslod set) ----
 
     /**
+     * 0.23.0 review: a preference frame that raced its own player's quit. The pump drains the
+     * quit's Remove (which clears the kept preference) before the runtime tasks, so the
+     * frame must not put the preference back for a player who is gone.
+     */
+    @Test
+    void aPreferenceFrameThatRacedItsQuitIsNotKept() {
+        var optOut = new dev.vox.lss.common.farplayers.FarPlayerWire.Prefs(true, 0, 0, false, 0);
+        var gone = UUID.randomUUID();
+        // The messenger thread queued the frame; the quit landed before the pump ran.
+        service.enqueueFarPlayerPrefs(gone, optOut, () -> true);
+        service.enqueueRemove(gone);
+        service.tick();
+        assertEquals(0, service.getFarPlayerService().optedOut(),
+                "the frame of a player who has gone is dropped, not kept until their next quit");
+
+        // A player who is still here: kept, and counted, without any session.
+        var here = UUID.randomUUID();
+        service.enqueueFarPlayerPrefs(here, optOut, () -> false);
+        service.tick();
+        assertEquals(1, service.getFarPlayerService().optedOut());
+        // The flag is read when the frame is applied, not when it is queued.
+        var late = UUID.randomUUID();
+        var disconnected = new java.util.concurrent.atomic.AtomicBoolean();
+        service.enqueueFarPlayerPrefs(late, optOut, disconnected::get);
+        disconnected.set(true);
+        service.tick();
+        assertEquals(1, service.getFarPlayerService().optedOut(), "read on the pump");
+        service.enqueueRemove(here);
+        service.tick();
+        assertEquals(0, service.getFarPlayerService().optedOut());
+    }
+
+    /**
      * THE SET-review ordering MAJOR, pinned: a registered-but-flip-pending player must
      * NOT be pushed a v20 SessionConfig. The re-push runs as a runtime task, and
      * runtime tasks drain AFTER the lifecycle mailbox — so the register's

@@ -7,7 +7,7 @@ package dev.vox.lss.common.diagnostics;
  * still for {@link #SETTLE_TICKS}, so a slow server or the Distant Horizons timers are never
  * mistaken for an answer; and under lifetime caps, so a player whose usual server lacks the mod,
  * has it switched off or runs another version is told a few times and then left alone. The
- * status command and screen always carry the verdict. The caps are four counters, never a list
+ * status command and screen always carry the verdict. The caps are five counters, never a list
  * of servers.
  *
  * <p>Not thread-safe: the client tick drives it.
@@ -21,26 +21,39 @@ public final class ClientNoticePolicy {
 
     /** What has already been said, across game starts. */
     public record Caps(int noSupportShown, boolean nothingToShowShown, int serverOffShown,
-                       int versionMismatchShown) {
-        public static final Caps NONE = new Caps(0, false, 0, 0);
+                       int versionMismatchShown, boolean rendererUnsupportedShown) {
+        public static final Caps NONE = new Caps(0, false, 0, 0, false);
         /** Nothing may be said: the state file could not be read. */
-        public static final Caps EXHAUSTED = new Caps(LIFETIME_CAP, true, LIFETIME_CAP, LIFETIME_CAP);
+        public static final Caps EXHAUSTED = new Caps(LIFETIME_CAP, true, LIFETIME_CAP, LIFETIME_CAP, true);
+
+        /** The four counters of 0.22.0; "the LOD renderer cannot run here" not yet said. */
+        public Caps(int noSupportShown, boolean nothingToShowShown, int serverOffShown, int versionMismatchShown) {
+            this(noSupportShown, nothingToShowShown, serverOffShown, versionMismatchShown, false);
+        }
 
         /** The caps after {@code verdict} was announced. */
         public Caps after(ClientVerdict verdict) {
             if (verdict.versionMismatch()) {
                 return new Caps(this.noSupportShown, this.nothingToShowShown, this.serverOffShown,
-                        this.versionMismatchShown + 1);
+                        this.versionMismatchShown + 1, this.rendererUnsupportedShown);
+            }
+            // The four "the server says not here" answers are one kind of notice (0.23.0 §3).
+            if (verdict.serverOff()) {
+                return new Caps(this.noSupportShown, this.nothingToShowShown, this.serverOffShown + 1,
+                        this.versionMismatchShown, this.rendererUnsupportedShown);
             }
             return switch (verdict) {
                 case NO_SUPPORT -> new Caps(this.noSupportShown + 1, this.nothingToShowShown,
-                        this.serverOffShown, this.versionMismatchShown);
+                        this.serverOffShown, this.versionMismatchShown, this.rendererUnsupportedShown);
                 // One count for the three: "add something that shows terrain" and "the mod
                 // you have for that is not connected" are the same once-ever nudge.
                 case NOTHING_TO_SHOW, RENDERER_NOT_CONNECTED, MAP_NOT_CONNECTED -> new Caps(
-                        this.noSupportShown, true, this.serverOffShown, this.versionMismatchShown);
-                case SERVER_OFF -> new Caps(this.noSupportShown, this.nothingToShowShown,
-                        this.serverOffShown + 1, this.versionMismatchShown);
+                        this.noSupportShown, true, this.serverOffShown, this.versionMismatchShown,
+                        this.rendererUnsupportedShown);
+                // Its own once-ever count (0.23.0 review): the player who was told to add an
+                // LOD renderer, added one and finds it cannot run here must still be told.
+                case RENDERER_UNSUPPORTED -> new Caps(this.noSupportShown, this.nothingToShowShown,
+                        this.serverOffShown, this.versionMismatchShown, true);
                 default -> this;
             };
         }
@@ -48,10 +61,11 @@ public final class ClientNoticePolicy {
         /** Whether {@code verdict} may still be announced. */
         public boolean allows(ClientVerdict verdict) {
             if (verdict.versionMismatch()) return this.versionMismatchShown < LIFETIME_CAP;
+            if (verdict.serverOff()) return this.serverOffShown < LIFETIME_CAP;
             return switch (verdict) {
                 case NO_SUPPORT -> this.noSupportShown < LIFETIME_CAP;
                 case NOTHING_TO_SHOW, RENDERER_NOT_CONNECTED, MAP_NOT_CONNECTED -> !this.nothingToShowShown;
-                case SERVER_OFF -> this.serverOffShown < LIFETIME_CAP;
+                case RENDERER_UNSUPPORTED -> !this.rendererUnsupportedShown;
                 // Working, waiting, local, the player's own choice, and a silent server (which
                 // may be a proxy or a busy link) are never announced.
                 default -> false;
@@ -97,10 +111,17 @@ public final class ClientNoticePolicy {
         return verdict;
     }
 
+    /** Whether {@code verdict} is ever said in chat. All but one of these are under the lifetime
+     *  caps; a settings file that did not load is said once per game start instead
+     *  ({@link ClientNoticeBook}), so the caps never allow it. */
+    public static boolean announces(ClientVerdict verdict) { return announceable(verdict); }
+
     /** The verdicts that end a connection's watch, spoken or capped. */
     private static boolean announceable(ClientVerdict verdict) {
         return verdict == ClientVerdict.NO_SUPPORT || verdict == ClientVerdict.NOTHING_TO_SHOW
                 || verdict == ClientVerdict.RENDERER_NOT_CONNECTED || verdict == ClientVerdict.MAP_NOT_CONNECTED
-                || verdict == ClientVerdict.SERVER_OFF || verdict.versionMismatch();
+                || verdict == ClientVerdict.RENDERER_UNSUPPORTED
+                || verdict.serverOff() || verdict.versionMismatch()
+                || verdict == ClientVerdict.SETTINGS_BROKEN;
     }
 }

@@ -28,11 +28,15 @@ public final class VoxyCommon {
         createBody.run();
     }
 
+    /** Voxy's "a factory was installed": false on a computer whose graphics it cannot run on. */
+    public static volatile boolean available = true;
+
     public static boolean isAvailable() {
-        return instance != null;
+        return available;
     }
 
     public static void reset() {
+        available = true;
         instance = new VoxyInstance();
         shutdownBody = () -> {};
         createBody = () -> {};
