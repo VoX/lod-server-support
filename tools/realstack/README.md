@@ -21,7 +21,12 @@ directory). `run` exits 0 only when every check passed.
 
 A run waits for the shared harness lock (up to 30 minutes), then has 15 minutes: it stages a fresh
 offline server and a fresh client, starts the client on a private Xvfb display, lets it join,
-watches `lsslod diag`, takes a screenshot, stops everything it started and writes the verdict.
+watches `lsslod diag`, takes a screenshot, ends the player's session, stops everything it started
+and writes the verdict.
+
+The session ends with a kick from the server console. `run <row> --leave quit` stops the client
+instead, so the server sees the connection close as when a player quits. Once the server has logged
+`RealStack left the game`, it is asked for its diag once more (`server-diag-after-leave.txt`).
 
 Needs: Python 3.11+, JDK 21 and JDK 25, `Xvfb`, `xdotool`, `timeout`, 15 GiB free.
 Settings: `LSS_JAVA_HOME_21`, `LSS_JAVA_HOME_25`, `LSS_REALSTACK_CACHE` (default
@@ -34,7 +39,8 @@ instead of downloading; a file is used only when its hash matches).
 Each run has its own directory, `<runs>/<UTC time>-<row>/`:
 
 - `verdict.json`: `passed`, and for every check its message and the log lines it relied on.
-- `evidence/`: server console log, client log, the final `lsslod diag`, `client.png`, the staged
+- `evidence/`: server console log, client log, the final `lsslod diag`, the diag after the leave,
+  `client.png`, the staged
   jar list with hashes, the server's settings file, and what was left running (nothing). A
   scenario that changes the server's settings also keeps the file as the server generated it.
   A scenario that stages client settings also keeps that file.
@@ -52,6 +58,7 @@ Each run has its own directory, `<runs>/<UTC time>-<row>/`:
 | `columns_sent` | the server-wide and the per-player `sent=` counters in the final diag are above zero |
 | `client_clean` | no crash report, no LSS ERROR in the client log, and the client stayed alive and connected for the whole observation window |
 | `screenshot` | a picture of the private display was saved while a Minecraft window existed (the picture is not judged yet) |
+| `session_ended` | the server logged that the player left, and the diag asked after that counts no live session on the current protocol, no longer lists the player, and counts more ended sessions (`Dialects: … ended=`) than the final diag of the window |
 
 A check passes on positive evidence, never on the absence of an error alone. To see the checks
 fail, run a row with `--fault client-without-lss`: the client is staged without the LSS jar and the
@@ -114,18 +121,25 @@ that build's short name as the prefix.
 The client needs a terrain consumer (Voxy or a map mod); without one it requests no terrain and
 `columns_sent` has nothing to witness.
 
-Server platforms: `fabric`, `neoforge` and `paper`. A Paper row pins the server jar from the
+Server platforms: `fabric`, `neoforge`, `paper` and `sponge`. A Paper row pins the server jar from the
 PaperMC download API (`"paper": {"build", "file", "sha256"}`); the mod under test and the pinned
 `mods` of the server side go into `plugins/`. The Paper jar unpacks itself in the run's server
 directory on every start. It would download the game's server jar for that; the tool puts its own
 verified copy where the Paper jar looks, when the hash is the one the Paper jar asks for. A Paper
 console names no thread and prints `[LSS]` in front of the mod's lines; the checks read both forms.
 
+A Sponge row pins a SpongeVanilla universal jar from the Sponge repository
+(`"sponge": {"version", "sha1"}`, the build and hash `gradle.properties` pins for the boot smoke).
+The plugin under test goes into `mods/` and keeps its settings in `config/`. On its first start the
+server downloads and remaps the game and its libraries into `libraries/`, and checks their hashes
+itself; a run links that folder to the cache (`sponge/<version>/libraries`), so only the first run
+downloads them.
+
 ## Rules the tool keeps
 
-- Official sources only (Modrinth, Mojang, Fabric, NeoForge and PaperMC), every file hash-checked, a
-  generic User-Agent, no account, token or credential of any kind. Clients start with
-  `--accessToken 0` against an offline server.
+- Official sources only (Modrinth, Mojang, Fabric, NeoForge, PaperMC and SpongePowered), every file
+  hash-checked, a generic User-Agent, no account, token or credential of any kind. Clients start
+  with `--accessToken 0` against an offline server.
 - Private Xvfb display only, never `:0`; `WAYLAND_DISPLAY` and `XAUTHORITY` are removed.
 - It signals only processes it started, found by name plus the run's unique `-Dlssrig.id=` tag.
 - A red check is explained, not retried ([decision 0007](../../docs/decisions/0007-retry-rule.md)).

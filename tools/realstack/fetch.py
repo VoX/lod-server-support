@@ -14,6 +14,8 @@ Cache layout (LSS_REALSTACK_CACHE, default ~/.cache/lss-realstack):
   fabric/<mc>-<loader>-<side>.json      Fabric loader profiles
   neoforge/<version>/                   installer jar and the client and server installs
   paper/<mc>/<file>                     pinned Paper server jars
+  sponge/<version>/                     pinned SpongeVanilla jars, and the libraries/ folder the
+                                        server fills on its first start (it checks their hashes)
 """
 from __future__ import annotations
 
@@ -36,6 +38,7 @@ FABRIC_MAVEN = 'https://maven.fabricmc.net/'
 NEOFORGE_MAVEN = 'https://maven.neoforged.net/releases'
 PAPER_API = 'https://fill.papermc.io/v3/projects/paper'
 PAPER_DOWNLOAD = 'server:default'
+SPONGE_REPO = 'https://repo.spongepowered.org/repository/maven-releases/org/spongepowered/spongevanilla'
 ASSET_BASE = 'https://resources.download.minecraft.net'
 SAFE_FILE = re.compile(r'^[A-Za-z0-9][A-Za-z0-9._+-]*\.jar$')
 SAFE_ID = re.compile(r'^[A-Za-z0-9]{6,16}$')
@@ -46,6 +49,7 @@ ALLOWED_HOSTS = frozenset({
     'meta.fabricmc.net', 'maven.fabricmc.net',
     'maven.neoforged.net',
     'fill.papermc.io', 'fill-data.papermc.io',
+    'repo.spongepowered.org',
 })
 
 
@@ -480,4 +484,35 @@ def fetch_paper_server(minecraft: str, pin: dict, cache: Path) -> tuple[Path, st
                          f'{pin["file"]} {pin["sha256"][:16]}…')
     url = build['downloads'][PAPER_DOWNLOAD]['url']
     write_verified(dest, http_get(url, timeout=600), 'sha256', pin['sha256'], url)
+    return dest, 'downloaded'
+
+
+# --------------------------------------------------------------------------- SpongeVanilla
+
+def sponge_jar_name(version: str) -> str:
+    """The universal jar of one SpongeVanilla build, as the Sponge repository names it."""
+    return f'spongevanilla-{version}-universal.jar'
+
+
+def sponge_root(version: str, cache: Path) -> Path:
+    """The cache folder of one SpongeVanilla build: its jar and the server's libraries/."""
+    return cache / 'sponge' / version
+
+
+def fetch_sponge_server(pin: dict, cache: Path) -> tuple[Path, str]:
+    """Put the pinned SpongeVanilla universal jar in the cache and return (path, how).
+
+    The pin's sha1 (the hash the repository publishes, and the one gradle.properties pins) is
+    the authority: a cached file that matches needs no network at all. On its first start the
+    server downloads the game and its libraries into ./libraries and checks their hashes
+    itself; a run links that folder to sponge/<version>/libraries so later runs reuse it.
+    """
+    name = sponge_jar_name(pin['version'])
+    if not SAFE_FILE.match(name):
+        raise FetchError(f'unexpected SpongeVanilla version {pin["version"]!r}')
+    dest = sponge_root(pin['version'], cache) / name
+    if file_matches(dest, 'sha1', pin['sha1']):
+        return dest, 'cached'
+    url = f'{SPONGE_REPO}/{urllib.parse.quote(pin["version"])}/{name}'
+    write_verified(dest, http_get(url, timeout=600), 'sha1', pin['sha1'], url)
     return dest, 'downloaded'

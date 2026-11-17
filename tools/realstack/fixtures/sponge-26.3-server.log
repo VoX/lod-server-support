@@ -1,0 +1,14 @@
+[16:36:17] [Server thread/INFO]: Starting minecraft server version 26.3
+[16:36:19] [Server thread/INFO]: Done (2.011s)! For help, type "help"
+[16:36:19] [Server thread/INFO] [LSS]: Created settings /home/user/.local/state/lss-realstack/runs/20261117T213605Z-sponge-26.3-fabric-client/server/config/lss-server-config.yaml
+[16:36:19] [Server thread/INFO] [LSS]: Starting LSS LOD request processing service
+[16:36:19] [Server thread/INFO] [LSS]: LOD Server Support (Sponge) enabled
+[16:36:30] [Server thread/INFO]: RealStack[ServerPlayer['RealStack'/9, l='ServerLevel[key=ResourceKey[minecraft:dimension / minecraft:overworld],worldType=minecraft:overworld]', x=143.50, y=66.00, z=189.50]] logged in to world 'minecraft:overworld' with entity id 9 at (143.5, 66.0, 189.5)
+[16:36:32] [Server thread/INFO] [LSS]: LSS handshake received from RealStack (protocol v20, capabilities=15)
+[16:36:32] [Server thread/INFO] [LSS]: Player RealStack registered for LSS LOD request processing (caps=15)
+[16:37:36] [Server thread/INFO]: Kicked RealStack: Kicked by an operator
+[16:37:36] [Server thread/INFO]: RealStack lost connection: Kicked by an operator
+[16:37:36] [Server thread/INFO]: RealStack left the game
+[16:37:38] [Server thread/INFO]: Stopping the server
+[16:37:38] [Server thread/INFO] [LSS]: Stopping LSS LOD request processing service
+[16:37:38] [Server thread/INFO]: Stopping server

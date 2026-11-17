@@ -45,6 +45,12 @@ RELOAD_FAILED = 'Reload failed'
 RELOAD_NOT_APPLIED = re.compile(r'^(?:Restart required|Inactive on this platform): (?P<paths>.+)$')
 DIAG_LAST_FIELD = 'Bandwidth'
 PLAYER_JOINED = '{player} joined the game'
+# SpongeVanilla does not print the join message on its console; the line it prints when it puts
+# the player into the world is the witness there: "RealStack[ServerPlayer[...]] logged in to world
+# 'minecraft:overworld' with entity id 25 at (...)". Vanilla's own line says "logged in with".
+SPONGE_JOINED = re.compile(r'^(?P<name>\S+?)\[.*\] logged in to world ')
+PLAYER_LEFT = '{player} left the game'
+DIAG_ENDED = re.compile(r'(?<![A-Za-z0-9_])ended=(?P<counts>\d+(?:/\d+)*)')
 # The client's own chat line, as the game logs it: "[System] [CHAT] [LSS] ...". The prefix is the
 # build's short name. The sentence says "this mod" and names no brand: a Voxy Server Side client
 # on a LOD Server Support server must not name the server's copy by its own brand.
@@ -212,6 +218,15 @@ def counter(text: str | None, name: str) -> int | None:
     return int(match.group(1)) if match else None
 
 
+def is_join(message: str, player: str) -> bool:
+    """True for the server's line that says the player joined the world (the join message, or
+    SpongeVanilla's "logged in to world" line)."""
+    if message == PLAYER_JOINED.format(player=player):
+        return True
+    match = SPONGE_JOINED.match(message)
+    return bool(match) and match.group('name') == player
+
+
 def check_server_started(server_log: str, diag_text: str,
                          own_paths: tuple[str, ...] = ()) -> CheckResult:
     """The server finished starting, LSS started its service and reports itself enabled, and no
@@ -252,7 +267,7 @@ def check_handshake(server_log: str, client_log: str, diag_text: str, player: st
     diag = parse_diag(diag_text)
     name = 'handshake'
     evidence: list[str] = []
-    joined = [entry for entry in server if entry.message == f'{player} joined the game']
+    joined = [entry for entry in server if is_join(entry.message, player)]
     if not joined:
         return CheckResult(name, False, f'the server never logged "{player} joined the game"')
     evidence.append(joined[0].first_line())
@@ -376,7 +391,7 @@ def check_client_joined(observed_server_log: str, player: str) -> CheckResult:
     name = 'client_joined'
     wanted = PLAYER_JOINED.format(player=player)
     joined = [entry.first_line() for entry in parse_entries(observed_server_log)
-              if entry.message.startswith(wanted)]
+              if entry.message.startswith(wanted) or is_join(entry.message, player)]
     if not joined:
         return CheckResult(name, False, f'the server never logged "{wanted}"')
     return CheckResult(name, True, 'the player joined', joined[:1])
@@ -453,7 +468,7 @@ def check_handshake_off(server_log: str, client_log: str, diag_text: str, player
     protocol with enabled: false."""
     server = parse_entries(server_log)
     name = 'handshake_off'
-    joined = [entry for entry in server if entry.message == PLAYER_JOINED.format(player=player)]
+    joined = [entry for entry in server if is_join(entry.message, player)]
     if not joined:
         return CheckResult(name, False, f'the server never logged "{player} joined the game"')
     evidence = [joined[0].first_line()]
@@ -525,7 +540,7 @@ def check_no_handshake(server_log: str, diag_text: str, player: str) -> CheckRes
     online, counts no session on any protocol, neither live nor ever started."""
     server = parse_entries(server_log)
     name = 'no_handshake'
-    joined = [entry for entry in server if entry.message == PLAYER_JOINED.format(player=player)]
+    joined = [entry for entry in server if is_join(entry.message, player)]
     if not joined:
         return CheckResult(name, False, f'the server never logged "{player} joined the game"')
     evidence = [joined[0].first_line()]
@@ -572,6 +587,51 @@ def check_opted_out(diag_text: str) -> CheckResult:
                        '(opted_out=1)', evidence)
 
 
+def ended_sessions(dialects: str | None) -> int | None:
+    """The number of ended sessions in a diag's Dialects line (the sum over the protocols of
+    `ended=20/19/18/16`), or None when the line has no such counter."""
+    match = DIAG_ENDED.search(dialects or '')
+    return sum(int(count) for count in match.group('counts').split('/')) if match else None
+
+
+def check_session_ended(server_log: str, diag_text: str, after_leave_text: str, player: str,
+                        protocol: int) -> CheckResult:
+    """The mod ended the player's session when the player left: the server logged the leave,
+    and the diag taken after it counts no live session on the current protocol, no longer
+    lists the player, and counts more ended sessions than the final diag of the observation
+    window did. `after_leave_text` is the console's answer to the diag asked after the leave."""
+    name = 'session_ended'
+    wanted = PLAYER_LEFT.format(player=player)
+    left = [entry for entry in parse_entries(server_log) if entry.message == wanted]
+    if not left:
+        return CheckResult(name, False, f'the server never logged "{wanted}"')
+    evidence = [left[-1].first_line()]
+    after = parse_diag(after_leave_text)
+    if not after['present']:
+        return CheckResult(name, False, 'no lsslod diag was captured after the leave', evidence)
+    before_line = parse_diag(diag_text)['fields'].get('Dialects')
+    after_line = after['fields'].get('Dialects')
+    if before_line is None or after_line is None:
+        return CheckResult(name, False, 'a diag has no Dialects line', evidence)
+    evidence += ['diag Dialects before the leave: ' + before_line,
+                 'diag Dialects after the leave: ' + after_line]
+    ended_before, ended_after = ended_sessions(before_line), ended_sessions(after_line)
+    if ended_before is None or ended_after is None:
+        return CheckResult(name, False, 'the Dialects line has no ended= counter', evidence)
+    live = counter(after_line, f'v{protocol}')
+    if live:
+        return CheckResult(name, False, f'after the leave the diag still counts {live} live '
+                           f'v{protocol} session(s)', evidence)
+    if player in after['players']:
+        return CheckResult(name, False, f'after the leave the diag still lists {player}', evidence)
+    if ended_after <= ended_before:
+        return CheckResult(name, False, f'the ended sessions did not grow ({ended_before} before '
+                           f'the leave, {ended_after} after)', evidence)
+    return CheckResult(name, True, f'{player} left and the server ended the session (ended '
+                       f'sessions {ended_before} -> {ended_after}, no live v{protocol} session)',
+                       evidence)
+
+
 def check_screenshot(shot: dict | None) -> CheckResult:
     """A screenshot of the private display was saved. The picture is not judged in this version;
     the check only proves that a real image of the right size was captured while a Minecraft
@@ -593,8 +653,9 @@ def check_screenshot(shot: dict | None) -> CheckResult:
 def run_checks(names: list[str], material: dict) -> list[CheckResult]:
     """Run the named checks over collected material: server_log, observed_server_log (the part
     written before the runner began to shut things down), client_log, diag, player, protocol,
-    crash_files, client_alive_at_end, screenshot, own_paths, and for scenarios notice, brand,
-    diag_polls, server_settings_text and server_settings_changes."""
+    crash_files, client_alive_at_end, screenshot, own_paths, diag_after_leave (the diag asked
+    once the player had left), and for scenarios notice, brand, diag_polls,
+    server_settings_text and server_settings_changes."""
     own_paths = tuple(material.get('own_paths', ()))
     server_log = material.get('server_log', '')
     client_log = material.get('client_log', '')
@@ -623,6 +684,9 @@ def run_checks(names: list[str], material: dict) -> list[CheckResult]:
         'no_columns': lambda: check_no_columns(diag, material.get('diag_polls', []), player),
         'no_handshake': lambda: check_no_handshake(server_log, diag, player),
         'opted_out': lambda: check_opted_out(diag),
+        'session_ended': lambda: check_session_ended(server_log, diag,
+                                                     material.get('diag_after_leave', ''),
+                                                     player, material['protocol']),
     }
     return [table[name]() for name in names]
 

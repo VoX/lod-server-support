@@ -1,0 +1,5 @@
+[16:36:25] [Render thread/INFO]: Registered voxel column consumer: dev.vox.lss.compat.VoxyCompat$1
+[16:36:25] [Render thread/INFO]: Registered voxel column consumer: dev.vox.lss.compat.XaeroSession$2
+[16:36:28] [Render thread/INFO]: Connecting to 127.0.0.1, 25900
+[16:36:32] [Render thread/INFO]: Server session config received (protocol v20, LOD distance: 512 chunks, enabled: true)
+[16:37:36] [LSS-CacheIO/INFO]: Saved 2140 cached column entries for minecraft_overworld

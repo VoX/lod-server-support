@@ -98,8 +98,18 @@ public class LSSSpongePlugin {
         LSSServerNetworking.onServerStopping();
     }
 
+    /**
+     * A player who was in the world has left (a quit, a kick, a timeout or the server
+     * stopping). SpongeVanilla posts {@code Leave} on the server thread, from the play
+     * listener's {@code removePlayerFromWorld}, and only for a player who reached the world:
+     * the point where NeoForge posts its logged-out event. Never {@code Disconnect}: it also
+     * fires for a connection that never reached play, carrying that connection's profile,
+     * and from Sponge's login thread when the drop lands during authentication, so a refused
+     * second login of an account that is online would end the online player's session
+     * (v0.23.0 plan §11). {@code SpongeConnectionEndContractTest} pins this listener.
+     */
     @Listener
-    public void onPlayerDisconnect(ServerSideConnectionEvent.Disconnect event) {
-        if (active) event.profile().ifPresent(profile -> LSSServerNetworking.onPlayerDisconnect(profile.uuid()));
+    public void onPlayerLeave(ServerSideConnectionEvent.Leave event) {
+        if (active) LSSServerNetworking.onPlayerDisconnect(event.player().uniqueId());
     }
 }
