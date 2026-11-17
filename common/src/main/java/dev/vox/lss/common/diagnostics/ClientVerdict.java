@@ -32,13 +32,27 @@ public enum ClientVerdict {
     CLIENT_OUTDATED,
     /** The server speaks an older protocol: only the server can fix it. */
     SERVER_OUTDATED,
-    /** The server answered "not for you here": off for everyone, for this world, or for this player. */
+    /** The server answered "not for you here" and did not say why (an older server, or an
+     *  operator who keeps the permission reason private): off for everyone, for this world, or
+     *  for this player. */
     SERVER_OFF,
+    /** The server said its service is switched off (0.23.0 plan §3). */
+    SERVER_OFF_EVERYONE,
+    /** The server said this world's distance is 0. */
+    SERVER_OFF_WORLD,
+    /** The server said it requires a permission this player does not hold. */
+    SERVER_OFF_PERMISSION,
     /** No LOD renderer and no map mod: nothing can show what would be downloaded. */
     NOTHING_TO_SHOW,
     /** An LOD renderer is installed and the bridge to it did not start (its internals changed):
      *  the player has the mod the "nothing to show" advice names, so that advice would be wrong. */
     RENDERER_NOT_CONNECTED,
+    /** The LOD renderer is installed and says it cannot run on this computer (0.23.0 plan §6):
+     *  it draws nothing, so "working" would be the worst answer. */
+    RENDERER_UNSUPPORTED,
+    /** The LOD renderer, or its drawing, is switched off in its own settings. The player's own
+     *  choice: never announced. */
+    RENDERER_OFF,
     /** A map mod is installed and the bridge to it did not start, and nothing else here can
      *  show the terrain. */
     MAP_NOT_CONNECTED,
@@ -51,7 +65,10 @@ public enum ClientVerdict {
     /** The player turned receiving off. */
     RECEIVING_OFF,
     /** The Distant Horizons source is selected but paused, blocked or stopped; its own lines say why. */
-    SOURCE_NOT_RUNNING;
+    SOURCE_NOT_RUNNING,
+    /** This client's settings file did not load, so the mod is switched off (0.23.0 plan §1).
+     *  It comes before every other answer: while the file is broken nothing else is true. */
+    SETTINGS_BROKEN;
 
     /** The translation key suffix: {@code lss.status.verdict.<key>} and {@code lss.notice.<key>}. */
     public String key() {
@@ -67,9 +84,21 @@ public enum ClientVerdict {
         return voxy != null && !voxy.equals("absent") && !voxy.equals("unknown");
     }
 
+    /** {@code otherwise}, unless the installed LOD renderer itself says it is not drawing. Only
+     *  asked where everything else is in order, so a server-side cause is always named first. */
+    private static ClientVerdict unlessRendererIdle(ClientStatusSnapshot s, ClientVerdict otherwise) {
+        if (!rendererInstalled(s)) return otherwise;
+        return switch (s.renderer()) {
+            case UNSUPPORTED -> RENDERER_UNSUPPORTED;
+            case SWITCHED_OFF -> RENDERER_OFF;
+            case UNKNOWN, READY -> otherwise;
+        };
+    }
+
     /** Why nothing on this client can show the terrain: the nearest fix first. */
     private static ClientVerdict nothingShows(ClientStatusSnapshot s) {
-        if (rendererInstalled(s)) return RENDERER_NOT_CONNECTED;
+        // A renderer that says why it is idle is a better answer than "could not connect".
+        if (rendererInstalled(s)) return unlessRendererIdle(s, RENDERER_NOT_CONNECTED);
         var xaero = s.xaeroAvailability();
         var journeyMap = s.journeyMapAvailability();
         var off = ClientStatusSnapshot.Availability.DISABLED;
@@ -90,6 +119,22 @@ public enum ClientVerdict {
                 && s.xaeroAvailability() != available && s.journeyMapAvailability() != available;
     }
 
+    /** Which "switched off" it is, from the one reason bit the server sent; none = not said. */
+    private static ClientVerdict serverOff(int reason) {
+        return switch (reason) {
+            case dev.vox.lss.common.LSSConstants.SESSION_FLAG_OFF_SERVER -> SERVER_OFF_EVERYONE;
+            case dev.vox.lss.common.LSSConstants.SESSION_FLAG_OFF_WORLD -> SERVER_OFF_WORLD;
+            case dev.vox.lss.common.LSSConstants.SESSION_FLAG_OFF_PERMISSION -> SERVER_OFF_PERMISSION;
+            default -> SERVER_OFF;
+        };
+    }
+
+    /** Whether this is one of the four "the server says not here" answers (one notice counter). */
+    public boolean serverOff() {
+        return this == SERVER_OFF || this == SERVER_OFF_EVERYONE || this == SERVER_OFF_WORLD
+                || this == SERVER_OFF_PERMISSION;
+    }
+
     /** Whether this is one of the three "the two sides speak different versions" answers. */
     public boolean versionMismatch() {
         return this == VERSION_MISMATCH || this == CLIENT_OUTDATED || this == SERVER_OUTDATED;
@@ -102,6 +147,9 @@ public enum ClientVerdict {
 
     public static ClientVerdict of(ClientStatusSnapshot s) {
         if (s == null) return WAITING;
+        // Without this the broken file's stand-in settings (everything off) would read as
+        // "you turned receiving off", which the player did not do.
+        if (s.settings() != null && !s.settings().available()) return SETTINGS_BROKEN;
         if (!s.connected()) return NOT_CONNECTED;
         if (s.discovery() == ClientStatusSnapshot.Discovery.LOCAL) return LOCAL_WORLD;
         if (!s.receptionEnabled()) return RECEIVING_OFF;
@@ -110,12 +158,13 @@ public enum ClientVerdict {
                 && dh.reason() != DhStatusSnapshot.Reason.NATIVE_PREFERRED;
         if (dhSource) {
             switch (dh.state()) {
-                case READY: return WORKING_DH;
+                case READY: return unlessRendererIdle(s, WORKING_DH);
                 case CONNECTING: case BETWEEN_SESSIONS: case PAUSED: return WAITING;
                 case BLOCKED: case STOPPED: return SOURCE_NOT_RUNNING;
                 case NEED_VOXY:
                     // A Distant Horizons server answered and the LOD renderer is still starting.
-                    if (dh.activity() == DhStatusSnapshot.Activity.WAITING_VOXY) return WAITING;
+                    // ...or will never start: it says so itself.
+                    if (dh.activity() == DhStatusSnapshot.Activity.WAITING_VOXY) return unlessRendererIdle(s, WAITING);
                     break;
                 // No Distant Horizons terrain here, or this source cannot run on this client
                 // (it feeds an LOD renderer only; the player runs the Distant Horizons client
@@ -142,10 +191,12 @@ public enum ClientVerdict {
                     ? CLIENT_OUTDATED
                     : s.protocol() > 0 && s.protocol() < dev.vox.lss.common.LSSConstants.PROTOCOL_VERSION
                             ? SERVER_OUTDATED : VERSION_MISMATCH;
-            case NEGOTIATED -> !s.serverEnabled() ? SERVER_OFF
+            case NEGOTIATED -> !s.serverEnabled() ? serverOff(s.serverOffReason())
                     // Terrain reaches the maps, but the LOD renderer the player installed gets none.
-                    : s.mapOnly() && rendererInstalled(s) ? RENDERER_NOT_CONNECTED
-                    : s.mapOnly() && mapsBlocked(s) ? MAPS_BLOCKED : WORKING;
+                    : s.mapOnly() && rendererInstalled(s) ? unlessRendererIdle(s, RENDERER_NOT_CONNECTED)
+                    : s.mapOnly() && mapsBlocked(s) ? MAPS_BLOCKED
+                    // The terrain arrives; whether anything draws it is the renderer's to say.
+                    : unlessRendererIdle(s, WORKING);
         };
     }
 }

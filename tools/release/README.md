@@ -30,7 +30,8 @@ The publish tools print their plan by default and act only with `--publish`.
 1. Gate every shipping line on its final commit (`gate-locked.sh`), then record the results.
 2. Merge the release PRs, create the annotated tags locally (`git tag -a --cleanup=verbatim`).
 3. `tag_chain.sh <version>`. A beta ships two lines: `LSS_RELEASE_LINES=1.21.1,26.3`. It refuses a
-   support line whose sync point is behind the release commit on main.
+   support line whose sync point is behind the release commit on main. Frozen lines are not
+   compared: a crash fix on 26.1 and 1.21.10 is `LSS_RELEASE_LINES=1.21.10,26.1` with no main tag.
 4. A stable release then runs `publish_vss.py` and `publish_curseforge.py`.
 
 A version with a hyphen (`0.22.0-beta.1`) is a prerelease: Modrinth type `beta`, a GitHub

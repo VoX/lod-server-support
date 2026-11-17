@@ -55,7 +55,7 @@ def plan(args, line, workdir):
     subprocess.run(['gh', 'release', 'download', tag, '-R', rc.REPO_SLUG, '-D', str(workdir), '--clobber'],
                    capture_output=True, check=True)
     names = {'fabric': 'Fabric (MC ' + env['LINE_MC_FABRIC'] + ')',
-             'paper': 'Paper/Purpur (MC ' + env['LINE_MC_PAPER'] + ')',
+             'paper': rc.paper_display(env) + ' (MC ' + env['LINE_MC_PAPER'] + ')',
              'neoforge': env.get('LINE_NEOFORGE_NAME', ''), 'sponge': env.get('LINE_SPONGE_NAME', '')}
     rows = []
     for platform in rc.platforms(env):

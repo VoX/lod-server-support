@@ -141,7 +141,11 @@ class StoreFrameDeliveryTest {
             this.state.enqueue(new IncomingRequest(cx, cz, clientTs));
             int before = this.proc.routeCyclesForTest();
             cycle();
-            await(() -> this.proc.routeCyclesForTest() > before, "routing cycle");
+            // Two completed cycles, not one: await() keeps cycles flowing, so a cycle that was
+            // already past its request drain when the request was offered can finish and
+            // bump the counter without having routed it. The cycle after that one started
+            // after the offer and routes it.
+            await(() -> this.proc.routeCyclesForTest() >= before + 2, "routing cycle");
         }
 
         void shutdown() {

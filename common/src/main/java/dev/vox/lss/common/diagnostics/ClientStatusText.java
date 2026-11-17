@@ -14,6 +14,9 @@ public final class ClientStatusText {
         return new Message("lss.status." + key, List.of(arguments));
     }
     private static Message onOff(boolean enabled) { return text(enabled ? "on" : "off"); }
+    /** A consumer's pending-ingest depth; below zero means nothing reports one, which a player
+     *  must not read as the number -1. */
+    private static Object backlog(int sections) { return sections < 0 ? text("unknown") : sections; }
     private static Message enumText(String group, Enum<?> value) {
         return text(group + "." + value.name().toLowerCase(Locale.ROOT));
     }
@@ -21,7 +24,16 @@ public final class ClientStatusText {
         if (s == null) return List.of(text("waiting"));
         var lines = new ArrayList<Message>();
         // First, the answer: working, or not working and why (ClientVerdict).
-        lines.add(text("verdict." + ClientVerdict.of(s).key()));
+        ClientVerdict verdict = ClientVerdict.of(s);
+        lines.add(text("verdict." + verdict.key()));
+        if (verdict == ClientVerdict.SETTINGS_BROKEN) {
+            // The file's real name (the two builds name it differently, and a client may have
+            // adopted the other build's file), then everything that is wrong with it.
+            lines.add(text("settings.file", s.settings().fileName()));
+            for (String problem : s.settings().problems()) lines.add(text("settings.problem", problem));
+        }
+        if (s.settings() != null && s.settings().ignoredExperimentalFile() != null)
+            lines.add(text("settings.experimental_ignored", s.settings().ignoredExperimentalFile()));
         if(s.dh()!=null && s.dh().reason()!=DhStatusSnapshot.Reason.NATIVE_OFFER && s.dh().reason()!=DhStatusSnapshot.Reason.NATIVE_PREFERRED) {
             var d=s.dh();
             lines.add(text("dh.source",d.profile().name(),enumText("dh.state",d.state())));
@@ -30,7 +42,7 @@ public final class ClientStatusText {
             lines.add(text("dh.terrain"));
             lines.add(text("dh.tiles",d.requestedTiles(),d.enqueuedTiles(),d.incompleteTiles(),d.refusedTiles()));
             lines.add(text("dh.columns",d.enqueuedColumns(),d.vanillaSkippedColumns(),d.failedColumns()));
-            lines.add(text("dh.resources",d.wireBytes(),d.ownedBytes(),d.decodeQueue(),d.inFlight(),d.ingestBacklog()));
+            lines.add(text("dh.resources",d.wireBytes(),d.ownedBytes(),d.decodeQueue(),d.inFlight(),backlog(d.ingestBacklog())));
             lines.add(text("dh.limits",d.effectiveRange(),d.generationRate(),d.syncRate(),d.bandwidthKB()));
             lines.add(text("dh.receipts",d.storedReceipts(),d.restoredReceipts(),d.pressureDroppedTerrainFrames()));
             lines.add(text("dh.freshness",onOff(d.syncOnLoad()),text(d.syncAvailable()?"available":"disabled"),
@@ -50,7 +62,7 @@ public final class ClientStatusText {
         lines.add(text("conditions", reasons.isEmpty() ? text("none") : reasons));
         lines.add(text("progress", s.receivedColumns(), s.receivedBytes(), s.effectiveDistance(), s.serverDistance()));
         lines.add(text("rate", s.rateGatedTicks(), s.rateCap()));
-        lines.add(text("queues", s.queuedColumns(), s.ingestBacklog(), s.xaeroPendingRebuilds(), s.journeyMapPending()));
+        lines.add(text("queues", s.queuedColumns(), backlog(s.ingestBacklog()), s.xaeroPendingRebuilds(), s.journeyMapPending()));
         lines.add(text("remote_unknown"));
         if(s.dh()!=null)lines.add(text("dh.reason",enumText("dh.reason",s.dh().reason())));
         }

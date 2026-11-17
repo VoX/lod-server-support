@@ -11,7 +11,38 @@ public record ClientStatusSnapshot(int schemaVersion, long lifecycle, long captu
         int ingestBacklog, long ingestFailures, int rateCap, long rateGatedTicks,
         int xaeroPendingRebuilds, Discovery discovery, Availability xaeroAvailability, ClientDiagnosticSnapshot details, DiagnosticVersions versions, ClientSettingsStatus settings, DhStatusSnapshot dh,
         Availability journeyMapAvailability, int journeyMapPending, int farPlayersFromServer,
-        boolean mapOnly) {
+        boolean mapOnly, int serverOffReason, Renderer renderer) {
+    /** What the installed LOD renderer says about itself (0.23.0 plan §6): the verdict reads
+     *  it, and the export carries it. {@code UNKNOWN} is "not asked or could not tell" and
+     *  never changes an answer. */
+    public enum Renderer {
+        UNKNOWN,
+        /** It runs and its drawing is switched on. */
+        READY,
+        /** It switched itself off for this computer (its graphics requirements are not met). */
+        UNSUPPORTED,
+        /** The player switched it, or its drawing, off in its own settings. */
+        SWITCHED_OFF
+    }
+    public ClientStatusSnapshot {
+        if (renderer == null) renderer = Renderer.UNKNOWN;
+    }
+    /** Callers that did not ask the LOD renderer about itself. */
+    public ClientStatusSnapshot(int schemaVersion, long lifecycle, long capturedAtMillis,
+            boolean connected, boolean negotiated, boolean receptionEnabled, boolean serverEnabled,
+            boolean consumerAvailable, boolean rendererAvailable, int protocol, int serverDistance,
+            int effectiveDistance, long receivedColumns, long receivedBytes, int queuedColumns,
+            int ingestBacklog, long ingestFailures, int rateCap, long rateGatedTicks,
+            int xaeroPendingRebuilds, Discovery discovery, Availability xaeroAvailability,
+            ClientDiagnosticSnapshot details, DiagnosticVersions versions, ClientSettingsStatus settings,
+            DhStatusSnapshot dh, Availability journeyMapAvailability, int journeyMapPending,
+            int farPlayersFromServer, boolean mapOnly, int serverOffReason) {
+        this(schemaVersion,lifecycle,capturedAtMillis,connected,negotiated,receptionEnabled,serverEnabled,
+                consumerAvailable,rendererAvailable,protocol,serverDistance,effectiveDistance,receivedColumns,
+                receivedBytes,queuedColumns,ingestBacklog,ingestFailures,rateCap,rateGatedTicks,xaeroPendingRebuilds,
+                discovery,xaeroAvailability,details,versions,settings,dh,journeyMapAvailability,journeyMapPending,
+                farPlayersFromServer,mapOnly,serverOffReason,Renderer.UNKNOWN);
+    }
     /** 4: settings.mapIngestionEnabled (was xaeroMapEnabled) and the JourneyMap fields.
      *  5: {@link Availability#SERVER_BLOCKED} (the server's map-ingestion request,
      *  map-policy plan A4).
@@ -19,10 +50,32 @@ public record ClientStatusSnapshot(int schemaVersion, long lifecycle, long captu
      *  sending this client (hide-permission plan §3): 0 means the server sends none
      *  (its mode, a permission or setting, the other players' sharing choice, distance),
      *  anything else means a missing far player is a client drawing question (fog, the
-     *  draw range). A count only; never names or positions. */
-    public static final int SCHEMA_VERSION = 6;
+     *  draw range). A count only; never names or positions.
+     *  7 (0.23.0): {@code serverOffReason}, {@code renderer} and the settings file's name
+     *  and problem lines ({@code settings}). The export writes the whole record, so these
+     *  and {@code mapOnly} (since 0.22.0) are in it; the problem lines never carry a value
+     *  from the file ({@code SettingsProblems}). */
+    public static final int SCHEMA_VERSION = 7;
+    /** Callers with no reason from the server for an answer that says "not here"
+     *  ({@code serverOffReason}: one {@code SESSION_FLAG_OFF_*} bit or 0, read by
+     *  {@link ClientVerdict} alone; 0.23.0 plan §3). */
+    public ClientStatusSnapshot(int schemaVersion, long lifecycle, long capturedAtMillis,
+            boolean connected, boolean negotiated, boolean receptionEnabled, boolean serverEnabled,
+            boolean consumerAvailable, boolean rendererAvailable, int protocol, int serverDistance,
+            int effectiveDistance, long receivedColumns, long receivedBytes, int queuedColumns,
+            int ingestBacklog, long ingestFailures, int rateCap, long rateGatedTicks,
+            int xaeroPendingRebuilds, Discovery discovery, Availability xaeroAvailability,
+            ClientDiagnosticSnapshot details, DiagnosticVersions versions, ClientSettingsStatus settings,
+            DhStatusSnapshot dh, Availability journeyMapAvailability, int journeyMapPending,
+            int farPlayersFromServer, boolean mapOnly) {
+        this(schemaVersion,lifecycle,capturedAtMillis,connected,negotiated,receptionEnabled,serverEnabled,
+                consumerAvailable,rendererAvailable,protocol,serverDistance,effectiveDistance,receivedColumns,
+                receivedBytes,queuedColumns,ingestBacklog,ingestFailures,rateCap,rateGatedTicks,xaeroPendingRebuilds,
+                discovery,xaeroAvailability,details,versions,settings,dh,journeyMapAvailability,journeyMapPending,
+                farPlayersFromServer,mapOnly,0);
+    }
     /** Callers that do not say whether the map mods are this client's only consumers
-     *  ({@code mapOnly}, read by {@link ClientVerdict} alone and not exported). */
+     *  ({@code mapOnly}, read by {@link ClientVerdict} alone). */
     public ClientStatusSnapshot(int schemaVersion, long lifecycle, long capturedAtMillis,
             boolean connected, boolean negotiated, boolean receptionEnabled, boolean serverEnabled,
             boolean consumerAvailable, boolean rendererAvailable, int protocol, int serverDistance,
@@ -148,6 +201,7 @@ public record ClientStatusSnapshot(int schemaVersion, long lifecycle, long captu
         if(dh!=null && dh.reason()!=DhStatusSnapshot.Reason.NATIVE_OFFER && dh.reason()!=DhStatusSnapshot.Reason.NATIVE_PREFERRED) {
             var lines=new ArrayList<String>();
             lines.add("Verdict: " + ClientVerdict.of(this));
+            lines.addAll(settingsFileLines());
             lines.addAll(dh.lines());
             if(settings!=null) {
                 lines.add("Settings: saved="+settings.saved()+"; configured="+settings.configured()+"; effective="+settings.effective());
@@ -175,6 +229,19 @@ public record ClientStatusSnapshot(int schemaVersion, long lifecycle, long captu
                 "Versions: " + versions.components(),
                 "Snapshot age: " + Math.max(0, System.currentTimeMillis() - capturedAtMillis) + " ms"));
         if(dh!=null)lines.add("DH fallback: "+dh.reason());
+        lines.addAll(1,settingsFileLines());
         return List.copyOf(lines);
+    }
+    /** What is wrong with the settings files, right under the verdict; empty when nothing is. */
+    private List<String> settingsFileLines() {
+        if(settings==null)return List.of();
+        var lines=new ArrayList<String>();
+        if(!settings.available()) {
+            lines.add("Settings file "+settings.fileName()+" did not load:");
+            for(String problem:settings.problems())lines.add("  "+problem);
+        }
+        if(settings.ignoredExperimentalFile()!=null)
+            lines.add("Experimental settings file ignored: "+settings.ignoredExperimentalFile());
+        return lines;
     }
 }

@@ -49,8 +49,7 @@ public final class ClientStatusScreen extends Screen {
         var lines = ClientStatusComponents.lines(snapshot);
         var wrappedLines = new java.util.ArrayList<net.minecraft.util.FormattedCharSequence>();
         var config = dev.vox.lss.config.LSSClientConfig.CONFIG;
-        if (config.error() != null) wrappedLines.addAll(font.split(
-                Component.translatable("lss.settings.inactive", config.error()), Math.max(50, width - 30)));
+        // A settings file that did not load is the status verdict now (the first of `lines`).
         if (!config.pendingReconnect().isEmpty()) wrappedLines.addAll(font.split(
                 Component.translatable("lss.settings.pending_reconnect_notice"), Math.max(50, width - 30)));
         if (lastActionFeedback != null) wrappedLines.addAll(font.split(lastActionFeedback, Math.max(50, width - 30)));
