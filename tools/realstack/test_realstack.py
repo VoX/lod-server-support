@@ -79,6 +79,46 @@ class StackFileTest(OfflineCase):
         self.assertIn('fabric-26.3-sodium-voxy-xaero', ids)
         self.assertIn('neoforge-1.21.1-c2me-scalablelux', ids)
         self.assertIn('paper-26.3-fabric-client', ids)
+        self.assertIn('sponge-26.3-fabric-client', ids)
+
+    def test_sponge_row_pins_the_boot_smoke_build_and_the_fabric_client(self) -> None:
+        document = stackfile.load()
+        sponge = stackfile.find_row(document, 'sponge-26.3-fabric-client')
+        fabric = stackfile.find_row(document, 'fabric-26.3-sodium-voxy-xaero')
+        self.assertEqual(sponge['client'], fabric['client'])
+        self.assertEqual(sponge['minecraft'], fabric['minecraft'])
+        self.assertEqual(sponge['server']['mods'], [], 'the plugin alone')
+        self.assertEqual(sponge['server']['lss'], {'loader': 'sponge',
+                                                   'jar_prefix': 'lod-server-support-sponge'})
+        self.assertIn('session_ended', sponge['checks'])
+        properties = REPO_ROOT / 'gradle.properties'
+        if not properties.is_file():
+            self.skipTest('gradle.properties is not in this checkout')
+        pinned = dict(line.split('=', 1) for line in properties.read_text().splitlines()
+                      if line.startswith('spongevanilla_'))
+        if pinned.get('spongevanilla_version', '').split('-')[0] != sponge['minecraft']:
+            self.skipTest('this checkout pins SpongeVanilla for another Minecraft version')
+        self.assertEqual(sponge['server']['sponge'], {'version': pinned['spongevanilla_version'],
+                                                      'sha1': pinned['spongevanilla_sha1']})
+
+    def test_sponge_needs_a_complete_pin(self) -> None:
+        good = stackfile.load()
+        cases = {
+            'sponge.version': lambda pin: pin.update(version='latest'),
+            'sponge.version must': lambda pin: pin.update(version='../26.3-21.0.0'),
+            'sponge.sha1': lambda pin: pin.update(sha1=pin['sha1'][:39]),
+            'sponge.sha1 must': lambda pin: pin.update(sha1=pin['sha1'].upper()),
+        }
+        for expected, damage in cases.items():
+            document = copy.deepcopy(good)
+            damage(stackfile.find_row(document, 'sponge-26.3-fabric-client')['server']['sponge'])
+            problems = stackfile.validate(document)
+            self.assertTrue(any(expected in problem for problem in problems), (expected, problems))
+        document = copy.deepcopy(good)
+        del stackfile.find_row(document, 'sponge-26.3-fabric-client')['server']['sponge']
+        self.assertTrue(any('sponge.version' in problem for problem in stackfile.validate(document)))
+        for version in ('26.3-21.0.0-RC2745', '1.21.1-12.0.3', '26.1.2-19.0.0-RC2742'):
+            self.assertTrue(stackfile.SPONGE_VERSION.match(version), version)
 
     def test_paper_row_has_the_fabric_rows_client(self) -> None:
         document = stackfile.load()
@@ -258,6 +298,8 @@ class FetchTest(OfflineCase):
         fetch.check_url_allowed('https://piston-meta.mojang.com/mc/game/version_manifest_v2.json')
         fetch.check_url_allowed('https://fill.papermc.io/v3/projects/paper/versions/26.3/builds')
         fetch.check_url_allowed('https://fill-data.papermc.io/v1/objects/abc/paper-26.3-249.jar')
+        fetch.check_url_allowed(f'{fetch.SPONGE_REPO}/26.3-21.0.0-RC2745/'
+                                'spongevanilla-26.3-21.0.0-RC2745-universal.jar')
         for url in ('http://cdn.modrinth.com/data/x.jar', 'https://example.org/mod.jar',
                     'https://cdn.modrinth.com.evil.example/x.jar', 'file:///etc/passwd'):
             with self.assertRaises(fetch.FetchError):
@@ -414,6 +456,32 @@ class FetchTest(OfflineCase):
         fetch.http_get = lambda url, timeout=180: b'paper'
         path, how = fetch.fetch_paper_server('26.3', pin, cache)
         self.assertEqual((path.read_bytes(), how), (b'paper', 'downloaded'))
+
+    SPONGE_PIN = {'version': '26.3-21.0.0-RC2745', 'sha1': hashlib.sha1(b'sponge').hexdigest()}
+
+    def test_pinned_sponge_from_cache_needs_no_network(self) -> None:
+        cache = self.temp()
+        dest = cache / 'sponge' / '26.3-21.0.0-RC2745' / 'spongevanilla-26.3-21.0.0-RC2745-universal.jar'
+        dest.parent.mkdir(parents=True)
+        dest.write_bytes(b'sponge')
+        self.assertEqual(fetch.fetch_sponge_server(self.SPONGE_PIN, cache), (dest, 'cached'))
+        self.assertEqual(fetch.sponge_root('26.3-21.0.0-RC2745', cache), dest.parent)
+
+    def test_sponge_download_is_checked_against_the_pin(self) -> None:
+        cache = self.temp()
+        asked = []
+        fetch.http_get = lambda url, timeout=180: asked.append(url) or b'tampered on the way'
+        with self.assertRaises(fetch.FetchError):
+            fetch.fetch_sponge_server(self.SPONGE_PIN, cache)
+        self.assertEqual(asked, [f'{fetch.SPONGE_REPO}/26.3-21.0.0-RC2745/'
+                                 'spongevanilla-26.3-21.0.0-RC2745-universal.jar'])
+        self.assertFalse((cache / 'sponge' / '26.3-21.0.0-RC2745'
+                          / 'spongevanilla-26.3-21.0.0-RC2745-universal.jar').exists())
+        fetch.http_get = lambda url, timeout=180: b'sponge'
+        path, how = fetch.fetch_sponge_server(self.SPONGE_PIN, cache)
+        self.assertEqual((path.read_bytes(), how), (b'sponge', 'downloaded'))
+        with self.assertRaises(fetch.FetchError):
+            fetch.fetch_sponge_server({'version': '../x', 'sha1': self.SPONGE_PIN['sha1']}, cache)
 
     def test_free_space_guard(self) -> None:
         with self.assertRaises(fetch.FetchError):
@@ -597,6 +665,19 @@ class LogParsingTest(OfflineCase):
         self.assertTrue(checks.first_match(entries, checks.SERVICE_START))
         self.assertEqual(len(checks.lss_entries(entries, ('WARN',))), 1)
 
+    def test_sponge_join_line(self) -> None:
+        sponge = ("[16:23:27] [Server thread/\x1b[32mINFO\x1b[m]: RealStack[ServerPlayer['RealStack'/25, "
+                  "l='ServerLevel[key=ResourceKey[minecraft:dimension / minecraft:overworld]]', x=149.50, "
+                  "y=64.00, z=197.50]] logged in to world 'minecraft:overworld' with entity id 25 at "
+                  "(149.5, 64.0, 197.5)\n")
+        entry = checks.parse_entries(sponge)[0]
+        self.assertTrue(checks.is_join(entry.message, PLAYER))
+        self.assertFalse(checks.is_join(entry.message, 'Someone'))
+        self.assertTrue(checks.is_join(f'{PLAYER} joined the game', PLAYER))
+        vanilla = f'{PLAYER}[/127.0.0.1:45946] logged in with entity id 20 at (154.5, 65.0, 188.5)'
+        self.assertFalse(checks.is_join(vanilla, PLAYER), 'vanilla prints its join message as well')
+        self.assertTrue(checks.check_client_joined(sponge, PLAYER).passed)
+
     def test_paper_console_of_a_real_run(self) -> None:
         entries = checks.parse_entries(fixture('paper-26.3-server.log'))
         self.assertTrue(all(entry.thread == '' for entry in entries))
@@ -656,8 +737,10 @@ class CheckTest(OfflineCase):
         server = fixture(f'{prefix}-server.log')
         cut = server.index(f'{PLAYER} lost connection') if f'{PLAYER} lost connection' in server \
             else len(server)
+        leave = FIXTURES / f'{prefix}-leave-diag.txt'
         return {'server_log': server, 'observed_server_log': server[:server.rindex('\n', 0, cut) + 1],
                 'client_log': fixture(f'{prefix}-client.log'), 'diag': fixture(f'{prefix}-diag.txt'),
+                'diag_after_leave': leave.read_text() if leave.is_file() else '',
                 'player': PLAYER, 'protocol': 20, 'crash_files': [], 'client_alive_at_end': True,
                 'own_paths': OWN_PATHS,
                 'screenshot': {'path': 'evidence/client.png', 'width': 1280, 'height': 720,
@@ -665,15 +748,60 @@ class CheckTest(OfflineCase):
                                'windows': ['Minecraft* 26.3 - Multiplayer (3rd-party Server)']}}
 
     def results(self, material: dict) -> dict:
-        """Every check's result by name."""
-        names = list(stackfile.KNOWN_CHECKS)
+        """Every check's result by name. session_ended only where the excerpts include the diag
+        asked after the leave (runs from before the tool asked for it have none)."""
+        names = [name for name in stackfile.KNOWN_CHECKS
+                 if name != 'session_ended' or material['diag_after_leave']]
         return {result.name: result for result in checks.run_checks(names, material)}
 
     def test_real_runs_pass_every_check(self) -> None:
-        for prefix in ('fabric-26.3', 'neoforge-1.21.1', 'paper-26.3'):
+        for prefix in ('fabric-26.3', 'neoforge-1.21.1', 'paper-26.3', 'sponge-26.3'):
             for name, result in self.results(self.material(prefix)).items():
                 self.assertTrue(result.passed, (prefix, name, result.message))
                 self.assertTrue(result.evidence, (prefix, name))
+        self.assertIn('session_ended', self.results(self.material('sponge-26.3')))
+
+    def test_sponge_run_shows_the_session_ending_on_the_server_thread(self) -> None:
+        material = self.material('sponge-26.3')
+        result = checks.check_session_ended(material['server_log'], material['diag'],
+                                            material['diag_after_leave'], PLAYER, 20)
+        self.assertTrue(result.passed, result.message)
+        self.assertIn('[Server thread/INFO]: RealStack left the game', result.evidence[0])
+        self.assertIn('ended=1/0/0/0', result.evidence[2])
+        # The same run judged against its own pre-leave diag: the session was still live.
+        self.assertFalse(checks.check_session_ended(material['server_log'], material['diag'],
+                                                    material['diag'], PLAYER, 20).passed)
+
+    def after_leave(self, diag: str) -> str:
+        """A diag as the server answers it once the player has left: no live session, one
+        more ended, the player no longer listed."""
+        lines = [line for line in diag.splitlines(keepends=True) if f'  {PLAYER}: ' not in line]
+        return ''.join(lines).replace('v20=1,', 'v20=0,').replace('ended=0/0/0/0', 'ended=1/0/0/0')
+
+    def test_session_ended_needs_each_witness(self) -> None:
+        material = self.material('paper-26.3')
+        before, server = material['diag'], material['server_log']
+        after = self.after_leave(before)
+
+        def judge(server_log: str = server, diag: str = before, leave: str = after) -> checks.CheckResult:
+            """The check on the paper excerpts with one part replaced."""
+            return checks.check_session_ended(server_log, diag, leave, PLAYER, 20)
+        result = judge()
+        self.assertTrue(result.passed, result.message)
+        self.assertIn('0 -> 1', result.message)
+        self.assertIn(f'{PLAYER} left the game', result.evidence[0])
+        self.assertIn('never logged', judge(server_log=server.replace('left the game', 'stayed')).message)
+        self.assertIn('no lsslod diag', judge(leave='').message)
+        self.assertIn('still counts 1 live', judge(leave=after.replace('v20=0,', 'v20=1,')).message)
+        self.assertIn('did not grow', judge(leave=after.replace('ended=1/0/0/0', 'ended=0/0/0/0')).message)
+        self.assertIn('did not grow', judge(diag=before.replace('ended=0/0/0/0', 'ended=1/0/0/0')).message)
+        player_line = [line for line in before.splitlines(keepends=True) if f'  {PLAYER}: ' in line][0]
+        self.assertIn(f'still lists {PLAYER}', judge(leave=after + player_line).message)
+        older = re.sub(r', ended=[\d/]+ in \w+', '', after)
+        self.assertIn('no ended= counter', judge(leave=older).message)
+        self.assertEqual(checks.ended_sessions('started=3/0/0/0, ended=2/0/1/0 in 5m'), 3)
+        self.assertIsNone(checks.ended_sessions('v20=1, started=1/0/0/0'))
+        self.assertIsNone(checks.ended_sessions(None))
 
     def test_client_without_lss_fails_the_handshake(self) -> None:
         results = self.results(self.material('fabric-26.3-nolss'))
@@ -1278,6 +1406,82 @@ class RunStagingTest(OfflineCase):
         self.assertFalse((run.server_dir / 'cache').exists())
         self.assertEqual(run.facts['paper_cache_seeded'], [])
 
+    def test_sponge_server_takes_mods_and_shares_its_libraries(self) -> None:
+        run = self.run_for('sponge-26.3-fabric-client')
+        libraries = run.directory / 'cache' / 'sponge' / 'libraries'
+        libraries.mkdir(parents=True)
+        self.staged(run, {'sponge_jar': str(run.directory / 'sponge.jar'),
+                          'libraries': str(libraries)})
+        self.assertEqual([path.name for path in (run.server_dir / 'mods').iterdir()],
+                         ['lod-server-support-server.jar'])
+        self.assertFalse((run.server_dir / 'plugins').exists())
+        link = run.server_dir / 'libraries'
+        self.assertTrue(link.is_symlink())
+        self.assertEqual(link.resolve(), libraries.resolve())
+        self.assertEqual(realstack.loader_label(run.row['server'], 'platform'),
+                         'spongevanilla 26.3-21.0.0-RC2745')
+
+    LEFT = f'[10:01:00] [Server thread/INFO]: {PLAYER} left the game\n'
+
+    def leaving(self, row_id: str, *arguments: str, logs_leave: bool = True) -> tuple:
+        """A run whose server is a recorded console: the kick (or the client's stop) makes the
+        console log the leave, and the diag is answered with a captured one."""
+        run = self.run_for(row_id, *arguments)
+        run.server_dir.mkdir(parents=True)
+        run.console_log.write_text(f'[10:00:00] [Server thread/INFO]: {PLAYER} joined the game\n')
+        sent = []
+
+        def leave() -> None:
+            """The server logs the leave."""
+            if logs_leave:
+                with open(run.console_log, 'a') as handle:
+                    handle.write(self.LEFT)
+
+        def console(command: str, **_kwargs) -> str:
+            """Record the command; a kick makes the player leave."""
+            sent.append(command)
+            if command.startswith('kick '):
+                leave()
+                return ''
+            return fixture('paper-26.3-diag.txt')
+        run.console = console
+        saved = realstack.procs.stop_owned
+        realstack.procs.stop_owned = lambda markers, grace: sent.append(('stop', markers)) or leave() or {}
+        self.addCleanup(setattr, realstack.procs, 'stop_owned', saved)
+        return run, sent
+
+    def test_end_session_kicks_waits_for_the_leave_and_asks_again(self) -> None:
+        run, sent = self.leaving('sponge-26.3-fabric-client')
+        run.end_session()
+        self.assertEqual(sent, [f'kick {PLAYER}', 'lsslod diag'])
+        self.assertEqual((run.evidence / 'server-diag-after-leave.txt').read_text(),
+                         fixture('paper-26.3-diag.txt'))
+        record = run.facts['leave']
+        self.assertEqual((record['how'], record['left_logged'], record['diag_after_leave']),
+                         ('kick', True, True))
+
+    def test_end_session_by_quit_stops_the_client_first(self) -> None:
+        run, sent = self.leaving('sponge-26.3-fabric-client', '--leave', 'quit', '--brand', 'vss')
+        run.end_session()
+        self.assertEqual(sent, [('stop', run.markers('client')), 'vsslod diag'])
+        self.assertEqual(run.facts['leave']['how'], 'quit')
+        self.assertTrue(run.facts['leave']['left_logged'])
+
+    def test_end_session_without_a_leave_asks_nothing(self) -> None:
+        saved = realstack.LEAVE_SECONDS
+        realstack.LEAVE_SECONDS = 0.3
+        self.addCleanup(setattr, realstack, 'LEAVE_SECONDS', saved)
+        run, sent = self.leaving('sponge-26.3-fabric-client', logs_leave=False)
+        run.end_session()
+        self.assertEqual(sent, [f'kick {PLAYER}'])
+        self.assertFalse(run.facts['leave']['left_logged'])
+        self.assertFalse((run.evidence / 'server-diag-after-leave.txt').exists())
+        # A server without the mod is never asked for a diag.
+        run, sent = self.leaving('fabric-26.3-sodium-voxy-xaero', '--scenario', 'server-without-lss')
+        run.end_session()
+        self.assertEqual(sent, [f'kick {PLAYER}'])
+        self.assertTrue(run.facts['leave']['left_logged'])
+
     def test_scenario_stages_client_settings(self) -> None:
         run = self.run_for('fabric-26.3-sodium-voxy-xaero', '--scenario', 'client-receives-nothing')
         self.staged(run)
@@ -1467,6 +1671,17 @@ class LaunchTest(OfflineCase):
         self.assertEqual(launch.mods_folder('paper'), 'plugins')
         self.assertEqual(launch.mods_folder('fabric'), 'mods')
         self.assertEqual(launch.mods_folder('neoforge'), 'mods')
+
+    def test_sponge_server(self) -> None:
+        jar = Path('/cache/sponge/26.3-21.0.0-RC2745/spongevanilla-26.3-21.0.0-RC2745-universal.jar')
+        command = launch.sponge_server_command(Path('/jdk/bin/java'), '-Dlssrig.id=x-server', jar,
+                                               ['-Dx=y'])
+        self.assertEqual(command[:2], ['/jdk/bin/java', '-Dlssrig.id=x-server'])
+        self.assertEqual(command[-4:], ['-Dx=y', '-jar', str(jar), 'nogui'])
+        self.assertEqual(launch.mods_folder('sponge'), 'mods')
+        self.assertEqual(launch.server_settings_path('sponge', 'lss'),
+                         Path('config/lss-server-config.yaml'),
+                         'the plugin asks Sponge for the shared configuration folder')
 
     def test_settings_paths(self) -> None:
         self.assertEqual(launch.server_settings_path('fabric', 'lss'),

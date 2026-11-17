@@ -7,15 +7,18 @@ import re
 from pathlib import Path
 
 SCHEMA = 1
-SERVER_PLATFORMS = ('fabric', 'neoforge', 'paper')
+SERVER_PLATFORMS = ('fabric', 'neoforge', 'paper', 'sponge')
 CLIENT_LOADERS = ('fabric', 'neoforge')
 STATUSES = ('ready', 'blocked')
-KNOWN_CHECKS = ('server_started', 'handshake', 'columns_sent', 'client_clean', 'screenshot')
+KNOWN_CHECKS = ('server_started', 'handshake', 'columns_sent', 'client_clean', 'screenshot',
+                'session_ended')
 PIN_KEYS = ('slug', 'project_id', 'version_id', 'version_number', 'file', 'sha512')
 ROW_ID = re.compile(r'^[a-z0-9][a-z0-9.+-]*$')
 HEX = re.compile(r'^[0-9a-f]+$')
 JAR_NAME = re.compile(r'^[A-Za-z0-9][A-Za-z0-9._+-]*\.jar$')
 MODRINTH_ID = re.compile(r'^[A-Za-z0-9]{6,16}$')
+# A SpongeVanilla build as the Sponge repository names it: <minecraft>-<api>[-RC<build>].
+SPONGE_VERSION = re.compile(r'^[0-9][0-9.]*-[0-9]+\.[0-9]+\.[0-9]+(-RC[0-9]+)?$')
 DEFAULT_PATH = Path(__file__).resolve().parent / 'stacks.json'
 
 
@@ -127,6 +130,14 @@ def validate_side(side, label: str, kind_key: str, kinds: tuple[str, ...]) -> li
             problems.append(f'{label}.paper.file must be the plain .jar file name of that build')
         elif not is_hex(paper.get('sha256'), 64):
             problems.append(f'{label}.paper.sha256 must be the server jar sha256')
+    if kind == 'sponge':
+        sponge = side.get('sponge')
+        if not isinstance(sponge, dict) or not isinstance(sponge.get('version'), str) \
+                or not SPONGE_VERSION.match(sponge['version']):
+            problems.append(f'{label}.sponge.version must pin the SpongeVanilla build '
+                            '(<minecraft>-<api>[-RC<build>])')
+        elif not is_hex(sponge.get('sha1'), 40):
+            problems.append(f'{label}.sponge.sha1 must be the universal jar sha1')
     selector = side.get('lss')
     if not isinstance(selector, dict) or not isinstance(selector.get('loader'), str) \
             or not isinstance(selector.get('jar_prefix'), str):

@@ -51,6 +51,10 @@ CONSOLE_REPLY_SECONDS = 8
 RELOAD_SECONDS = 30          # how long the server may take to answer a settings reload
 SETTINGS_FILE_SECONDS = 30   # how long after "Done" the first start may take to write its settings
 INSTALLER_SECONDS = 900
+LEAVE_SECONDS = 30           # how long the server may take to log that the player left
+# How the player's session ends after the observation window: the server console kicks the
+# player, or the client is stopped, so the server sees its connection close (a quit).
+LEAVES = ('kick', 'quit')
 FAULTS = ('client-without-lss',)
 # A scenario replaces the row's checks: it stages a situation a player meets and reads what the
 # client and the server say about it.
@@ -227,6 +231,12 @@ def provision(row: dict, cache: Path) -> dict:
         result['server'] = {'paper_jar': str(path),
                             'game_jar': str(fetch.fetch_game_jar(version_json, 'server', cache))}
         say(f'  server: Paper {row["minecraft"]} build {server["paper"]["build"]}: {how}')
+    elif server['platform'] == 'sponge':
+        path, how = fetch.fetch_sponge_server(server['sponge'], cache)
+        libraries = fetch.sponge_root(server['sponge']['version'], cache) / 'libraries'
+        libraries.mkdir(parents=True, exist_ok=True)
+        result['server'] = {'sponge_jar': str(path), 'libraries': str(libraries)}
+        say(f'  server: SpongeVanilla {server["sponge"]["version"]}: {how}')
     else:
         raise fetch.FetchError(f'server platform {server["platform"]} is not implemented yet')
 
@@ -424,6 +434,9 @@ class Run:
             (self.server_dir / 'libraries').symlink_to(libraries, target_is_directory=True)
         if platform == 'paper':
             self.seed_paper_cache(provisioned)
+        if platform == 'sponge':
+            libraries = Path(provisioned['server']['libraries'])
+            (self.server_dir / 'libraries').symlink_to(libraries, target_is_directory=True)
         if scenario.get('client_settings'):
             relative = launch.client_settings_path(self.options.brand)
             text = settings.render(scenario['client_settings'])
@@ -482,6 +495,9 @@ class Run:
         elif block['platform'] == 'paper':
             command = launch.paper_server_command(java, tag, Path(provisioned['server']['paper_jar']),
                                                   block.get('jvm_args', []))
+        elif block['platform'] == 'sponge':
+            command = launch.sponge_server_command(java, tag, Path(provisioned['server']['sponge_jar']),
+                                                   block.get('jvm_args', []))
         else:
             command = launch.neoforge_server_command(java, tag, block['neoforge']['version'],
                                                      block.get('jvm_args', []))
@@ -574,9 +590,9 @@ class Run:
                                   self.client_log)
         say('client starting')
         started = time.monotonic()
-        joined = f'{launch.PLAYER} joined the game'
-        self.wait_for_line(self.console_log, lambda message: message == joined, self.client,
-                           CLIENT_JOIN_SECONDS, f'"{joined}" in the server log')
+        joined = checks.PLAYER_JOINED.format(player=launch.PLAYER)
+        self.wait_for_line(self.console_log, lambda message: checks.is_join(message, launch.PLAYER),
+                           self.client, CLIENT_JOIN_SECONDS, f'"{joined}" in the server log')
         self.facts['client_join_seconds'] = round(time.monotonic() - started, 1)
         say(f'client joined after {self.facts["client_join_seconds"]} s')
 
@@ -672,12 +688,50 @@ class Run:
         self.facts['screenshot'] = shot
         say(f'screenshot saved ({shot["width"]}x{shot["height"]}, windows: {shot["windows"]})')
 
+    def end_session(self) -> None:
+        """End the player's session while the server still runs, and ask the server what it
+        holds afterwards. `--leave kick` has the console kick the player; `--leave quit` stops
+        the client, so the server sees the connection close as when a player quits. Once the
+        server has logged the leave, a server that runs the mod is asked for its diag: that
+        answer (server-diag-after-leave.txt) shows whether the mod ended the session."""
+        how = self.options.leave
+        offset = self.console_log.stat().st_size if self.console_log.exists() else 0
+        record: dict = {'how': how, 'console_offset': offset}
+        if how == 'quit':
+            record['client_stop'] = procs.stop_owned(self.markers('client'), grace=20)
+        else:
+            self.console(f'kick {launch.PLAYER}', settle=0)
+        left = checks.PLAYER_LEFT.format(player=launch.PLAYER)
+
+        def logged() -> bool:
+            """True once the server has logged the leave after the offset."""
+            with open(self.console_log, 'rb') as handle:
+                handle.seek(offset)
+                text = handle.read().decode('utf-8', 'replace')
+            return any(entry.message == left for entry in checks.parse_entries(text))
+
+        started = time.monotonic()
+        record['left_logged'] = procs.wait_until(logged, started + LEAVE_SECONDS, 0.5)
+        record['left_seconds'] = round(time.monotonic() - started, 1)
+        if record['left_logged'] and (self.scenario or {}).get('server_lss', True):
+            reply = self.console(f'{SERVER_COMMANDS[self.options.brand]} diag', expect='Bandwidth:')
+            (self.evidence / 'server-diag-after-leave.txt').write_text(reply)
+            record['diag_after_leave'] = checks.parse_diag(reply)['present']
+        self.facts['leave'] = record
+        say(f'session ended by {how}: leave logged={record["left_logged"]} '
+            f'after {record["left_seconds"]} s')
+
     def stop_everything(self) -> None:
-        """Stop the client, then the server (through its console first), then the display.
-        Only this run's own processes are ever signalled."""
+        """End the player's session (when the player joined), stop the client, then the server
+        (through its console first), then the display. Only this run's own processes are ever
+        signalled."""
         report: dict = {}
-        if self.server is not None and self.server.poll() is None:
-            self.console(f'kick {launch.PLAYER}', settle=3.0)
+        if self.server is not None and self.server.poll() is None \
+                and 'client_join_seconds' in self.facts:
+            try:
+                self.end_session()
+            except OSError as error:
+                self.facts['leave'] = {'how': self.options.leave, 'error': str(error)}
         report['client'] = procs.stop_owned(self.markers('client'), grace=20)
         if self.server is not None and self.server.poll() is None:
             self.console('stop', settle=0.5)
@@ -794,7 +848,7 @@ def verdict_context(row: dict, facts: dict) -> dict:
             for side in ('server', 'client')}
     keys = ('rig_id', 'started', 'run_seconds', 'lock_wait_seconds', 'server_start_seconds',
             'client_join_seconds', 'port', 'display', 'java', 'fault', 'scenario', 'brand',
-            'notice_seconds_after_join', 'witness_seconds_after_join', 'server_settings',
+            'notice_seconds_after_join', 'witness_seconds_after_join', 'server_settings', 'leave',
             'client_settings', 'lss_selector', 'lss', 'diag_polls', 'stop_report')
     context = {key: facts.get(key) for key in keys}
     context.update({'minecraft': row['minecraft'], 'pins': pins,
@@ -812,6 +866,8 @@ def loader_label(block: dict, kind_key: str) -> str:
         return f'neoforge {block["neoforge"]["version"]}'
     if kind == 'paper':
         return f'paper (build {block["paper"]["build"]})'
+    if kind == 'sponge':
+        return f'spongevanilla {block["sponge"]["version"]}'
     return kind
 
 
@@ -834,6 +890,7 @@ def load_material(directory: Path, document: dict) -> dict:
         screenshot = None
     return {'server_log': server_log, 'observed_server_log': observed,
             'client_log': text('client-stdout.log'), 'diag': text('server-diag-final.txt'),
+            'diag_after_leave': text('server-diag-after-leave.txt'),
             'player': facts.get('player', launch.PLAYER), 'protocol': document['lss']['protocol'],
             'crash_files': facts.get('crash_files', []),
             'client_alive_at_end': facts.get('client_alive_at_end', False),
@@ -1007,6 +1064,9 @@ def build_parser() -> argparse.ArgumentParser:
                             help='stage a situation a player meets and judge what the client says')
     run_parser.add_argument('--brand', choices=sorted(BRAND_PREFIXES), default='lss',
                             help='which build of the jars under test (vss needs --lss dir:)')
+    run_parser.add_argument('--leave', choices=LEAVES, default='kick',
+                            help='how the session ends after the window: the console kicks the '
+                                 'player (default), or the client is stopped (a quit)')
     run_parser.add_argument('--port', type=int, help='server port (default: first free candidate)')
     run_parser.add_argument('--display', type=int, help='private X display number (never 0)')
     run_parser.add_argument('--observe', type=int, default=OBSERVE_SECONDS,

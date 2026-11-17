@@ -185,6 +185,13 @@ def paper_server_command(java: Path, tag: str, paper_jar: Path, jvm_args: list[s
     return [str(java), tag, *SERVER_MEMORY, *jvm_args, '-jar', str(paper_jar), 'nogui']
 
 
+def sponge_server_command(java: Path, tag: str, sponge_jar: Path, jvm_args: list[str]) -> list[str]:
+    """A SpongeVanilla server: the pinned universal jar. Its first start downloads and remaps the
+    game and its libraries into ./libraries. Plugins come from ./mods, and a plugin that asks
+    for the shared configuration folder keeps its settings in ./config."""
+    return [str(java), tag, *SERVER_MEMORY, *jvm_args, '-jar', str(sponge_jar), 'nogui']
+
+
 def paperclip_downloads(context: str) -> list[dict]:
     """The files a Paper server jar would download on its first start, from the jar's
     META-INF/download-context: one line per file with its sha256, its URL and the name it gets
