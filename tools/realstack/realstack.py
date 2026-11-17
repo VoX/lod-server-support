@@ -40,7 +40,7 @@ import stackfile  # noqa: E402
 import xwdpng  # noqa: E402
 
 RUN_SECONDS = 900            # hard bound of one run, lock wait excluded
-TEARDOWN_RESERVE = 120       # part of the bound kept for stopping everything
+TEARDOWN_RESERVE = 150       # part of the bound kept for stopping everything (leave wait included)
 LOCK_WAIT_SECONDS = 1800
 SERVER_START_SECONDS = 300
 CLIENT_JOIN_SECONDS = 300
