@@ -545,7 +545,7 @@ class WireParityTest {
     void aReasonJoinsTheFlagsOnPaperExactlyAsOnFabric() {
         // 0.23.0 plan §3 (the Fabric twin: SessionConfigFlagsWireTest). enabled=false, 512, gen,
         // the runtime data version, then the flags.
-        String off = "14008004019f27";
+        String off = "1400800401bf24";
         assertEquals(off + "00", hex(PaperPayloadHandler.encodeSessionConfig(
                 LSSConstants.PROTOCOL_VERSION, false, 0, 512, true, NEW_CAPS, false)));
         assertEquals(off + "02", hex(PaperPayloadHandler.encodeSessionConfig(
@@ -561,7 +561,7 @@ class WireParityTest {
                 LSSConstants.PROTOCOL_VERSION, false, 0x43, 512, true, NEW_CAPS, false)),
                 "only reason bits get through; the map bit comes from the decision alone");
         // An enabled answer never carries a reason.
-        assertEquals("14018004019f27" + "00", hex(PaperPayloadHandler.encodeSessionConfig(
+        assertEquals("1401800401bf24" + "00", hex(PaperPayloadHandler.encodeSessionConfig(
                 LSSConstants.PROTOCOL_VERSION, true, LSSConstants.SESSION_FLAG_OFF_SERVER, 512, true, NEW_CAPS, false)));
         // A session without the bit, and every echo: the bytes of before, whatever the reason
         // (a 0.10 to 0.18 client is kicked by a trailing byte).
