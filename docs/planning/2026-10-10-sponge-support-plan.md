@@ -177,7 +177,7 @@ Guards (all identical):
 | start | `StartedEngineEvent<Server>` | Fabric `SERVER_STARTED` |
 | tick | `ServerTickHook` at `tickServer` TAIL | Fabric `END_SERVER_TICK` (same TAIL; includes the paused-empty early-return skip) |
 | stop | `StoppingEngineEvent<Server>`: stop receiving, then `onServerStopping` | fires at `stopServer` HEAD, before the world save = Fabric `SERVER_STOPPING` |
-| disconnect | `ServerSideConnectionEvent.Disconnect` (0.23.0: `ServerSideConnectionEvent.Leave`, see the [0.23.0 plan](2026-11-13-v0.23.0-plan.md) §11) | main thread, after player removal = NeoForge `PlayerLoggedOut`; sweeps on never-registered UUIDs are no-ops |
+| disconnect | `ServerSideConnectionEvent.Disconnect` (0.23.0: `ServerSideConnectionEvent.Leave`, see the [0.23.0 plan](2026-11-13-v0.23.0-plan.md) §11) | main thread; 0.23.0 `Leave` is posted from `removePlayerFromWorld`, before `PlayerList.remove` = NeoForge `PlayerLoggedOut`; sweeps on never-registered UUIDs are no-ops |
 
 Sponge's sync scheduler ticks at `tickServer` **HEAD**, before world work, which is why
 the PR's scheduler task is replaced. Sponge's own `tickServer` mixins (scheduler HEAD,
