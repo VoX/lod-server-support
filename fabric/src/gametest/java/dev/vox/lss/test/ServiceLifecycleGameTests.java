@@ -2414,8 +2414,12 @@ public class ServiceLifecycleGameTests {
                     "flags-only: the off-world session is not removed and re-registered");
             helper.assertTrue(flagsOnly.size() == 1
                             && !((SessionConfigS2CPayload) flagsOnly.get(0)[1]).enabled()
-                            && ((SessionConfigS2CPayload) flagsOnly.get(0)[1]).sessionFlags() == 0,
-                    "…and the push still says off, with the new flags");
+                            // 0.23.0 plan §3: the deny bit is gone, and the "off" names its
+                            // reason (this world's distance is 0).
+                            && ((SessionConfigS2CPayload) flagsOnly.get(0)[1]).sessionFlags()
+                                    == LSSConstants.SESSION_FLAG_OFF_WORLD,
+                    "…and the push still says off, with the new flags and the reason: "
+                            + (flagsOnly.isEmpty() ? "none" : flagsOnly.get(0)[1]));
             service.setMapIngestionExemptProbeForTest(null);
             service.repushSessionConfig();
             helper.assertTrue(service.getPlayers().get(capable.getUUID()) != before,

@@ -356,7 +356,7 @@ tasks.register('vssJar') {
                         zos.write(text.getBytes('UTF-8'))
                         zos.closeEntry()
                     } else if (e.name == 'lss-brand.properties') {
-                        def props = 'shortName=VSS\ndisplayName=Voxy Server Side\nclientCommand=vss\nserverCommand=vsslod\n'
+                        def props = 'shortName=VSS\ndisplayName=Voxy Server Side\nclientCommand=vss\nserverCommand=vsslod\nalsoClientCommand=lss\n'
                         zos.putNextEntry(new ZipEntry('lss-brand.properties'))
                         zos.write(props.getBytes('UTF-8'))
                         zos.closeEntry()

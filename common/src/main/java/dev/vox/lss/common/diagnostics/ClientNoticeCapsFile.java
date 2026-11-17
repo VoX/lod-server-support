@@ -9,7 +9,7 @@ import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 
 /**
- * The chat notices' counters on disk: four numbers in the client's state directory, so a notice
+ * The chat notices' counters on disk: five values in the client's state directory, so a notice
  * that was said its few times is not said again after a restart. No server names or addresses.
  *
  * <p>Fails quiet: a file that cannot be read means "say nothing", and the caller speaks a
@@ -25,6 +25,8 @@ public final class ClientNoticeCapsFile {
         try {
             int noSupport = -1, serverOff = -1, versionMismatch = -1;
             Boolean nothingToShow = null;
+            // Added in 0.23.0: a file from 0.22 does not have it, and that means "not said yet".
+            boolean rendererUnsupported = false;
             for (String line : Files.readAllLines(file, StandardCharsets.UTF_8)) {
                 int at = line.indexOf('=');
                 if (at < 0) continue;
@@ -35,20 +37,21 @@ public final class ClientNoticeCapsFile {
                     case "server_off" -> serverOff = Integer.parseInt(value);
                     case "version_mismatch" -> versionMismatch = Integer.parseInt(value);
                     case "nothing_to_show" -> nothingToShow = Boolean.parseBoolean(value);
+                    case "renderer_unsupported" -> rendererUnsupported = Boolean.parseBoolean(value);
                     default -> { } // a newer version's counter: not ours to judge
                 }
             }
             if (noSupport < 0 || serverOff < 0 || versionMismatch < 0 || nothingToShow == null) {
                 return Caps.EXHAUSTED;
             }
-            return new Caps(noSupport, nothingToShow, serverOff, versionMismatch);
+            return new Caps(noSupport, nothingToShow, serverOff, versionMismatch, rendererUnsupported);
         } catch (IOException | RuntimeException unreadable) {
             return Caps.EXHAUSTED;
         }
     }
 
     private static final java.util.Set<String> OWN_KEYS =
-            java.util.Set.of("no_support", "nothing_to_show", "server_off", "version_mismatch");
+            java.util.Set.of("no_support", "nothing_to_show", "server_off", "version_mismatch", "renderer_unsupported");
 
     /** Writes the caps (a sibling temp file, then a move), keeping any counter this version does
      *  not know. False when it could not be saved. */
@@ -66,7 +69,8 @@ public final class ClientNoticeCapsFile {
             Files.writeString(temp, "no_support=" + caps.noSupportShown() + "\n"
                     + "nothing_to_show=" + caps.nothingToShowShown() + "\n"
                     + "server_off=" + caps.serverOffShown() + "\n"
-                    + "version_mismatch=" + caps.versionMismatchShown() + "\n" + kept, StandardCharsets.UTF_8);
+                    + "version_mismatch=" + caps.versionMismatchShown() + "\n"
+                    + "renderer_unsupported=" + caps.rendererUnsupportedShown() + "\n" + kept, StandardCharsets.UTF_8);
             Files.move(temp, file, StandardCopyOption.REPLACE_EXISTING);
             return true;
         } catch (IOException | RuntimeException failure) {

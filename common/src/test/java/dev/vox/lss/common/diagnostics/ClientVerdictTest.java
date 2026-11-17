@@ -21,6 +21,7 @@ import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /** 0.22.0 plan §1: one answer to "is distant terrain working here, and if not, why?". */
@@ -51,6 +52,110 @@ class ClientVerdictTest {
     private static ClientVerdict dhVerdict(State state, Activity activity, boolean consumer, Discovery discovery) {
         return ClientVerdict.of(snapshot(true, true, false, consumer, discovery, 0,
                 dh(state, Reason.NONE, activity)));
+    }
+
+    // ---- 0.23.0 plan §3: which "switched off" it is ----
+
+    private static ClientStatusSnapshot answered(boolean enabled, int reason) {
+        return new ClientStatusSnapshot(ClientStatusSnapshot.SCHEMA_VERSION, 1, 0, true, true, true,
+                enabled, true, true, V, 512, 0, 0, 0, 0, -1, 0, 0, 0, 0, Discovery.NEGOTIATED, Availability.UNKNOWN, null,
+                DiagnosticVersions.unknown(), null, null, Availability.UNKNOWN, 0, 0, false, reason);
+    }
+
+    @Test
+    void theServersReasonPicksTheSentenceAndNoReasonKeepsTheOldOne() {
+        assertEquals(ClientVerdict.SERVER_OFF, ClientVerdict.of(answered(false, 0)),
+                "not said: an older server, or a private reason");
+        assertEquals(ClientVerdict.SERVER_OFF_EVERYONE, ClientVerdict.of(answered(false, LSSConstants.SESSION_FLAG_OFF_SERVER)));
+        assertEquals(ClientVerdict.SERVER_OFF_WORLD, ClientVerdict.of(answered(false, LSSConstants.SESSION_FLAG_OFF_WORLD)));
+        assertEquals(ClientVerdict.SERVER_OFF_PERMISSION, ClientVerdict.of(answered(false, LSSConstants.SESSION_FLAG_OFF_PERMISSION)));
+        assertEquals(ClientVerdict.SERVER_OFF, ClientVerdict.of(answered(false, 0x40)), "an unknown bit is not a reason");
+        // A reason never turns a working session into a refusal.
+        assertEquals(ClientVerdict.WORKING, ClientVerdict.of(answered(true, LSSConstants.SESSION_FLAG_OFF_SERVER)));
+        for (ClientVerdict verdict : ClientVerdict.values())
+            assertEquals(verdict.name().startsWith("SERVER_OFF"), verdict.serverOff(), verdict.name());
+    }
+
+    @Test
+    void theFourServerOffAnswersShareOneNoticeCounter() {
+        Caps caps = Caps.NONE;
+        for (ClientVerdict verdict : List.of(ClientVerdict.SERVER_OFF_WORLD, ClientVerdict.SERVER_OFF_PERMISSION,
+                ClientVerdict.SERVER_OFF_EVERYONE)) {
+            assertTrue(caps.allows(verdict), verdict.name());
+            assertTrue(ClientNoticePolicy.announces(verdict), verdict.name());
+            caps = caps.after(verdict);
+        }
+        assertEquals(new Caps(0, false, 3, 0), caps);
+        for (ClientVerdict verdict : ClientVerdict.values())
+            if (verdict.serverOff()) assertFalse(caps.allows(verdict), "three in all, whatever the reason: " + verdict);
+        assertTrue(caps.allows(ClientVerdict.NO_SUPPORT), "another kind is unaffected");
+    }
+
+    // ---- 0.23.0 plan §1: a settings file that did not load ----
+
+    private static ClientSettingsStatus settings(boolean loaded) {
+        var defaults = dev.vox.lss.common.config.SettingsSchema.client().defaults();
+        return ClientSettingsStatus.capture(loaded, defaults, defaults, defaults, java.util.Set.of())
+                .withFile("lss-client-config.yaml", loaded ? List.of() : List.of("line 3: unknown setting lod.recieve. Did you mean lod.receive?"), null);
+    }
+
+    private static ClientStatusSnapshot withSettings(boolean connected, boolean receiving, Discovery discovery,
+                                                     ClientSettingsStatus settings) {
+        return new ClientStatusSnapshot(ClientStatusSnapshot.SCHEMA_VERSION, 1, 0, connected,
+                discovery == Discovery.NEGOTIATED, receiving, true, true, true, V, 512,
+                0, 0, 0, 0, -1, 0, 0, 0, 0, discovery, Availability.UNKNOWN, null, DiagnosticVersions.unknown(),
+                settings);
+    }
+
+    @Test
+    void aSettingsFileThatDidNotLoadIsTheAnswerInEveryStateAndNeverOtherwise() {
+        // The stand-in settings of a broken file have receiving off. Without the verdict the
+        // player reads "you turned receiving off in the settings", which they did not do.
+        for (Discovery discovery : Discovery.values())
+            for (boolean connected : new boolean[] {true, false})
+                for (boolean receiving : new boolean[] {true, false}) {
+                    assertEquals(ClientVerdict.SETTINGS_BROKEN,
+                            ClientVerdict.of(withSettings(connected, receiving, discovery, settings(false))),
+                            discovery + " connected=" + connected + " receiving=" + receiving);
+                    assertNotEquals(ClientVerdict.SETTINGS_BROKEN,
+                            ClientVerdict.of(withSettings(connected, receiving, discovery, settings(true))));
+                }
+        // No settings observation at all (older callers): not this verdict.
+        assertEquals(ClientVerdict.RECEIVING_OFF, ClientVerdict.of(withSettings(true, false, Discovery.DORMANT, null)));
+        assertFalse(ClientVerdict.SETTINGS_BROKEN.working());
+    }
+
+    @Test
+    void theStatusNamesTheFileAndListsWhatIsWrongWithIt() {
+        var broken = withSettings(true, false, Discovery.DORMANT, settings(false));
+        var lines = ClientStatusText.lines(broken, 0);
+        assertEquals("lss.status.verdict.settings_broken", lines.get(0).key());
+        assertEquals(List.of(), lines.get(0).arguments(), "a verdict line carries no arguments");
+        assertEquals("lss.status.settings.file", lines.get(1).key());
+        assertEquals(List.of("lss-client-config.yaml"), lines.get(1).arguments());
+        assertEquals("lss.status.settings.problem", lines.get(2).key());
+        assertEquals(List.of("line 3: unknown setting lod.recieve. Did you mean lod.receive?"), lines.get(2).arguments());
+        var plain = broken.lines();
+        assertEquals(List.of("Verdict: SETTINGS_BROKEN", "Settings file lss-client-config.yaml did not load:",
+                "  line 3: unknown setting lod.recieve. Did you mean lod.receive?"), plain.subList(0, 3));
+        // A file that loaded adds nothing.
+        var fine = ClientStatusText.lines(withSettings(true, true, Discovery.NEGOTIATED, settings(true)), 0);
+        assertTrue(fine.stream().noneMatch(m -> m.key().equals("lss.status.settings.file")
+                || m.key().equals("lss.status.settings.problem") || m.key().equals("lss.status.settings.experimental_ignored")));
+    }
+
+    @Test
+    void anIgnoredExperimentalFileIsALineUnderAWorkingVerdict() {
+        // The mod is working; the experimental file's options are back at their defaults (the
+        // Distant Horizons source a player had switched off, for one), and the status says so.
+        var ignored = settings(true).withFile("lss-client-config.yaml", List.of(), "lss-client-experimental.yaml");
+        var snapshot = withSettings(true, true, Discovery.NEGOTIATED, ignored);
+        assertEquals(ClientVerdict.WORKING, ClientVerdict.of(snapshot));
+        var lines = ClientStatusText.lines(snapshot, 0);
+        assertEquals("lss.status.verdict.working", lines.get(0).key());
+        assertEquals("lss.status.settings.experimental_ignored", lines.get(1).key());
+        assertEquals(List.of("lss-client-experimental.yaml"), lines.get(1).arguments());
+        assertEquals("Experimental settings file ignored: lss-client-experimental.yaml", snapshot.lines().get(1));
     }
 
     @Test
@@ -135,6 +240,112 @@ class ClientVerdictTest {
         return new ClientStatusSnapshot(ClientStatusSnapshot.SCHEMA_VERSION, 1, 0, true,
                 discovery == Discovery.NEGOTIATED, true, true, false, true, V, 512, 0, 0, 0, 0, -1, 0, 0, 0, 0,
                 discovery, Availability.UNKNOWN, null, versions, null, null);
+    }
+
+    // ---- the LOD renderer's own answer (0.23.0 plan §6) ----
+
+    private static ClientStatusSnapshot voxy(ClientStatusSnapshot.Renderer renderer, String voxyVersion,
+                                             Discovery discovery, boolean serverEnabled, boolean receiving,
+                                             boolean consumer, boolean mapOnly, DhStatusSnapshot dh) {
+        var versions = new DiagnosticVersions(Map.of(DiagnosticVersions.Component.VOXY, voxyVersion));
+        return new ClientStatusSnapshot(ClientStatusSnapshot.SCHEMA_VERSION, 1, 0, true,
+                discovery == Discovery.NEGOTIATED, receiving, serverEnabled, consumer, true, V, 512, 0, 0, 0, 0,
+                -1, 0, 0, 0, 0, discovery, mapOnly ? Availability.AVAILABLE : Availability.ABSENT, null, versions,
+                null, dh, Availability.ABSENT, 0, 0, mapOnly, 0, renderer);
+    }
+
+    private static ClientVerdict voxyVerdict(ClientStatusSnapshot.Renderer renderer) {
+        return ClientVerdict.of(voxy(renderer, "0.2.20-beta", Discovery.NEGOTIATED, true, true, true, false, null));
+    }
+
+    @Test
+    void aVoxyThatSaysItIsNotDrawingIsNotCalledWorking() {
+        var unsupported = ClientStatusSnapshot.Renderer.UNSUPPORTED;
+        var off = ClientStatusSnapshot.Renderer.SWITCHED_OFF;
+        assertEquals(ClientVerdict.RENDERER_UNSUPPORTED, voxyVerdict(unsupported));
+        assertEquals(ClientVerdict.RENDERER_OFF, voxyVerdict(off));
+        // No answer, or "drawing": nothing changes. Unknown is never a guess.
+        assertEquals(ClientVerdict.WORKING, voxyVerdict(ClientStatusSnapshot.Renderer.READY));
+        assertEquals(ClientVerdict.WORKING, voxyVerdict(ClientStatusSnapshot.Renderer.UNKNOWN));
+        assertEquals(ClientVerdict.WORKING, ClientVerdict.of(new ClientStatusSnapshot(
+                ClientStatusSnapshot.SCHEMA_VERSION, 1, 0, true, true, true, true, true, true, V, 512, 0, 0, 0, 0,
+                -1, 0, 0, 0, 0, Discovery.NEGOTIATED, Availability.ABSENT, null,
+                new DiagnosticVersions(Map.of(DiagnosticVersions.Component.VOXY, "0.2.20-beta")), null, null,
+                Availability.ABSENT, 0, 0, false, 0, null)), "a caller that passes no answer");
+        // The answer belongs to an installed renderer only.
+        for (String version : new String[]{"absent", "unknown"}) {
+            assertEquals(ClientVerdict.WORKING, ClientVerdict.of(
+                    voxy(unsupported, version, Discovery.NEGOTIATED, true, true, true, false, null)), version);
+        }
+        // Terrain still reaches a map: the Voxy the player installed draws none, so not "Working".
+        assertEquals(ClientVerdict.RENDERER_UNSUPPORTED, ClientVerdict.of(
+                voxy(unsupported, "0.2.20-beta", Discovery.NEGOTIATED, true, true, true, true, null)));
+        assertEquals(ClientVerdict.RENDERER_OFF, ClientVerdict.of(
+                voxy(off, "0.2.20-beta", Discovery.NEGOTIATED, true, true, true, true, null)));
+    }
+
+    @Test
+    void aCauseOnTheServerOrAPlayersSwitchIsNamedBeforeTheRenderer() {
+        var unsupported = ClientStatusSnapshot.Renderer.UNSUPPORTED;
+        assertEquals(ClientVerdict.NO_SUPPORT, ClientVerdict.of(
+                voxy(unsupported, "0.2.20-beta", Discovery.NO_CHANNEL, false, true, true, false, null)));
+        assertEquals(ClientVerdict.NO_ANSWER, ClientVerdict.of(
+                voxy(unsupported, "0.2.20-beta", Discovery.NO_ANSWER, false, true, true, false, null)));
+        assertEquals(ClientVerdict.SERVER_OFF, ClientVerdict.of(
+                voxy(unsupported, "0.2.20-beta", Discovery.NEGOTIATED, false, true, true, false, null)));
+        assertEquals(ClientVerdict.WAITING, ClientVerdict.of(
+                voxy(unsupported, "0.2.20-beta", Discovery.AWAITING_NEGOTIATION, false, true, true, false, null)));
+        assertEquals(ClientVerdict.RECEIVING_OFF, ClientVerdict.of(
+                voxy(unsupported, "0.2.20-beta", Discovery.NEGOTIATED, true, false, true, false, null)));
+    }
+
+    @Test
+    void aVoxyThatSaysWhyItIsIdleBeatsCouldNotConnect() {
+        var unsupported = ClientStatusSnapshot.Renderer.UNSUPPORTED;
+        // The bridge did not start and nothing else shows terrain.
+        assertEquals(ClientVerdict.RENDERER_UNSUPPORTED, ClientVerdict.of(
+                voxy(unsupported, "0.2.20-beta", Discovery.NEGOTIATED, true, true, false, false, null)));
+        assertEquals(ClientVerdict.RENDERER_NOT_CONNECTED, ClientVerdict.of(
+                voxy(ClientStatusSnapshot.Renderer.UNKNOWN, "0.2.20-beta", Discovery.NEGOTIATED, true, true, false, false, null)));
+        // The bridge did not start and the maps fill.
+        assertEquals(ClientVerdict.RENDERER_OFF, ClientVerdict.of(voxy(ClientStatusSnapshot.Renderer.SWITCHED_OFF,
+                "0.2.20-beta", Discovery.NEGOTIATED, true, true, true, true, null)));
+    }
+
+    @Test
+    void theDistantHorizonsSourceAsksTheRendererToo() {
+        // That source feeds the LOD renderer only. "Ready" with a renderer that cannot draw is
+        // not working, and "waiting for the renderer" would otherwise wait for ever.
+        var unsupported = ClientStatusSnapshot.Renderer.UNSUPPORTED;
+        var off = ClientStatusSnapshot.Renderer.SWITCHED_OFF;
+        var ready = dh(State.READY, Reason.NONE, Activity.IDLE);
+        var needVoxy = dh(State.NEED_VOXY, Reason.NONE, Activity.WAITING_VOXY);
+        assertEquals(ClientVerdict.RENDERER_UNSUPPORTED, ClientVerdict.of(
+                voxy(unsupported, "0.2.20-beta", Discovery.NO_CHANNEL, false, true, true, false, ready)));
+        assertEquals(ClientVerdict.RENDERER_OFF, ClientVerdict.of(
+                voxy(off, "0.2.20-beta", Discovery.NO_CHANNEL, false, true, true, false, needVoxy)));
+        assertEquals(ClientVerdict.WORKING_DH, ClientVerdict.of(voxy(ClientStatusSnapshot.Renderer.READY,
+                "0.2.20-beta", Discovery.NO_CHANNEL, false, true, true, false, ready)));
+        assertEquals(ClientVerdict.WAITING, ClientVerdict.of(voxy(ClientStatusSnapshot.Renderer.UNKNOWN,
+                "0.2.20-beta", Discovery.NO_CHANNEL, false, true, true, false, needVoxy)));
+    }
+
+    @Test
+    void onlyTheRendererThatCannotRunIsSaidInChat() {
+        // "Cannot run here" is said once ever, on its own count: the player who was told to
+        // add an LOD renderer, added one and finds it cannot run here must still be told.
+        assertTrue(ClientNoticePolicy.announces(ClientVerdict.RENDERER_UNSUPPORTED));
+        assertTrue(Caps.NONE.allows(ClientVerdict.RENDERER_UNSUPPORTED));
+        assertTrue(Caps.NONE.after(ClientVerdict.NOTHING_TO_SHOW).allows(ClientVerdict.RENDERER_UNSUPPORTED));
+        assertTrue(Caps.NONE.after(ClientVerdict.RENDERER_UNSUPPORTED).allows(ClientVerdict.NOTHING_TO_SHOW));
+        assertFalse(Caps.NONE.after(ClientVerdict.RENDERER_UNSUPPORTED).allows(ClientVerdict.RENDERER_UNSUPPORTED));
+        assertEquals(new Caps(0, false, 0, 0, true), Caps.NONE.after(ClientVerdict.RENDERER_UNSUPPORTED));
+        assertFalse(Caps.EXHAUSTED.allows(ClientVerdict.RENDERER_UNSUPPORTED));
+        // Switched off in the renderer's own settings is the player's choice: never announced.
+        assertFalse(ClientNoticePolicy.announces(ClientVerdict.RENDERER_OFF));
+        assertFalse(Caps.NONE.allows(ClientVerdict.RENDERER_OFF));
+        assertEquals(Caps.NONE, Caps.NONE.after(ClientVerdict.RENDERER_OFF));
+        assertFalse(ClientVerdict.RENDERER_UNSUPPORTED.working() || ClientVerdict.RENDERER_OFF.working());
     }
 
     @Test
@@ -245,7 +456,10 @@ class ClientVerdictTest {
             assertTrue(keys.add(verdict.key()), verdict.key());
             assertFalse(verdict.key().isBlank());
             var needed = new ArrayList<>(List.of("lss.status.verdict." + verdict.key()));
-            if (Caps.NONE.allows(verdict)) needed.add("lss.notice." + verdict.key());
+            // Every verdict the caps allow is one the policy announces; one more is announced
+            // without a cap (a settings file that did not load).
+            assertTrue(!Caps.NONE.allows(verdict) || ClientNoticePolicy.announces(verdict), verdict.name());
+            if (ClientNoticePolicy.announces(verdict)) needed.add("lss.notice." + verdict.key());
             for (String key : needed) {
                 for (var locale : locales.entrySet()) {
                     String where = locale.getKey() + " " + key;
@@ -255,7 +469,12 @@ class ClientVerdictTest {
                     }
                     String value = locale.getValue().get(key).getAsString();
                     if (value.isBlank()) problems.add(where + ": blank");
-                    if (value.contains("%")) problems.add(where + ": the line is shown without arguments");
+                    // One notice takes one argument, the build's own command (0.23.0 plan §1);
+                    // every other line is shown as it is written.
+                    if (key.equals("lss.notice.settings_broken")) {
+                        if (!value.contains("/%s status") || value.replace("/%s status", "").contains("%"))
+                            problems.add(where + ": takes exactly the command as /%s status");
+                    } else if (value.contains("%")) problems.add(where + ": the line is shown without arguments");
                     // The notices and verdicts say "this mod": a VSS client on an LSS server (or
                     // the reverse) must not name the server's copy by the client's brand.
                     if (value.matches("(?s).*(\\bLSS\\b|\\bVSS\\b|LOD Server Support|Voxy Server Side).*")) {
@@ -280,7 +499,7 @@ class ClientVerdictTest {
             String suffix = key.substring("lss.notice.".length());
             boolean announceable = false;
             for (ClientVerdict verdict : ClientVerdict.values()) {
-                announceable |= verdict.key().equals(suffix) && Caps.NONE.allows(verdict);
+                announceable |= verdict.key().equals(suffix) && ClientNoticePolicy.announces(verdict);
             }
             if (!announceable) problems.add(key + ": a notice the policy never announces");
         }

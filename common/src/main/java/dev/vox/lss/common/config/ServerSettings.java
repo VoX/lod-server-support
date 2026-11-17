@@ -4,7 +4,7 @@ import java.util.*;
 
 /** Immutable settings; mutable document nodes never enter runtime snapshots. */
 public record ServerSettings(Service service, Lod lod, Generation generation, Network network, Updates updates, Storage storage, Serialization serialization, Compatibility compatibility, Privacy privacy, FarPlayers farPlayers, Paper paper) {
-    public record Service(boolean enabled, boolean requirePermission) {}
+    public record Service(boolean enabled, boolean requirePermission, boolean showPermissionRefusal) {}
     public record LodDistance(int defaultChunks, Map<String, Integer> byDimension, Map<String, Integer> byWorld) {
         public LodDistance { byDimension = Collections.unmodifiableMap(new LinkedHashMap<>(byDimension)); byWorld = Collections.unmodifiableMap(new LinkedHashMap<>(byWorld)); }
     }
@@ -38,6 +38,7 @@ public record ServerSettings(Service service, Lod lod, Generation generation, Ne
         var s = this;
         v.put("service.enabled", s.service().enabled());
         v.put("service.require_permission", s.service().requirePermission());
+        v.put("service.show_permission_refusal", s.service().showPermissionRefusal());
         v.put("lod.distance.default_chunks", s.lod().distance().defaultChunks());
         v.put("lod.distance.by_dimension", s.lod().distance().byDimension());
         v.put("lod.distance.by_world", s.lod().distance().byWorld());
@@ -87,7 +88,8 @@ public record ServerSettings(Service service, Lod lod, Generation generation, Ne
     }
     @SuppressWarnings("unchecked")
     private static Service Service(Map<String,Object> v) {
-        return new Service((boolean)v.get("service.enabled"), (boolean)v.get("service.require_permission"));
+        return new Service((boolean)v.get("service.enabled"), (boolean)v.get("service.require_permission"),
+                (boolean)v.get("service.show_permission_refusal"));
     }
     @SuppressWarnings("unchecked")
     private static LodDistance LodDistance(Map<String,Object> v) {
