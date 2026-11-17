@@ -20,6 +20,26 @@ class BrandTest {
         // Brand is a process-global; restore the LSS defaults so no other test observes
         // a VSS value (the default IS what every other assertion in the suite relies on).
         Brand.apply("LSS", "LOD Server Support", "lss", "lsslod");
+        Brand.applyAlsoClientCommand("");
+    }
+
+    @Test
+    void theLssBuildAnswersToItsOwnClientCommandOnly() {
+        // 0.23.0 plan §4, decision 0005: the LSS build does not gain /vss.
+        assertEquals(java.util.List.of("lss"), Brand.clientCommands());
+    }
+
+    @Test
+    void theVssBuildAlsoAnswersToTheLssClientCommandItsOwnFirst() {
+        Brand.apply("VSS", "Voxy Server Side", "vss", "vsslod");
+        Brand.applyAlsoClientCommand("lss");
+        assertEquals(java.util.List.of("vss", "lss"), Brand.clientCommands());
+        assertEquals("vss", Brand.clientCommand(), "help and messages keep printing the build's own name");
+        // A blank or repeated extra name adds nothing.
+        Brand.applyAlsoClientCommand("  ");
+        assertEquals(java.util.List.of("vss"), Brand.clientCommands());
+        Brand.applyAlsoClientCommand("vss");
+        assertEquals(java.util.List.of("vss"), Brand.clientCommands());
     }
 
     @Test

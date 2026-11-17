@@ -31,6 +31,8 @@ public class ServerConfigBase {
     public boolean generationConfiguredForRestart() { return snapshot().generation().enabled(); }
     public final boolean enabled() { return snapshot().service().enabled(); }
     public final boolean requireServicePermission() { return snapshot().service().requirePermission(); }
+    /** Whether a player the permission gate leaves out may be told so (0.23.0 plan §3). */
+    public final boolean showPermissionRefusal() { return snapshot().service().showPermissionRefusal(); }
     public final int lodDistanceChunks() { return snapshot().lod().distance().defaultChunks(); }
     public final double mbPerSecondLimitPerPlayer() { return snapshot().network().bandwidth().perPlayerMibPerSecond(); }
     public final double mbPerSecondLimitGlobal() { return snapshot().network().bandwidth().globalMibPerSecond(); }

@@ -12,12 +12,15 @@ import java.util.OptionalInt;
  */
 public final class ModCompat {
     private static boolean voxyLoaded;
+    /** Voxy is installed, whether or not the bridge to it started. */
+    private static volatile boolean voxyInstalled;
     /** JourneyMap is installed: its facade may be class-loaded (never otherwise). */
     private static volatile boolean journeyMapLoaded;
     private static volatile boolean discoveryComplete;
 
     public static void init() {
         if (dev.vox.lss.platform.LoaderServices.get().isModLoaded("voxy")) {
+            voxyInstalled = true;
             voxyLoaded = VoxyCompat.init();
         }
         if (dev.vox.lss.platform.LoaderServices.get().isModLoaded("xaeroworldmap")) {
@@ -66,6 +69,14 @@ public final class ModCompat {
      *  (cache-alias-keying-and-reset-override-plan.md §2.2). */
     public static boolean isVoxyBridgeActive() {
         return voxyLoaded;
+    }
+
+    /** What Voxy says about its own drawing; UNKNOWN without Voxy. It does not need the ingest
+     *  bridge: a Voxy this mod could not connect to can still say it is switched off. Ask in
+     *  a world only (see {@code VoxyCompat.drawState}). */
+    public static dev.vox.lss.common.diagnostics.ClientStatusSnapshot.Renderer voxyDrawState() {
+        return voxyInstalled ? VoxyCompat.drawState()
+                : dev.vox.lss.common.diagnostics.ClientStatusSnapshot.Renderer.UNKNOWN;
     }
 
     /** The map backends' column consumers this launch, registered or not. */
