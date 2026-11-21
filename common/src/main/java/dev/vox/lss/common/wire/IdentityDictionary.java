@@ -24,9 +24,10 @@ import java.util.List;
  * in a flight profile. A string that fails is never remembered, so it throws every time.
  */
 public final class IdentityDictionary {
-    /** Bounded: identities normally come from the registries, but a dictionary is also
-     *  built from stored and received bytes, and nothing here may grow without limit.
-     *  Past the bound a new identity is validated every time, as before. */
+    /** Bounded, because nothing process-wide may grow without limit: the identities come
+     *  from the registry tables, and a heavily modded registry can hold several hundred
+     *  thousand block states. Past the bound a new identity is validated every time, as
+     *  before; the common ones are seen first and are in. */
     static final int MAX_REMEMBERED = 131_072;
 
     /** The strings that passed validation. One shared instance in production; its own
