@@ -44,6 +44,9 @@ final class VoxyVanillaCoverage {
     private final Map<Long,WeakReference<LevelChunk>> arrivals=new LinkedHashMap<>();
     private boolean disabled;
     private int tickSubmissions,tickLookups,tickCandidates;
+    /** Chunks held back because the sky light Voxy would read is not there yet (#429), with
+     *  the time each was first seen so. With no deadline a stuck hold must be visible. */
+    private final Map<Long,Long> skyWaiting=new LinkedHashMap<>();
 
     VoxyVanillaCoverage(Access access) {this.access=access;}
 
@@ -112,9 +115,9 @@ final class VoxyVanillaCoverage {
         if(disabled)return;
         try {
             Object engine=access.destination(current);
-            if(engine==null){accepted.clear();retries.clear();level=null;destination=null;return;}
+            if(engine==null){accepted.clear();retries.clear();skyWaiting.clear();publishSkyWaiting();level=null;destination=null;return;}
             if(current!=level || engine!=destination) {
-                accepted.clear();retries.clear();radius=-1;credit=SUBMISSIONS_PER_TICK;creditAt=now;
+                accepted.clear();retries.clear();skyWaiting.clear();radius=-1;credit=SUBMISSIONS_PER_TICK;creditAt=now;
                 if(arrivalLevel!=current)arrivals.clear();
                 level=current;destination=engine;arrivalLevel=current;
             }
@@ -127,7 +130,7 @@ final class VoxyVanillaCoverage {
                 sweepX=first?cx-r:Math.max(cx-r,Math.min(cx+r,sweepX));
                 sweepZ=first?cz-r:Math.max(cz-r,Math.min(cz+r,sweepZ));
                 accepted.keySet().removeIf(p->!inSquare(p));retries.keySet().removeIf(p->!inSquare(p));
-                arrivals.keySet().removeIf(p->!inSquare(p));
+                arrivals.keySet().removeIf(p->!inSquare(p));skyWaiting.keySet().removeIf(p->!inSquare(p));
             }
             credit=Math.min(SUBMISSIONS_PER_TICK,credit+Math.max(0,now-creditAt)*SUBMISSIONS_PER_SECOND/1e9);creditAt=now;
             if(access.backlog()>BACKLOG_GATE)return;
@@ -155,13 +158,14 @@ final class VoxyVanillaCoverage {
                 long position=ChunkPos.pack(x,z);
                 lookups++;tickLookups=lookups;
                 LevelChunk chunk=chunks.getChunk(x,z,ChunkStatus.FULL,false);
-                if(chunk==null){accepted.remove(position);retries.remove(position);arrivals.remove(position);continue;}
+                if(chunk==null){accepted.remove(position);retries.remove(position);arrivals.remove(position);skyWaiting.remove(position);continue;}
                 if(!ready(position,chunk,now))continue;
                 if(credit<1 || submitted>=SUBMISSIONS_PER_TICK || access.backlog()>BACKLOG_GATE) {
                     arrivals.put(position,new WeakReference<>(chunk));trim(arrivals);continue;
                 }
                 submit(position,chunk,now);submitted++;tickSubmissions=submitted;
             }
+            publishSkyWaiting();
         } catch(Throwable failure) {
             if(failure instanceof Error error && !(error instanceof LinkageError) && !(error instanceof AssertionError))throw error;
             clear();disabled=failure instanceof LinkageError;
@@ -169,26 +173,66 @@ final class VoxyVanillaCoverage {
         }
     }
     private boolean ready(long position,LevelChunk chunk,long now) {
-        // Cheap map checks first: an accepted chunk never pays the per-section light scan.
+        // Cheap map checks first: an accepted chunk never pays the per-section light scan,
+        // and neither does one Voxy refused whose retry is not due (the scan clones a
+        // layer per section on some light engines).
         var held=accepted.get(position);if(held!=null && held.get()==chunk)return false;
-        if(!lightReady(level,chunk))return false;
-        var retry=retries.get(position);return retry==null || retry.chunk.get()!=chunk || now>=retry.due;
+        var retry=retries.get(position);
+        if(retry!=null && retry.chunk.get()==chunk && now<retry.due)return false;
+        int state=lightState(level,chunk);
+        if(state==SKY_UNREADABLE) {
+            if(skyWaiting.putIfAbsent(position,now)==null){VoxyLightStats.addBorderHold();trim(skyWaiting);}
+        } else skyWaiting.remove(position);
+        return state==LIGHT_READY;
     }
+    static final int LIGHT_READY=0,LIGHT_PENDING=1,SKY_UNREADABLE=2;
     /** Mirror Voxy's per-section readiness, independent of unrelated load/unload light work. */
-    static boolean lightReady(ClientLevel level,LevelChunk chunk) {
+    static boolean lightReady(ClientLevel level,LevelChunk chunk) {return lightState(level,chunk)==LIGHT_READY;}
+    /**
+     * {@link #LIGHT_READY} when Voxy can read this chunk's light now. A hand-over is
+     * permanent (an accepted chunk is never submitted again), so a chunk that is not ready
+     * is skipped and looked at again on the next pump, with no deadline: a late hand-over
+     * stores darkness for good, while a gap closes by itself.
+     *
+     * <p>{@link #SKY_UNREADABLE} is the #429 case: every section reports "light and data",
+     * and yet the sky layer Voxy is about to read is null. Vanilla always has that layer
+     * for such a section, so nothing changes there. ScalableLux 0.1.0.1 reports "light and
+     * data" as soon as a chunk packet's light is attached and returns null from its
+     * sky-light reader until the client's light pass has built the chunk's emptiness map;
+     * a pump between the two handed Voxy a null layer, which Voxy stores as sky light 0:
+     * black strips at the edge of the render distance.
+     */
+    static int lightState(ClientLevel level,LevelChunk chunk) {
         var light=level.getLightEngine();
+        boolean sky=level.dimensionType().hasSkyLight();
         for(int i=0;i<chunk.getSections().length;i++) {
             var section=chunk.getSections()[i];if(section==null || section.hasOnlyAir())continue;
             var p=net.minecraft.core.SectionPos.of(chunk.getPos(),chunk.getSectionYFromSectionIndex(i));
             if(!light.lightOnInColumn(net.minecraft.core.SectionPos.getZeroNode(p.asLong())) || light.getDebugSectionType(net.minecraft.world.level.LightLayer.BLOCK,p)
-                    !=net.minecraft.world.level.lighting.LayerLightSectionStorage.SectionType.LIGHT_AND_DATA)return false;
-            if(level.dimensionType().hasSkyLight() && light.getDebugSectionType(net.minecraft.world.level.LightLayer.SKY,p)
-                    !=net.minecraft.world.level.lighting.LayerLightSectionStorage.SectionType.LIGHT_AND_DATA)return false;
+                    !=net.minecraft.world.level.lighting.LayerLightSectionStorage.SectionType.LIGHT_AND_DATA)return LIGHT_PENDING;
+            if(sky && light.getDebugSectionType(net.minecraft.world.level.LightLayer.SKY,p)
+                    !=net.minecraft.world.level.lighting.LayerLightSectionStorage.SectionType.LIGHT_AND_DATA)return LIGHT_PENDING;
         }
-        return true;
+        // A second pass, after every cheap test passed: the read Voxy itself will make.
+        // Not in dimensions without sky light (the listener there always returns null),
+        // and not for all-air sections (no layer is legitimate above the terrain).
+        if(sky) {
+            var listener=light.getLayerListener(net.minecraft.world.level.LightLayer.SKY);
+            for(int i=0;i<chunk.getSections().length;i++) {
+                var section=chunk.getSections()[i];if(section==null || section.hasOnlyAir())continue;
+                if(listener.getDataLayerData(net.minecraft.core.SectionPos.of(chunk.getPos(),chunk.getSectionYFromSectionIndex(i)))==null)return SKY_UNREADABLE;
+            }
+        }
+        return LIGHT_READY;
+    }
+    private void publishSkyWaiting() {
+        long oldest=Long.MAX_VALUE;
+        for(long since:skyWaiting.values())oldest=Math.min(oldest,since);
+        VoxyLightStats.setBorderWaiting(skyWaiting.size(),skyWaiting.isEmpty()?0L:oldest);
     }
     private void submit(long position,LevelChunk chunk,long now) throws Throwable {
         credit-=1;
+        skyWaiting.remove(position);
         if(access.ingest(chunk) || entirelyEmpty(chunk)) {
             retries.remove(position);accepted.put(position,new WeakReference<>(chunk));trim(accepted);
         } else {retries.put(position,new Retry(new WeakReference<>(chunk),now+RETRY_INTERVAL));trim(retries);}
@@ -211,6 +255,11 @@ final class VoxyVanillaCoverage {
         for(var section:sections)if(section!=null && !section.hasOnlyAir())return false;
         return true;
     }
-    void clear() {level=null;arrivalLevel=null;destination=null;radius=-1;sweepX=0;sweepZ=0;creditAt=0;credit=SUBMISSIONS_PER_TICK;accepted.clear();retries.clear();arrivals.clear();}
+    void clear() {
+        level=null;arrivalLevel=null;destination=null;radius=-1;sweepX=0;sweepZ=0;creditAt=0;credit=SUBMISSIONS_PER_TICK;accepted.clear();retries.clear();arrivals.clear();
+        // The waiting list goes with the world; the counts stay until the client disconnects.
+        if(!skyWaiting.isEmpty()){skyWaiting.clear();VoxyLightStats.setBorderWaiting(0,0L);}
+    }
+    int skyWaitingForTest() {return skyWaiting.size();}
     int tracked() {return accepted.size()+retries.size()+arrivals.size();}
 }
