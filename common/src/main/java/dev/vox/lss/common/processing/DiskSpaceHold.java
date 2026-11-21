@@ -38,12 +38,34 @@ public final class DiskSpaceHold {
         this.intervalNanos = intervalNanos;
     }
 
+    /**
+     * Soak and rig seam: {@code -Dlss.soak.freeDiskFile=<file>} makes every hold read the
+     * free space, in bytes, from that file, so a run can make the disk "fill" and "empty"
+     * without filling one. A file that is missing or unreadable means the real reading.
+     */
+    private static final String FREE_DISK_FILE = System.getProperty("lss.soak.freeDiskFile");
+
+    private static long soakReading() {
+        if (FREE_DISK_FILE == null) {
+            return Long.MIN_VALUE;
+        }
+        try {
+            return Long.parseLong(Files.readString(Path.of(FREE_DISK_FILE)).trim());
+        } catch (Exception e) {
+            return Long.MIN_VALUE;
+        }
+    }
+
     /** A hold that reads the volume {@code directory} is on; null never holds. */
     public static DiskSpaceHold forDirectory(Path directory) {
         if (directory == null) {
             return new DiskSpaceHold(() -> -1L);
         }
         return new DiskSpaceHold(() -> {
+            long soak = soakReading();
+            if (soak != Long.MIN_VALUE) {
+                return soak;
+            }
             try {
                 Path existing = directory;
                 while (existing != null && !Files.exists(existing)) {
