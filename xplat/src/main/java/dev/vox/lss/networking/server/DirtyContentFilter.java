@@ -65,7 +65,7 @@ public class DirtyContentFilter {
     private static final long ALL_AIR_HASH = 0x9E3779B97F4A7C15L;
 
     private final Map<String, Long2LongLinkedOpenHashMap> hashesByDimension = new HashMap<>();
-    private final ColumnSerializer serializer;
+    private final ColumnHasher hasher;
 
     // Saves whose LOD-visible content matched the stored hash — the metadata-only re-saves this
     // filter exists to suppress (vanilla's ~10s inhabitedTime re-saves). Closes the dirty
@@ -86,13 +86,23 @@ public class DirtyContentFilter {
         byte[] serializeSections(ServerLevel level, LevelChunk chunk, int cx, int cz);
     }
 
-    public DirtyContentFilter() {
-        this(SectionSerializer::nativeColumn);
+    /** A column's content hash: what is stored and compared. */
+    @FunctionalInterface
+    private interface ColumnHasher {
+        long hash(ServerLevel level, LevelChunk chunk, int cx, int cz);
     }
 
-    /** Test seam (see {@link ColumnSerializer}); zero behavior change when default-wired. */
+    /** Production: {@link SectionSerializer#nativeColumnHash} writes the native body into
+     *  a reused buffer and hashes it there — the same bytes {@link SectionSerializer#nativeColumn}
+     *  returns, without the array (the parity gametest holds the two together). */
+    public DirtyContentFilter() {
+        this.hasher = (level, chunk, cx, cz) -> remapAbsentSentinel(
+                SectionSerializer.nativeColumnHash(level, chunk, cx, cz, ALL_AIR_HASH));
+    }
+
+    /** Test seam (see {@link ColumnSerializer}): the same hash over the given bytes. */
     DirtyContentFilter(ColumnSerializer serializer) {
-        this.serializer = serializer;
+        this.hasher = (level, chunk, cx, cz) -> hashContent(serializer.serializeSections(level, chunk, cx, cz));
     }
 
     /**
@@ -116,7 +126,7 @@ public class DirtyContentFilter {
     void seedServed(ServerLevel level, LevelChunk chunk, int cx, int cz, String dimension) {
         long hash;
         try {
-            hash = hashContent(this.serializer.serializeSections(level, chunk, cx, cz));
+            hash = this.hasher.hash(level, chunk, cx, cz);
         } catch (Exception e) {
             LSSLogger.debug("Dirty-content serve seed failed for chunk " + cx + "," + cz + ": " + e);
             return;
@@ -148,7 +158,7 @@ public class DirtyContentFilter {
     void seedLoaded(ServerLevel level, LevelChunk chunk, int cx, int cz, String dimension) {
         long hash;
         try {
-            hash = hashContent(this.serializer.serializeSections(level, chunk, cx, cz));
+            hash = this.hasher.hash(level, chunk, cx, cz);
         } catch (Exception e) {
             LSSLogger.debug("Dirty-content load seed failed for chunk " + cx + "," + cz + ": " + e);
             return;
@@ -196,11 +206,8 @@ public class DirtyContentFilter {
     synchronized SaveObservation observeSave(ServerLevel level, LevelChunk chunk,
                                              int cx, int cz, String dimension) {
         long hash;
-        int length;
         try {
-            byte[] sections = this.serializer.serializeSections(level, chunk, cx, cz);
-            hash = hashContent(sections);
-            length = sections == null ? 0 : sections.length;
+            hash = this.hasher.hash(level, chunk, cx, cz);
         } catch (Exception e) {
             LSSLogger.debug("Dirty-content hash failed for chunk " + cx + "," + cz + ": " + e);
             return SaveObservation.FAIL_OPEN;
@@ -213,8 +220,7 @@ public class DirtyContentFilter {
         }
         if (Boolean.getBoolean("lss.soak.dirtydebug")) {
             LSSLogger.info("[DirtyDebug] re-marked " + cx + "," + cz
-                    + " hash=" + Long.toHexString(hash)
-                    + " len=" + length);
+                    + " hash=" + Long.toHexString(hash));
         }
         return SaveObservation.CHANGED;
     }
@@ -224,11 +230,8 @@ public class DirtyContentFilter {
      *  overload) so the seam keeps the class's entry-points-hold-the-lock insurance. */
     synchronized boolean contentChanged(ServerLevel level, LevelChunk chunk, int cx, int cz, String dimension) {
         long hash;
-        int lastLen;
         try {
-            byte[] sections = this.serializer.serializeSections(level, chunk, cx, cz);
-            hash = hashContent(sections);
-            lastLen = sections == null ? 0 : sections.length;
+            hash = this.hasher.hash(level, chunk, cx, cz);
         } catch (Exception e) {
             LSSLogger.debug("Dirty-content hash failed for chunk " + cx + "," + cz + ": " + e);
             return true;
@@ -239,7 +242,7 @@ public class DirtyContentFilter {
         if (!changed) this.totalSuppressed++; // metadata-only re-save the filter suppressed
         if (changed && Boolean.getBoolean("lss.soak.dirtydebug")) {
             LSSLogger.info("[DirtyDebug] re-marked " + cx + "," + cz
-                    + " hash=" + Long.toHexString(hash) + " len=" + lastLen);
+                    + " hash=" + Long.toHexString(hash));
         }
         return changed;
     }

@@ -554,6 +554,9 @@ public class SerializerParityGameTests {
             chunk = endLevel.getChunk(cx, cz);
         }
         var live = SectionSerializer.serializeColumn(endLevel, chunk, cx, cz);
+        helper.assertTrue(SectionSerializer.nativeColumn(endLevel, chunk, cx, cz) == null
+                        && SectionSerializer.nativeColumnHash(endLevel, chunk, cx, cz, 77L) == 77L,
+                "an all-air column has no native body and hashes to the empty value");
         helper.assertTrue(live.serializedSections() == null,
                 "premise: no all-air End void column found near chunk (" + cx + ", " + baseCz + ")"
                         + describeColumn(endLevel, chunk, cx, cz));
@@ -731,6 +734,13 @@ public class SerializerParityGameTests {
                     "the served bytes must be the translation of the native body");
             helper.assertTrue(Arrays.equals(nativeBody, SectionSerializer.nativeColumn(level, chunk, cx, cz)),
                     "the native body must be the same bytes on a second read");
+            // The detector's own path writes into a reused buffer and hashes in place: it
+            // must be the hash of exactly these bytes, call after call.
+            long expected = dev.vox.lss.common.ContentHash64.hash(nativeBody);
+            for (int i = 0; i < 3; i++) {
+                helper.assertTrue(SectionSerializer.nativeColumnHash(level, chunk, cx, cz, 0L) == expected,
+                        "the in-place hash must be the hash of the native body (call " + i + ")");
+            }
             before.set(nativeBody);
             // The generation serve's seed, then the save of the same content.
             seeded.seedServed(level, chunk, dim);
@@ -744,6 +754,9 @@ public class SerializerParityGameTests {
             byte[] nativeBody = SectionSerializer.nativeColumn(level, chunk, cx, cz);
             byte[] served = SectionSerializer.serializeColumn(level, chunk, cx, cz).serializedSections();
             helper.assertTrue(!Arrays.equals(before.get(), nativeBody), "an edit must change the native body");
+            helper.assertTrue(SectionSerializer.nativeColumnHash(level, chunk, cx, cz, 0L)
+                            == dev.vox.lss.common.ContentHash64.hash(nativeBody),
+                    "after the edit the in-place hash is still the hash of the native body");
             helper.assertTrue(Arrays.equals(SectionSerializer.translate(nativeBody, level), served),
                     "after the edit the served bytes are still the translation of the native body");
             helper.assertTrue(seeded.observeSave(level, chunk, dim).changed(),
