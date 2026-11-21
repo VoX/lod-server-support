@@ -630,6 +630,8 @@ public class RequestProcessingService {
             return s;
         });
         this.diskReader.registerPlayer(player.getUUID(), state.registration());
+        // Already-compressed columns skip Minecraft's deflate on this connection.
+        ColumnPacketPassthrough.install(player);
         state.setCapabilities(capabilities);
         // The five-term AND (plan §2 + v18-compat §2.5): capability bit x config+native
         // latch x NOT-v16 x NOT-v18. Both dialect marks land BEFORE registerPlayer on the

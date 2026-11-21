@@ -338,6 +338,9 @@ public class LSSServerCommands {
         }
         String offLine = config.unservedWorldsDiagLineOrNull();
         if (offLine != null) source.sendSuccess(() -> Component.literal(offLine), false);
+        // Column packets that skipped Minecraft's own compression. Absent until one did.
+        String passthrough = ColumnPacketPassthrough.diagLineOrNull();
+        if (passthrough != null) source.sendSuccess(() -> Component.literal(passthrough), false);
         // Failures the mod survived and counted. Absent when there were none.
         String recovered = dev.vox.lss.common.FaultCounters.global().diagLine();
         if (!recovered.isEmpty()) source.sendSuccess(() -> Component.literal(recovered), false);
