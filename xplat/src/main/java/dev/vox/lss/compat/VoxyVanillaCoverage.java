@@ -115,7 +115,7 @@ final class VoxyVanillaCoverage {
         if(disabled)return;
         try {
             Object engine=access.destination(current);
-            if(engine==null){accepted.clear();retries.clear();skyWaiting.clear();publishSkyWaiting();level=null;destination=null;return;}
+            if(engine==null){accepted.clear();retries.clear();skyWaiting.clear();VoxyLightStats.setBorderWaiting(0,0L);level=null;destination=null;return;}
             if(current!=level || engine!=destination) {
                 accepted.clear();retries.clear();skyWaiting.clear();radius=-1;credit=SUBMISSIONS_PER_TICK;creditAt=now;
                 if(arrivalLevel!=current)arrivals.clear();
@@ -133,7 +133,8 @@ final class VoxyVanillaCoverage {
                 arrivals.keySet().removeIf(p->!inSquare(p));skyWaiting.keySet().removeIf(p->!inSquare(p));
             }
             credit=Math.min(SUBMISSIONS_PER_TICK,credit+Math.max(0,now-creditAt)*SUBMISSIONS_PER_SECOND/1e9);creditAt=now;
-            if(access.backlog()>BACKLOG_GATE)return;
+            int border=Math.max(2,Math.min(64,distance));
+            if(access.backlog()>BACKLOG_GATE){publishSkyWaiting(cameraX,cameraZ,border);return;}
             int submitted=tickSubmissions,lookups=tickLookups;
             int events=Math.min(32,arrivals.size());
             for(int i=0;i<events && credit>=1 && submitted<SUBMISSIONS_PER_TICK;i++) {
@@ -165,7 +166,7 @@ final class VoxyVanillaCoverage {
                 }
                 submit(position,chunk,now);submitted++;tickSubmissions=submitted;
             }
-            publishSkyWaiting();
+            publishSkyWaiting(cameraX,cameraZ,border);
         } catch(Throwable failure) {
             if(failure instanceof Error error && !(error instanceof LinkageError) && !(error instanceof AssertionError))throw error;
             clear();disabled=failure instanceof LinkageError;
@@ -225,7 +226,11 @@ final class VoxyVanillaCoverage {
         }
         return LIGHT_READY;
     }
-    private void publishSkyWaiting() {
+    /** A chunk waits only while the fill would hand it over: once the player has moved on
+     *  and it is no longer at the border nothing probes it again, so it must not stay in
+     *  the gauge (which exists to show a hold that does not end). */
+    private void publishSkyWaiting(double cameraX,double cameraZ,int border) {
+        if(!skyWaiting.isEmpty())skyWaiting.keySet().removeIf(p->!atBorder((int)(long)p,(int)(p>>32),cameraX,cameraZ,border));
         long oldest=Long.MAX_VALUE;
         for(long since:skyWaiting.values())oldest=Math.min(oldest,since);
         VoxyLightStats.setBorderWaiting(skyWaiting.size(),skyWaiting.isEmpty()?0L:oldest);

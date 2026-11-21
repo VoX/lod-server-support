@@ -9,7 +9,6 @@ import io.netty.buffer.ByteBufAllocator;
 import io.netty.buffer.ByteBufUtil;
 import io.netty.buffer.Unpooled;
 import io.netty.buffer.UnpooledByteBufAllocator;
-import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelOutboundHandlerAdapter;
 import io.netty.channel.embedded.EmbeddedChannel;
 import net.minecraft.SharedConstants;
@@ -275,7 +274,6 @@ class ColumnPacketPassthroughTest {
         var server = server(true);
         ByteBufAllocator real = UnpooledByteBufAllocator.DEFAULT;
         boolean[] fail = {true};
-        ChannelHandlerContext[] seen = new ChannelHandlerContext[1];
         // an allocator that refuses the handler's one allocation, then works again
         server.config().setAllocator(new io.netty.buffer.AbstractByteBufAllocator() {
             @Override protected ByteBuf newHeapBuffer(int initialCapacity, int maxCapacity) {
@@ -295,7 +293,7 @@ class ColumnPacketPassthroughTest {
         assertEquals(packets, ColumnPacketPassthrough.packets());
         assertEquals(fallbacks + 1, ColumnPacketPassthrough.fallbacks());
         assertArrayEquals(packet, receive(wire));
-        assertNull(seen[0]);
+        assertFalse(fail[0], "premise: the handler asked the allocator, and was refused");
     }
 
     /** The helper the common tests build their frames with matches the real codec. */

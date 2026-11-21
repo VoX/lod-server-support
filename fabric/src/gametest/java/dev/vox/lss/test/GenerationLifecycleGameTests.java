@@ -953,6 +953,8 @@ public class GenerationLifecycleGameTests {
                         + border.getCenterX() + "," + border.getCenterZ() + " size " + border.getSize());
         var service = new RequestProcessingService(server);
         var processor = service.getOffThreadProcessor();
+        // The disk this test runs on must not decide it: a reading with room, always.
+        processor.setDiskSpaceHoldForTest(new dev.vox.lss.common.processing.DiskSpaceHold(() -> 100L << 30, 0L));
         helper.assertTrue(processor.generationAllowedAt(LSSConstants.DIM_STR_OVERWORLD, 1_900_000, 0),
                 "before the first tick nothing is published, so nothing is refused");
         service.tick();
@@ -968,11 +970,67 @@ public class GenerationLifecycleGameTests {
         }
         helper.assertTrue(processor.generationAllowedAt("some_mod:not_a_dimension_here", 1_900_000, 0),
                 "a dimension that was never published has no bound");
-        helper.assertTrue(!processor.generationHeldForDisk(), "premise: the test machine has free disk space");
-        helper.assertTrue(service.generationEnabledForSession(),
-                "and so sessions are told generation is on, as configured");
         service.shutdown();
         helper.succeed();
+    }
+
+    /**
+     * The operator's opt-out reaches the processor (0.24.0 plan §2): with
+     * {@code generation.outside_world_border: true} the service publishes no bound at all,
+     * so nothing is refused however far out.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = 200)
+    public void withTheOptOutNoBorderIsPublished(GameTestHelper helper) {
+        var server = helper.getLevel().getServer();
+        var values = new java.util.LinkedHashMap<>(new LSSServerConfig().snapshot().values());
+        helper.assertTrue(Boolean.FALSE.equals(values.get("generation.outside_world_border")),
+                "premise: the rule is on by default, got " + values.get("generation.outside_world_border"));
+        values.put("generation.outside_world_border", true);
+        var service = new RequestProcessingService(server,
+                new LSSServerConfig(dev.vox.lss.common.config.ServerSettings.fromValues(values)));
+        var processor = service.getOffThreadProcessor();
+        service.tick();
+        for (var each : server.getAllLevels()) {
+            String dim = each.dimension().identifier().toString();
+            helper.assertTrue(processor.generationAllowedAt(dim, 1_874_999, 0),
+                    dim + ": past the border, and allowed because the operator said so");
+        }
+        service.shutdown();
+        helper.succeed();
+    }
+
+    /**
+     * The low-disk hold reaches what sessions are told, and its end does too (0.24.0 plan
+     * §2): the processing thread switches generation off when its reading falls under the
+     * floor, and the service's tick mirrors that into the advertised session config. With
+     * an injected reading, so the disk this runs on decides nothing.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = 400)
+    public void aLowDiskHoldIsMirroredIntoWhatSessionsAreTold(GameTestHelper helper) {
+        var server = helper.getLevel().getServer();
+        var service = new RequestProcessingService(server);
+        var processor = service.getOffThreadProcessor();
+        var free = new java.util.concurrent.atomic.AtomicLong(100L << 30);
+        processor.setDiskSpaceHoldForTest(new dev.vox.lss.common.processing.DiskSpaceHold(free::get, 0L));
+        service.tick();
+        helper.assertTrue(service.generationEnabledForSession(), "premise: generation is on with room on the disk");
+        free.set(1L << 30);
+        int[] phase = {0};
+        helper.succeedWhen(() -> {
+            service.tick();
+            if (phase[0] == 0) {
+                helper.assertTrue(processor.generationHeldForDisk(), "waiting for the low reading to start the hold");
+                service.tick();
+                helper.assertTrue(!service.generationEnabledForSession(),
+                        "a hold is told to sessions as generation off");
+                free.set(100L << 30);
+                phase[0] = 1;
+            }
+            helper.assertTrue(!processor.generationHeldForDisk(), "waiting for the reading with room to end the hold");
+            service.tick();
+            helper.assertTrue(service.generationEnabledForSession(), "and its end as generation on again");
+            service.shutdown();
+        });
     }
 
     private static boolean containsPosition(long[] positions, long packed) {

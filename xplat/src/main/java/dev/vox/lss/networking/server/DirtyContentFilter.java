@@ -16,9 +16,10 @@ import java.util.Map;
  * (inhabitedTime ticks every tick a player is in range), so a save-hook-driven dirty
  * tracker re-marks every loaded chunk near a player forever. Each mark triggers a
  * broadcast, a client re-request, and a full column re-send of identical bytes —
- * a measured ~2-5 columns/s/player of pure waste. This filter hashes exactly what LSS
- * serves (the serialized sections + light wire bytes) and lets a save mark dirty only
- * when that content actually changed.
+ * a measured ~2-5 columns/s/player of pure waste. This filter hashes the content LSS
+ * serves (the sections and their light, in Minecraft's own layout: the bytes every
+ * served form is translated from) and lets a save mark dirty only when that content
+ * actually changed.
  *
  * <p>Fail-open: serialization errors fall back to "changed" — a spurious re-send is
  * harmless, a missed update is not. Paper needs no twin: its dirty detection is

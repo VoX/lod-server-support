@@ -15,13 +15,34 @@ import java.util.function.LongSupplier;
  * one. Owned by the processing thread; {@link #poll} is cheap between readings.
  */
 public final class DiskSpaceHold {
-    /** The store backfill's floor: room for the server to keep saving after LSS stops. */
-    public static final long HOLD_BELOW_BYTES = 2L << 30;
-    public static final long RELEASE_AT_BYTES = 3L << 30;
+    /**
+     * The floor: 2 GiB, the store backfill's own, which leaves the server room to keep
+     * saving after LSS stops. {@code -Dlss.lowDiskHoldMiB=<n>} moves it and 0 turns the hold
+     * off. A JVM flag and not a setting: a host that lives under the default must be able to
+     * get out of the way of an upgrade, and nobody else should have to think about it.
+     */
+    public static final long HOLD_BELOW_BYTES = floorBytes(System.getProperty("lss.lowDiskHoldMiB"));
+    /** Half as much again: the gap that keeps a server at the floor from flapping. */
+    public static final long RELEASE_AT_BYTES = HOLD_BELOW_BYTES + HOLD_BELOW_BYTES / 2;
     static final long INTERVAL_NANOS = 5_000_000_000L;
+
+    /** The floor in bytes for a configured number of MiB; anything unreadable is the default. */
+    static long floorBytes(String configuredMib) {
+        long mib = 2048;
+        if (configuredMib != null) {
+            try {
+                mib = Long.parseLong(configuredMib.trim());
+            } catch (NumberFormatException e) {
+                mib = 2048;
+            }
+        }
+        return Math.max(0L, Math.min(mib, 1L << 20)) << 20; // at most 1 TiB
+    }
 
     private final LongSupplier usableBytes;
     private final long intervalNanos;
+    private final long holdBelow;
+    private final long releaseAt;
     private long nextReadingNanos;
     private boolean first = true;
     private boolean held;
@@ -34,8 +55,15 @@ public final class DiskSpaceHold {
 
     /** With the time between readings given (tests read every time). */
     public DiskSpaceHold(LongSupplier usableBytes, long intervalNanos) {
+        this(usableBytes, intervalNanos, HOLD_BELOW_BYTES, RELEASE_AT_BYTES);
+    }
+
+    /** With the two marks given. A floor of 0 never holds. */
+    DiskSpaceHold(LongSupplier usableBytes, long intervalNanos, long holdBelow, long releaseAt) {
         this.usableBytes = usableBytes;
         this.intervalNanos = intervalNanos;
+        this.holdBelow = holdBelow;
+        this.releaseAt = releaseAt;
     }
 
     /**
@@ -97,7 +125,7 @@ public final class DiskSpaceHold {
         if (usable < 0) {
             return false;
         }
-        boolean next = this.held ? usable < RELEASE_AT_BYTES : usable < HOLD_BELOW_BYTES;
+        boolean next = this.held ? usable < this.releaseAt : usable < this.holdBelow;
         if (next == this.held) {
             return false;
         }

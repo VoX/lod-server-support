@@ -5,6 +5,7 @@ import dev.vox.lss.common.Brand;
 import dev.vox.lss.common.LSSLogger;
 import dev.vox.lss.common.PositionUtil;
 import dev.vox.lss.common.voxel.ColumnTimestampCache;
+import it.unimi.dsi.fastutil.longs.Long2IntOpenHashMap;
 import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
 
 import java.nio.file.Path;
@@ -156,10 +157,13 @@ public abstract class OffThreadProcessor<PlayerState extends AbstractPlayerReque
     /** Reads the free disk space when a reading is due and starts or ends the hold. */
     private void pollDiskHold() {
         DiskSpaceHold hold = this.diskHold;
-        if (!hold.poll(System.nanoTime())) {
+        boolean changed = hold.poll(System.nanoTime());
+        boolean held = hold.held();
+        // Compared with what was last applied, not only with the hold's own last state: a
+        // hold that was swapped (the test seam) is brought in line at its next reading.
+        if (!changed && held == this.generationHeldForDisk) {
             return;
         }
-        boolean held = hold.held();
         long freeMb = hold.lastReadingBytes() >> 20;
         applyGenerationAvailability(this.policyGeneration && !held);
         this.generationHeldForDisk = held;
@@ -167,7 +171,8 @@ public abstract class OffThreadProcessor<PlayerState extends AbstractPlayerReque
             LSSLogger.warn("Terrain generation for distant terrain is on hold: only " + freeMb
                     + " MB free on the world's disk (it resumes at "
                     + (DiskSpaceHold.RELEASE_AT_BYTES >> 20) + " MB). Terrain that already exists"
-                    + " is still served. Free some space; nothing else needs doing.");
+                    + " is still served. Free some space to resume. The floor is"
+                    + " -Dlss.lowDiskHoldMiB (default 2048; 0 turns the hold off).");
         } else {
             LSSLogger.info("Terrain generation for distant terrain resumed: " + freeMb
                     + " MB free on the world's disk.");
@@ -193,7 +198,7 @@ public abstract class OffThreadProcessor<PlayerState extends AbstractPlayerReque
     }
 
     /** Test seam: the disk reading. */
-    void setDiskSpaceHoldForTest(DiskSpaceHold hold) {
+    public void setDiskSpaceHoldForTest(DiskSpaceHold hold) {
         this.diskHold = hold;
     }
 
@@ -1720,7 +1725,16 @@ public abstract class OffThreadProcessor<PlayerState extends AbstractPlayerReque
                 // about whether the chunk exists. Inside the border such a miss goes on to
                 // generation, which loads the chunk if it is there; here that road is
                 // closed, so it takes the transient drop and the next declaration reads
-                // again. Never the permanent answer off a read that proved nothing.
+                // again. Never the permanent answer off a read that proved nothing...
+                if (!staleAgainstEdit && unreadableOutsideBorder(dimension, packed)) {
+                    // ...unless it fails every time: a chunk that cannot be read and may
+                    // not be generated is one this server cannot serve. Without this end a
+                    // region entry that throws would be read again at every declaration of
+                    // every player in range, for as long as they stay.
+                    this.ctx.diagnostics().addGenRefusedOutsideBorder(1);
+                    this.ctx.sendActions().add(new SendAction.ColumnNotGenerated(playerUuid, packed, state));
+                    return;
+                }
                 this.ctx.diagnostics().addSuperseded(1);
                 this.ctx.diagnostics().addMissDropped(1); // law A5: a miss with no submit, no answer
                 return;
@@ -1748,6 +1762,31 @@ public abstract class OffThreadProcessor<PlayerState extends AbstractPlayerReque
         }
         escalateMissToGeneration(playerUuid, state, packed, cx, cz, pending.clientTimestamp(),
                 dimension, "miss");
+    }
+
+    /** How often in a row a read outside the border may fail before it is answered. */
+    static final int UNREADABLE_OUTSIDE_BORDER_TRIES = 3;
+    private static final int UNREADABLE_OUTSIDE_BORDER_CAP = 4096;
+    private static final long UNREADABLE_OUTSIDE_BORDER_FORGET_NANOS = 600_000_000_000L; // 10 min
+
+    /** Failed reads outside the world border, by position. Small and short-lived: emptied
+     *  when full and every ten minutes, so an old failure cannot count against a chunk
+     *  that reads again. Processing thread only. */
+    private final Long2IntOpenHashMap unreadableOutsideBorder = new Long2IntOpenHashMap();
+    private long unreadableOutsideBorderSince;
+
+    /** Counts one failed read outside the border; true from the third for a position. */
+    private boolean unreadableOutsideBorder(String dimension, long packed) {
+        long now = System.nanoTime();
+        if (this.unreadableOutsideBorder.isEmpty()) {
+            this.unreadableOutsideBorderSince = now;
+        } else if (this.unreadableOutsideBorder.size() >= UNREADABLE_OUTSIDE_BORDER_CAP
+                || now - this.unreadableOutsideBorderSince > UNREADABLE_OUTSIDE_BORDER_FORGET_NANOS) {
+            this.unreadableOutsideBorder.clear();
+            this.unreadableOutsideBorderSince = now;
+        }
+        long key = packed ^ (dimension.hashCode() * 0x9E3779B97F4A7C15L);
+        return this.unreadableOutsideBorder.addTo(key, 1) + 1 >= UNREADABLE_OUTSIDE_BORDER_TRIES;
     }
 
     /** Admission-order diagnosis (-Dlss.admissionTrace=true, dev servers only — see

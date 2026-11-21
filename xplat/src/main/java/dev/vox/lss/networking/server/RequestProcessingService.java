@@ -820,7 +820,8 @@ public class RequestProcessingService {
                 for (ServerLevel level : this.server.getAllLevels()) {
                     var border = level.getWorldBorder();
                     // While a border moves, the larger of where it is and where it is
-                    // going: one change, and never a refusal for a chunk it will cover.
+                    // going: a growing border is one change, a shrinking one follows the
+                    // border in, and neither refuses a chunk the border will cover.
                     rectangles.put(this.dimensionStringCache.computeIfAbsent(level.dimension(),
                             k -> k.identifier().toString()),
                             dev.vox.lss.common.processing.GenerationBounds.chunkRectangle(
@@ -841,7 +842,16 @@ public class RequestProcessingService {
         if (session != this.advertisedGeneration && !this.generationRefreshPending) {
             this.advertisedGeneration = session;
             this.refreshedGeneration = session;
-            repushSessionConfig();
+            int[] told = repushSessionConfig();
+            if (told[1] > 0) {
+                // Older client dialects take no second session config. During a hold they
+                // get the permanent "not generated" every generation-off server gives
+                // (asking again every second would be a disk read each, on a server that
+                // is short of disk); they are not told when it ends.
+                LSSLogger.info(told[1] + " player(s) on older client versions cannot be told that"
+                        + " terrain generation " + (session ? "is back" : "is on hold")
+                        + ": terrain that does not exist yet stays missing for them until they rejoin.");
+            }
         }
     }
 

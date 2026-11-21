@@ -2485,6 +2485,38 @@ class OffThreadProcessorDiskResultTest {
         }
     }
 
+    /** A read that fails every time must end: outside the border nothing else would stop
+     *  every player in range from asking for it, and the disk from being read, for ever.
+     *  The third failure in a row is answered; another position starts its own count. */
+    @Test
+    void outsideTheBorderAReadThatKeepsFailingIsAnsweredAfterThreeTries() throws Exception {
+        var rig = new Rig(true, 4, 4, 30);
+        try {
+            rig.proc.publishGenerationBounds(border512());
+            long packed = PositionUtil.packPosition(20, 0);
+            for (int attempt = 1; attempt < OffThreadProcessor.UNREADABLE_OUTSIDE_BORDER_TRIES; attempt++) {
+                int expected = attempt;
+                missAt(rig, 20, 0, false);
+                waitFor(() -> rig.proc.getDiagnostics().getTotalMissDropped() == expected,
+                        "failure " + attempt + " is dropped and asked again");
+            }
+            missAt(rig, 21, 0, false); // a neighbour's first failure
+            waitFor(() -> rig.proc.getDiagnostics().getTotalMissDropped()
+                    == OffThreadProcessor.UNREADABLE_OUTSIDE_BORDER_TRIES, "its own count starts at one");
+            assertEquals(0, rig.proc.getDiagnostics().getTotalGenRefusedOutsideBorder());
+
+            missAt(rig, 20, 0, false);
+            drainUntil(rig.proc, received(rig.uuid, LSSConstants.RESPONSE_NOT_GENERATED, packed));
+            assertEquals(1, rig.proc.getDiagnostics().getTotalGenRefusedOutsideBorder());
+            assertEquals(OffThreadProcessor.UNREADABLE_OUTSIDE_BORDER_TRIES,
+                    rig.proc.getDiagnostics().getTotalMissDropped(), "the answered miss is not also a drop (law A5)");
+            assertNull(rig.proc.pollGenerationTicketRequest(), "and never a ticket");
+            assertEquals(0, rig.proc.timestampCacheForTest().missCount(), "nor a memo: nothing was learned about the chunk");
+        } finally {
+            rig.proc.shutdown();
+        }
+    }
+
     /** The memo is a fact about the world, written while the position was inside. Once the
      *  border no longer covers it, the memo rung must not turn it into a ticket, and no
      *  memo hit is counted for it (law A5 counts a hit as a miss that was dispositioned). */

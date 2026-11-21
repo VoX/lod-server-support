@@ -193,6 +193,33 @@ public class VoxyVanillaCoverageTest {
         assertTrue(VoxyLightStats.borderHolds()>=1);
         world.dispose();
     }
+    /** The player moves on and the held chunk is no longer at the border: nothing probes it
+     *  again, so it must leave the gauge, which exists to show a hold that does not end. */
+    @Test void aWaitingChunkThePlayerHasPassedIsNoLongerWaiting() {
+        VoxyLightStats.reset();
+        var backend=new Backend();var coverage=new VoxyVanillaCoverage(backend);var world=new World();
+        world.add(9,0);
+        when(world.sky.getDataLayerData(any())).thenReturn(null);
+        sweep(coverage,world,0,100);
+        assertEquals(1,coverage.skyWaitingForTest());
+        assertEquals(1,VoxyLightStats.borderWaiting());
+        assertFalse(VoxyVanillaCoverage.atBorder(9,0,152.5,.5,8),"premise: under the player it is not at the border");
+        // the player now stands in that chunk: still inside the square, no longer at its border
+        coverage.tick(world.level,152.5,.5,8,10_000_000_000L);
+        assertEquals(0,coverage.skyWaitingForTest());
+        assertEquals(0,VoxyLightStats.borderWaiting());
+        assertEquals(0,VoxyLightStats.borderOldestWaitMillis(99_000_000_000L));
+        // and a backlog that stops the pump early still reports what waits
+        when(world.sky.getDataLayerData(any())).thenReturn(null);
+        var other=new World();other.add(9,0);when(other.sky.getDataLayerData(any())).thenReturn(null);
+        var gated=new VoxyVanillaCoverage(backend);
+        sweep(gated,other,20_000_000_000L,100);
+        assertEquals(1,VoxyLightStats.borderWaiting());
+        backend.backlog=VoxyVanillaCoverage.BACKLOG_GATE+1;
+        gated.tick(other.level,152.5,.5,8,40_000_000_000L);
+        assertEquals(0,VoxyLightStats.borderWaiting(),"the gate returns early, the gauge is still brought up to date");
+        world.dispose();other.dispose();
+    }
     @Test void theDiagLineIsAbsentAtZeroAndNamesWhatWaits() {
         assertNull(VoxyLightStats.diagLineOrNull(0,0,0,0));
         assertEquals("Voxy light: sections_without_sky=3, border_fill_held=0",VoxyLightStats.diagLineOrNull(3,0,0,0));

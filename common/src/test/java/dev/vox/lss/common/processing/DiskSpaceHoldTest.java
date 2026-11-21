@@ -10,6 +10,36 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class DiskSpaceHoldTest {
+
+    /** {@code -Dlss.lowDiskHoldMiB}: the floor an operator can move, and 0 turns the hold off. */
+    @org.junit.jupiter.api.Test
+    void theFloorCanBeMovedAndZeroTurnsTheHoldOff() {
+        org.junit.jupiter.api.Assertions.assertEquals(2L << 30, DiskSpaceHold.floorBytes(null), "the default");
+        org.junit.jupiter.api.Assertions.assertEquals(2L << 30, DiskSpaceHold.floorBytes("not a number"));
+        org.junit.jupiter.api.Assertions.assertEquals(512L << 20, DiskSpaceHold.floorBytes(" 512 "));
+        org.junit.jupiter.api.Assertions.assertEquals(0L, DiskSpaceHold.floorBytes("0"));
+        org.junit.jupiter.api.Assertions.assertEquals(0L, DiskSpaceHold.floorBytes("-5"));
+        org.junit.jupiter.api.Assertions.assertEquals(1L << 40, DiskSpaceHold.floorBytes("99999999999"));
+        org.junit.jupiter.api.Assertions.assertEquals(2L << 30, DiskSpaceHold.HOLD_BELOW_BYTES,
+                "this test JVM runs with the default");
+        org.junit.jupiter.api.Assertions.assertEquals(3L << 30, DiskSpaceHold.RELEASE_AT_BYTES);
+
+        long[] free = {0L};
+        var off = new DiskSpaceHold(() -> free[0], 0L, 0L, 0L);
+        org.junit.jupiter.api.Assertions.assertFalse(off.poll(1L), "a floor of 0 never holds, even on a full disk");
+        org.junit.jupiter.api.Assertions.assertFalse(off.held());
+
+        var moved = new DiskSpaceHold(() -> free[0], 0L, 512L << 20, 768L << 20);
+        free[0] = 600L << 20;
+        org.junit.jupiter.api.Assertions.assertFalse(moved.poll(2L), "600 MB is above a 512 MB floor");
+        free[0] = 500L << 20;
+        org.junit.jupiter.api.Assertions.assertTrue(moved.poll(3L));
+        free[0] = 700L << 20;
+        org.junit.jupiter.api.Assertions.assertFalse(moved.poll(4L), "held until the higher mark");
+        free[0] = 768L << 20;
+        org.junit.jupiter.api.Assertions.assertTrue(moved.poll(5L));
+        org.junit.jupiter.api.Assertions.assertFalse(moved.held());
+    }
     private static final long GIB = 1L << 30;
 
     @Test

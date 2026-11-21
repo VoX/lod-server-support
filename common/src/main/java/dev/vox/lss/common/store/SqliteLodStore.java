@@ -1260,6 +1260,11 @@ public final class SqliteLodStore implements LodStoreService {
      *  (startup sweep done) and not latched off. A latched store silently no-ops every
      *  write — a driver that keeps walking would burn IO for nothing and claim
      *  progress (review MAJOR). */
+    /** True while low disk space makes the store refuse deposits. Any thread. */
+    public boolean depositsHeldForDisk() {
+        return this.depositsHeldForDisk;
+    }
+
     public boolean isHealthy() {
         return this.serving && !this.latchedOff;
     }
