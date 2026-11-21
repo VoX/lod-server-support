@@ -10,7 +10,7 @@ public record ServerSettings(Service service, Lod lod, Generation generation, Ne
     }
     public record Lod(LodDistance distance) {}
     public record GenerationConcurrency(int global, int perPlayer) {}
-    public record Generation(boolean enabled, GenerationConcurrency concurrency, int timeoutTicks) {}
+    public record Generation(boolean enabled, GenerationConcurrency concurrency, int timeoutTicks, boolean outsideWorldBorder) {}
     public record NetworkBandwidth(double perPlayerMibPerSecond, double globalMibPerSecond) {}
     public record Network(NetworkBandwidth bandwidth, int sendQueueLimitPerPlayer, boolean pingBackstop, boolean sendPacing, boolean yieldToVanilla) {}
     public record Updates(int dirtyBroadcastIntervalTicks, boolean regionSummaries) {}
@@ -43,6 +43,7 @@ public record ServerSettings(Service service, Lod lod, Generation generation, Ne
         v.put("lod.distance.by_dimension", s.lod().distance().byDimension());
         v.put("lod.distance.by_world", s.lod().distance().byWorld());
         v.put("generation.enabled", s.generation().enabled());
+        v.put("generation.outside_world_border", s.generation().outsideWorldBorder());
         v.put("generation.concurrency.global", s.generation().concurrency().global());
         v.put("generation.concurrency.per_player", s.generation().concurrency().perPlayer());
         v.put("generation.timeout_ticks", s.generation().timeoutTicks());
@@ -105,7 +106,8 @@ public record ServerSettings(Service service, Lod lod, Generation generation, Ne
     }
     @SuppressWarnings("unchecked")
     private static Generation Generation(Map<String,Object> v) {
-        return new Generation((boolean)v.get("generation.enabled"), GenerationConcurrency(v), (int)v.get("generation.timeout_ticks"));
+        return new Generation((boolean)v.get("generation.enabled"), GenerationConcurrency(v), (int)v.get("generation.timeout_ticks"),
+                (boolean)v.get("generation.outside_world_border"));
     }
     @SuppressWarnings("unchecked")
     private static NetworkBandwidth NetworkBandwidth(Map<String,Object> v) {

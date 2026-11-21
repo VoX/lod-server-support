@@ -132,6 +132,14 @@ public final class SqliteLodStore implements LodStoreService {
      *  serve rung uses). Null = walk waits (serves still translate via the reader). */
     private volatile java.util.function.UnaryOperator<byte[]> legacyMigrationTranslator;
 
+    /** Deposits stop while the store's volume is nearly full (0.24.0 plan §2): until now
+     *  only the backfill looked at free space, and a store filling the last gigabytes
+     *  breaks Minecraft's own saves before it breaks anything of ours. Serving goes on;
+     *  the rows that were not written are deposited by a later serve. Read by the
+     *  batcher with its gauges, written to a volatile for the depositing threads. */
+    private volatile dev.vox.lss.common.processing.DiskSpaceHold depositHold;
+    private volatile boolean depositsHeldForDisk;
+
     private static final String DB_FILE = "store.db";
     private static final int PAGE_SIZE = 16384;
     private static final int WRITE_TXN_ROWS = 64;
@@ -431,6 +439,7 @@ public final class SqliteLodStore implements LodStoreService {
         this.policy = new StorePolicy(env.maxDbBytes(), env.resweepSeconds(), 0);
         this.diag = diag;
         this.dbPath = env.storeDir().resolve(DB_FILE);
+        this.depositHold = dev.vox.lss.common.processing.DiskSpaceHold.forDirectory(env.storeDir());
         this.directoryLease = StoreDirectoryLease.acquire(env.storeDir());
         this.batcher = new Thread(this::batcherLoop, Brand.shortName() + " LOD Store SQLite");
         this.batcher.setDaemon(true);
@@ -1143,6 +1152,10 @@ public final class SqliteLodStore implements LodStoreService {
     public boolean deposit(String dimension, long packed, byte[] sectionBytes, long columnTimestamp,
                            long acquiredEpochSeconds) {
         if (this.shutdown.get() || this.latchedOff) return false;
+        if (this.depositsHeldForDisk) {
+            this.diag.recordDepositDrop();
+            return false;
+        }
         byte[] normalized = sectionBytes == null || sectionBytes.length == 0 ? EMPTY : sectionBytes;
         // src_stamp: the byte-ACQUISITION wall second (read start / gen serialization),
         // never the column timestamp — the column ts of an untouched row can EQUAL its
@@ -1184,6 +1197,11 @@ public final class SqliteLodStore implements LodStoreService {
         // normalization) — refuse nonsense so the caller's raw fallback handles it.
         if (frame == null || frame.length == 0 || usize <= 0) return false;
         if (this.shutdown.get() || this.latchedOff) return false;
+        if (this.depositsHeldForDisk) {
+            // TRUE, like a shed below: false would send the caller to the raw deposit.
+            this.diag.recordDepositDrop();
+            return true;
+        }
         long nowSeconds = System.currentTimeMillis() / 1000L;
         long stamp = srcStampSeconds > 0 ? Math.min(srcStampSeconds, nowSeconds) : nowSeconds;
         Op.Deposit op = new Op.Deposit(dimension, packed, frame, columnTimestamp,
@@ -2261,6 +2279,18 @@ public final class SqliteLodStore implements LodStoreService {
     }
 
     private void maybeRefreshGauges(long nowNanos) {
+        var hold = this.depositHold;
+        if (hold.poll(nowNanos)) {
+            this.depositsHeldForDisk = hold.held();
+            long freeMb = hold.lastReadingBytes() >> 20;
+            if (hold.held()) {
+                LSSLogger.warn("LOD store: no new rows while only " + freeMb + " MB are free on its disk"
+                        + " (it resumes at " + (dev.vox.lss.common.processing.DiskSpaceHold.RELEASE_AT_BYTES >> 20)
+                        + " MB). Stored terrain is still served. Set storage.lod_store.max_size_mib to bound the store.");
+            } else {
+                LSSLogger.info("LOD store: taking new rows again, " + freeMb + " MB free on its disk.");
+            }
+        }
         if (nowNanos - this.lastGaugeRefreshNanos < GAUGE_REFRESH_NANOS) return;
         this.lastGaugeRefreshNanos = nowNanos;
         try {
@@ -2404,7 +2434,13 @@ public final class SqliteLodStore implements LodStoreService {
     public String stateToken() {
         if (this.latchedOff) return "latched";
         if (!this.serving) return "sweeping";
+        if (this.depositsHeldForDisk) return "low-disk";
         return "ok";
+    }
+
+    /** Test seam: the free-space reading behind the deposit floor. */
+    void setDepositHoldForTest(dev.vox.lss.common.processing.DiskSpaceHold hold) {
+        this.depositHold = hold;
     }
 
     /** Reads a single-value PRAGMA off the writer connection. Batcher-thread only. */

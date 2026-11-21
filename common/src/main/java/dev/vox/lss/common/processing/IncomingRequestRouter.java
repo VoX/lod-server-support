@@ -448,7 +448,11 @@ class IncomingRequestRouter<PS extends AbstractPlayerRequestState<?>> {
             // client). Placed AFTER the duplicate/timestamp/probe rungs by drain order, so
             // a stamped or loaded chunk always beats a stale memo entry. A memoized drop is
             // the standard transient drop, healed by the next 1 Hz declaration.
+            // Outside the world border the memo does not speak either (the check comes
+            // first, so no memo hit is counted): the request reads the disk, and a miss
+            // there gets the not-generated answer in handleDiskNotFound.
             if (this.generationAvailable
+                    && this.processor.generationAllowedAt(dimension, req.cx(), req.cz())
                     && this.timestampCache.isFreshMiss(dimension, packed, System.nanoTime())) {
                 this.ctx.diagnostics().addMemoHit(1);
                 this.processor.escalateMissToGeneration(playerUuid, state, packed,

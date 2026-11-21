@@ -2395,4 +2395,237 @@ class OffThreadProcessorDiskResultTest {
             } finally {rig.proc.shutdown();}
         }
     }
+
+    // ---- Generation bounds (0.24.0 plan §2): the world border and the disk hold ----
+
+    /** A border 512 blocks wide around the origin: chunks -16..15. Chunk 20 is outside. */
+    private static GenerationBounds border512() {
+        return GenerationBounds.of(Map.of(DIM, GenerationBounds.chunkRectangle(0, 0, 512)));
+    }
+
+    private static void missAt(Rig rig, int cx, int cz, boolean authoritative) throws Exception {
+        int before = rig.proc.diskSubmits.size();
+        rig.state.enqueue(new IncomingRequest(cx, cz, -1L));
+        rig.proc.postSnapshot(snapshot(DIM, rig.uuid), List.of());
+        waitFor(() -> rig.proc.diskSubmits.size() == before + 1, "the request reads the disk");
+        rig.inject(authoritative
+                ? ChunkReadResult.notFoundAuthoritative(rig.uuid, cx, cz, DIM, 1L)
+                : ChunkReadResult.notFoundFromError(rig.uuid, cx, cz, DIM, 1L));
+        rig.proc.postSnapshot(snapshot(DIM, rig.uuid), List.of());
+    }
+
+    @Test
+    void outsideTheBorderAMissIsAnsweredNotGeneratedWithNoTicketAndNoMemo() throws Exception {
+        var rig = new Rig(true, 4, 4, 30);
+        try {
+            rig.proc.publishGenerationBounds(border512());
+            missAt(rig, 20, 0, true);
+            long packed = PositionUtil.packPosition(20, 0);
+            drainUntil(rig.proc, received(rig.uuid, LSSConstants.RESPONSE_NOT_GENERATED, packed));
+
+            assertNull(rig.proc.pollGenerationTicketRequest(), "nothing outside the border becomes a ticket");
+            assertEquals(0, rig.state.getHeldGenSlots());
+            assertEquals(0, rig.state.getHeldSyncSlots(), "the delivery frees the sync slot");
+            assertFalse(rig.state.hasPendingRequest(20, 0));
+            assertFalse(rig.state.hasDiskReadDone(20, 0), "nothing was served");
+            assertEquals(0, rig.proc.timestampCacheForTest().missCount(), "no memo for a refused miss");
+            assertEquals(1, rig.proc.getDiagnostics().getTotalGenRefusedOutsideBorder());
+            assertEquals(0, rig.proc.getDiagnostics().getTotalMissDropped(),
+                    "law A5: the miss was answered (not_generated), not dropped");
+            assertEquals(0, rig.proc.getDiagnostics().getTotalSuperseded());
+            assertTrue(rig.proc.generationBoundsDiag().contains("outside_border=1"));
+
+            // Asked again (after a dirty notice, say): it reads the disk again, never the memo.
+            rig.state.enqueue(new IncomingRequest(20, 0, -1L));
+            rig.proc.postSnapshot(snapshot(DIM, rig.uuid), List.of());
+            waitFor(() -> rig.proc.diskSubmits.size() == 2, "the re-declaration reads the disk again");
+            assertEquals(0, rig.proc.getDiagnostics().getTotalMemoHits());
+        } finally {
+            rig.proc.shutdown();
+        }
+    }
+
+    /** The edge chunk the border cuts through, and everything inside, generate as before. */
+    @Test
+    void insideTheBorderAMissStillBecomesATicket() throws Exception {
+        var rig = new Rig(true, 4, 4, 30);
+        try {
+            rig.proc.publishGenerationBounds(border512());
+            missAt(rig, 15, -16, true); // the corner chunk of the border
+            waitFor(() -> rig.proc.pollGenerationTicketRequest() != null, "an inside miss escalates");
+            assertEquals(1, rig.state.getHeldGenSlots());
+            assertEquals(1, rig.proc.timestampCacheForTest().missCount(), "and is memoized, as before");
+            assertEquals(0, rig.proc.getDiagnostics().getTotalGenRefusedOutsideBorder());
+        } finally {
+            rig.proc.shutdown();
+        }
+    }
+
+    /** A read that failed says nothing about whether the chunk exists. Inside the border it
+     *  goes on to generation (which loads an existing chunk); outside, that road is closed,
+     *  and the permanent answer off a read that proved nothing would blank real terrain for
+     *  the session. It is dropped and asked again. */
+    @Test
+    void outsideTheBorderAFailedReadIsDroppedNotAnswered() throws Exception {
+        var rig = new Rig(true, 4, 4, 30);
+        try {
+            rig.proc.publishGenerationBounds(border512());
+            missAt(rig, 20, 0, false);
+            waitFor(() -> rig.proc.getDiagnostics().getTotalMissDropped() == 1, "the transient drop");
+            assertEquals(1, rig.proc.getDiagnostics().getTotalSuperseded());
+            assertEquals(0, rig.proc.getDiagnostics().getTotalGenRefusedOutsideBorder());
+            assertNull(rig.proc.pollGenerationTicketRequest());
+            assertEquals(0, rig.state.getHeldSyncSlots());
+            assertFalse(rig.state.hasPendingRequest(20, 0));
+            assertTrue(drainSendActions(rig.proc).stream()
+                            .noneMatch(r -> r.type() == LSSConstants.RESPONSE_NOT_GENERATED),
+                    "never the permanent answer off a failed read");
+        } finally {
+            rig.proc.shutdown();
+        }
+    }
+
+    /** The memo is a fact about the world, written while the position was inside. Once the
+     *  border no longer covers it, the memo rung must not turn it into a ticket, and no
+     *  memo hit is counted for it (law A5 counts a hit as a miss that was dispositioned). */
+    @Test
+    void theMemoDoesNotSpeakForAPositionOutsideTheBorder() throws Exception {
+        var rig = new Rig(true, 4, 0, 30); // no gen slot: the miss is memoized and dropped
+        try {
+            missAt(rig, 20, 0, true);
+            waitFor(() -> rig.proc.getDiagnostics().getTotalMissDropped() == 1, "memoized, then dropped on the full slot");
+            assertEquals(1, rig.proc.timestampCacheForTest().missCount());
+
+            rig.proc.publishGenerationBounds(border512()); // the border shrinks; chunk 20 is outside now
+            rig.state.enqueue(new IncomingRequest(20, 0, -1L));
+            rig.proc.postSnapshot(snapshot(DIM, rig.uuid), List.of());
+            waitFor(() -> rig.proc.diskSubmits.size() == 2, "outside the border the request reads the disk");
+            assertEquals(0, rig.proc.getDiagnostics().getTotalMemoHits(), "no memo hit counted");
+
+            rig.inject(ChunkReadResult.notFoundAuthoritative(rig.uuid, 20, 0, DIM, 2L));
+            rig.proc.postSnapshot(snapshot(DIM, rig.uuid), List.of());
+            drainUntil(rig.proc, received(rig.uuid, LSSConstants.RESPONSE_NOT_GENERATED,
+                    PositionUtil.packPosition(20, 0)));
+            assertEquals(1, rig.proc.getDiagnostics().getTotalGenRefusedOutsideBorder());
+        } finally {
+            rig.proc.shutdown();
+        }
+    }
+
+    /** {@code generation.outside_world_border: true} publishes no bounds; so does a
+     *  dimension the platform never published. */
+    @Test
+    void withNoBoundsPublishedNothingIsRefused() throws Exception {
+        var rig = new Rig(true, 4, 4, 30);
+        try {
+            rig.proc.publishGenerationBounds(border512());
+            rig.proc.publishGenerationBounds(GenerationBounds.NONE);
+            missAt(rig, 20, 0, true);
+            waitFor(() -> rig.proc.pollGenerationTicketRequest() != null, "no rule, so the miss escalates");
+            rig.proc.publishGenerationBounds(null); // tolerated: same as NONE
+            assertTrue(rig.proc.generationAllowedAt(DIM, 1_000_000, 1_000_000));
+            rig.proc.publishGenerationBounds(GenerationBounds.of(
+                    Map.of("minecraft:the_end", GenerationBounds.chunkRectangle(0, 0, 16))));
+            assertTrue(rig.proc.generationAllowedAt(DIM, 500, 500), "another dimension's border does not bind this one");
+        } finally {
+            rig.proc.shutdown();
+        }
+    }
+
+    /** With generation off the border changes nothing: the miss gets the generation-off answer. */
+    @Test
+    void withGenerationOffTheBorderRuleIsNotConsulted() throws Exception {
+        var rig = new Rig(false, 4, 4, 30);
+        try {
+            rig.proc.publishGenerationBounds(border512());
+            missAt(rig, 20, 0, true);
+            drainUntil(rig.proc, received(rig.uuid, LSSConstants.RESPONSE_NOT_GENERATED,
+                    PositionUtil.packPosition(20, 0)));
+            assertEquals(0, rig.proc.getDiagnostics().getTotalGenRefusedOutsideBorder(),
+                    "generation is off: that, not the border, is why");
+        } finally {
+            rig.proc.shutdown();
+        }
+    }
+
+    /** Low disk holds generation exactly as generation.enabled: false does, and the end of
+     *  the hold does what turning it back on does: the terminal answers given meanwhile
+     *  are fenced off, and a miss becomes a ticket again. */
+    @Test
+    void aLowDiskHoldsGenerationAndItsEndBringsItBack() throws Exception {
+        var rig = new Rig(true, 4, 4, 30);
+        try {
+            var free = new java.util.concurrent.atomic.AtomicLong(10L << 30);
+            rig.proc.setDiskSpaceHoldForTest(new DiskSpaceHold(free::get, 0));
+            assertFalse(rig.proc.generationHeldForDisk());
+
+            free.set(1L << 30);
+            rig.proc.postSnapshot(snapshot(DIM, rig.uuid), List.of());
+            waitFor(rig.proc::generationHeldForDisk, "the hold starts at the next reading");
+            assertTrue(rig.proc.generationBoundsDiag().contains("ON HOLD: low disk"));
+            long epoch = rig.state.terminalPolicyEpoch();
+
+            missAt(rig, 3, 0, true);
+            drainUntil(rig.proc, received(rig.uuid, LSSConstants.RESPONSE_NOT_GENERATED,
+                    PositionUtil.packPosition(3, 0)));
+            assertNull(rig.proc.pollGenerationTicketRequest(), "no ticket while the disk is nearly full");
+            assertEquals(0, rig.proc.timestampCacheForTest().missCount(), "and no memo, as with generation off");
+
+            free.set(2L << 30 | 1); // above the floor, below the release mark: still held
+            rig.proc.postSnapshot(snapshot(DIM, rig.uuid), List.of());
+            missAt(rig, 4, 0, true);
+            drainUntil(rig.proc, received(rig.uuid, LSSConstants.RESPONSE_NOT_GENERATED,
+                    PositionUtil.packPosition(4, 0)));
+            assertTrue(rig.proc.generationHeldForDisk());
+
+            free.set(4L << 30);
+            rig.proc.postSnapshot(snapshot(DIM, rig.uuid), List.of());
+            waitFor(() -> !rig.proc.generationHeldForDisk(), "the hold ends at the release mark");
+            assertTrue(rig.state.terminalPolicyEpoch() > epoch,
+                    "the terminal answers of the hold are fenced off, as on a settings refresh");
+            assertFalse(rig.proc.generationBoundsDiag().contains("ON HOLD"));
+
+            missAt(rig, 3, 0, true);
+            waitFor(() -> rig.proc.pollGenerationTicketRequest() != null, "generation is back");
+        } finally {
+            rig.proc.shutdown();
+        }
+    }
+
+    /** The hold and the setting are two inputs to one switch: a hold must not turn
+     *  generation on when the settings have it off, and a settings reload during a hold
+     *  must not lift the hold. */
+    @Test
+    void theHoldAndTheSettingCombine() throws Exception {
+        var rig = new Rig(true, 4, 4, 30);
+        try {
+            var free = new java.util.concurrent.atomic.AtomicLong(1L << 30);
+            rig.proc.setDiskSpaceHoldForTest(new DiskSpaceHold(free::get, 0));
+            rig.proc.postSnapshot(snapshot(DIM, rig.uuid), List.of());
+            waitFor(rig.proc::generationHeldForDisk, "held");
+
+            // a reload that says "generation on" while the disk is low: still held
+            rig.proc.updateSettingsPolicy(true, 8L << 20, 30_000_000_000L, 1L).get(5, java.util.concurrent.TimeUnit.SECONDS);
+            missAt(rig, 5, 0, true);
+            drainUntil(rig.proc, received(rig.uuid, LSSConstants.RESPONSE_NOT_GENERATED,
+                    PositionUtil.packPosition(5, 0)));
+            assertNull(rig.proc.pollGenerationTicketRequest());
+
+            // a reload that says "generation off", then the disk recovers: still off
+            rig.proc.updateSettingsPolicy(false, 8L << 20, 30_000_000_000L, 2L).get(5, java.util.concurrent.TimeUnit.SECONDS);
+            free.set(10L << 30);
+            rig.proc.postSnapshot(snapshot(DIM, rig.uuid), List.of());
+            waitFor(() -> !rig.proc.generationHeldForDisk(), "the hold ends");
+            missAt(rig, 6, 0, true);
+            drainUntil(rig.proc, received(rig.uuid, LSSConstants.RESPONSE_NOT_GENERATED,
+                    PositionUtil.packPosition(6, 0)));
+            assertNull(rig.proc.pollGenerationTicketRequest(), "the settings still say off");
+
+            rig.proc.updateSettingsPolicy(true, 8L << 20, 30_000_000_000L, 3L).get(5, java.util.concurrent.TimeUnit.SECONDS);
+            missAt(rig, 7, 0, true);
+            waitFor(() -> rig.proc.pollGenerationTicketRequest() != null, "on, and nothing holds it");
+        } finally {
+            rig.proc.shutdown();
+        }
+    }
 }

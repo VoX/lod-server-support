@@ -935,6 +935,46 @@ public class GenerationLifecycleGameTests {
         });
     }
 
+    /**
+     * The service publishes each dimension's world border to the processing thread, which
+     * refuses generation for chunks wholly outside it (0.24.0 plan §2). Read here against
+     * the real level's border, which stays vanilla's default (the gametest world is shared,
+     * so no test may move it): 59,999,968 blocks wide, so chunk 1,874,998 is the last one
+     * inside on each side. The refusal itself is pinned in OffThreadProcessorDiskResultTest.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = 200)
+    public void theServicePublishesTheWorldBorderOfEveryDimension(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        var server = level.getServer();
+        var border = level.getWorldBorder();
+        helper.assertTrue(border.getCenterX() == 0.0 && border.getCenterZ() == 0.0
+                        && border.getSize() == 5.9999968E7 && border.getLerpTarget() == border.getSize(),
+                "premise: the gametest world keeps vanilla's default border, got centre "
+                        + border.getCenterX() + "," + border.getCenterZ() + " size " + border.getSize());
+        var service = new RequestProcessingService(server);
+        var processor = service.getOffThreadProcessor();
+        helper.assertTrue(processor.generationAllowedAt(LSSConstants.DIM_STR_OVERWORLD, 1_900_000, 0),
+                "before the first tick nothing is published, so nothing is refused");
+        service.tick();
+        for (var each : server.getAllLevels()) {
+            String dim = each.dimension().identifier().toString();
+            helper.assertTrue(processor.generationAllowedAt(dim, 0, 0), dim + ": the origin is inside");
+            helper.assertTrue(processor.generationAllowedAt(dim, 1_874_998, -1_874_999),
+                    dim + ": the last chunks the border covers are inside");
+            helper.assertTrue(!processor.generationAllowedAt(dim, 1_874_999, 0),
+                    dim + ": the first chunk past the border is refused");
+            helper.assertTrue(!processor.generationAllowedAt(dim, 0, -1_875_000),
+                    dim + ": and so on the other side");
+        }
+        helper.assertTrue(processor.generationAllowedAt("some_mod:not_a_dimension_here", 1_900_000, 0),
+                "a dimension that was never published has no bound");
+        helper.assertTrue(!processor.generationHeldForDisk(), "premise: the test machine has free disk space");
+        helper.assertTrue(service.generationEnabledForSession(),
+                "and so sessions are told generation is on, as configured");
+        service.shutdown();
+        helper.succeed();
+    }
+
     private static boolean containsPosition(long[] positions, long packed) {
         if (positions == null) return false;
         for (long p : positions) {

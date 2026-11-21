@@ -1482,6 +1482,47 @@ class SqliteLodStoreTest {
         store.shutdown();
     }
 
+    /** 0.24.0 plan §2: below the free-space floor the store takes no new rows (it was the
+     *  backfill alone that looked), keeps serving what it has, says so in its state, and
+     *  takes rows again once space is back. */
+    @Test
+    void depositsStopWhileTheDiskIsNearlyFullAndResume() throws Exception {
+        writeRegion(OW, 0, 0, Map.of());
+        SqliteLodStore store = open(defaultEnv());
+        long kept = PositionUtil.packPosition(8, 0);
+        store.deposit(OW, kept, bytes(1, 64), 1000);
+        assertNotNull(awaitHit(store, OW, kept));
+
+        var free = new java.util.concurrent.atomic.AtomicLong(1L << 30);
+        store.setDepositHoldForTest(new dev.vox.lss.common.processing.DiskSpaceHold(free::get, 0));
+        for (int i = 0; i < 400 && !"low-disk".equals(store.stateToken()); i++) Thread.sleep(25);
+        assertEquals("low-disk", store.stateToken(), "the batcher's next pass reads the disk");
+        assertTrue(store.isHealthy(), "a store that only stopped growing is not a dead store");
+
+        long drops = store.diagnostics().getDepositDrops();
+        long refused = PositionUtil.packPosition(9, 0);
+        assertTrue(!store.deposit(OW, refused, bytes(2, 64), 2000), "no raw row below the floor");
+        assertTrue(store.depositFrame(OW, PositionUtil.packPosition(10, 0), new byte[]{1, 2, 3}, 64, 1L, 2L, 2000, 0),
+                "a frame is taken as handled, so the caller does not fall back to a raw deposit");
+        assertEquals(drops + 2, store.diagnostics().getDepositDrops(), "both are counted as drops");
+        assertNotNull(store.get(OW, kept), "what is stored is still served");
+        Thread.sleep(200);
+        assertNull(store.get(OW, refused));
+        assertEquals(1, sqlRowCount(OW));
+
+        // invalidations still apply: they are what frees space
+        store.invalidate(OW, new long[]{kept});
+        for (int i = 0; i < 400 && sqlRowCount(OW) > 0; i++) Thread.sleep(25);
+        assertEquals(0, sqlRowCount(OW));
+
+        free.set(10L << 30); // the same hold sees the space come back
+        for (int i = 0; i < 400 && !"ok".equals(store.stateToken()); i++) Thread.sleep(25);
+        assertEquals("ok", store.stateToken());
+        assertTrue(store.deposit(OW, refused, bytes(2, 64), 3000));
+        assertNotNull(awaitHit(store, OW, refused), "rows are taken again");
+        store.shutdown();
+    }
+
     /** C3c: WRITE_FAILURE_LATCH consecutive writer failures latch the store off —
      *  writes refused, reads miss, and the status surface renders "latched" (review
      *  B1: a dead store must LOOK dead), with isHealthy() false so the backfill's

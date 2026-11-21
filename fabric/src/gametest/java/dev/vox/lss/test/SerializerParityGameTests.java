@@ -72,7 +72,7 @@ public class SerializerParityGameTests {
     private static final int DISK_SEED_CHUNK_OFFSET = 112;
     private static final int ALL_AIR_TRANSITION_CHUNK_OFFSET = 128;
     private static final int BACKGROUND_READ_CHUNK_OFFSET = 144;
-    private static final int NATIVE_BODY_CHUNK_OFFSET = 160;
+    private static final int NATIVE_BODY_CHUNK_OFFSET = 304;
 
     /** Deprecated upstream without a replacement; it is the only factory that places a real
      *  ServerPlayer (player list entry + embedded-channel connection) inside a gametest. */
