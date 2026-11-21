@@ -37,10 +37,39 @@ public final class SectionSerializer {
     public static LoadedColumnData serializeColumn(ServerLevel level, LevelChunk chunk, int cx, int cz) {
         // One AntiXray-shim scope per COLUMN (not per section): section.write crashes under
         // the AntiXray mod's mixins outside this binding — see AntiXrayCompat.
-        return AntiXrayCompat.callSerializing(() -> serializeColumnInner(level, chunk, cx, cz));
+        return AntiXrayCompat.callSerializing(() -> {
+            byte[] nativeBody = nativeColumnInner(level, chunk, cx, cz);
+            if (nativeBody == null) {
+                return new LoadedColumnData(cx, cz, null, 0);
+            }
+            // C1 produce-path v20 hook (progress-doc decision 2026-08-07): the native
+            // emit is unchanged; the v20 body is its canonical translation. Live and
+            // generation serves (which reuse this method) see the same translated bytes.
+            byte[] serialized = translate(nativeBody, level);
+            return new LoadedColumnData(cx, cz, serialized, serialized.length);
+        });
     }
 
-    private static LoadedColumnData serializeColumnInner(ServerLevel level, LevelChunk chunk, int cx, int cz) {
+    /** The served (v20) form of a native body: the one translation {@link #serializeColumn}
+     *  applies. Public for the parity gametest, which checks it against a live chunk. */
+    public static byte[] translate(byte[] nativeBody, ServerLevel level) {
+        return NbtSectionSerializer.toV20(nativeBody, level.registryAccess());
+    }
+
+    /**
+     * The column's LOD-visible content in the MC-native layout, before the v20
+     * translation; null when there is nothing to serve. This is what the save-time change
+     * detector hashes ({@link DirtyContentFilter}): the translation is a function of
+     * these bytes (it rewrites palette values and nothing else), so two columns have
+     * equal native bodies exactly when they have equal served bytes, and the detector
+     * does not pay for a translation on the server thread at every chunk load and save.
+     * {@link #serializeColumn} is this plus the translation, by construction.
+     */
+    public static byte[] nativeColumn(ServerLevel level, LevelChunk chunk, int cx, int cz) {
+        return AntiXrayCompat.callSerializing(() -> nativeColumnInner(level, chunk, cx, cz));
+    }
+
+    private static byte[] nativeColumnInner(ServerLevel level, LevelChunk chunk, int cx, int cz) {
         int minSectionY = level.getMinSectionY();
         var sections = chunk.getSections();
         var lightEngine = level.getLightEngine();
@@ -90,7 +119,7 @@ public final class SectionSerializer {
                 && (noContent || info.sectionY() < lo || info.sectionY() > hi));
 
         if (includedSections.isEmpty()) {
-            return new LoadedColumnData(cx, cz, null, 0);
+            return null;
         }
 
         // Second pass: serialize using cached results
@@ -104,7 +133,7 @@ public final class SectionSerializer {
                 var section = sections[info.index];
                 if (maskEntry != null) {
                     // Masking INSIDE the choke point: probe, generation, and the
-                    // DirtyContentFilter hash all see identical masked bytes by construction.
+                    // DirtyContentFilter hash all see identical masked content by construction.
                     int[] replacedCells = new int[1];
                     var masked = XrayMaskFilter.mask(section, info.sectionY,
                             maskEntry.mask(), maskEntry.kind(), maskFactory, replacedCells);
@@ -137,20 +166,28 @@ public final class SectionSerializer {
 
             byte[] nativeBody = new byte[buf.readableBytes()];
             buf.readBytes(nativeBody);
-            // C1 produce-path v20 hook (progress-doc decision 2026-08-07): the native
-            // emit above is unchanged; the v20 body is its canonical translation. Live,
-            // generation (which reuses this method), and the DirtyContentFilter hash all
-            // see the same translated bytes.
-            byte[] serialized = NbtSectionSerializer.toV20(nativeBody, level.registryAccess());
-            return new LoadedColumnData(cx, cz, serialized, serialized.length);
+            return nativeBody;
         } finally {
             buf.release();
         }
     }
 
+    private static final java.lang.invoke.VarHandle LONGS = java.lang.invoke.MethodHandles
+            .byteArrayViewVarHandle(long[].class, java.nio.ByteOrder.LITTLE_ENDIAN);
+
     private static boolean hasNonZeroData(DataLayer layer) {
-        for (byte b : layer.getData()) {
-            if (b != 0) return true;
+        return hasNonZero(layer.getData());
+    }
+
+    /** Eight bytes at a time: this runs twice per section for every chunk load and save
+     *  (an all-dark layer is read to its end), and it showed in the server thread's profile. */
+    static boolean hasNonZero(byte[] data) {
+        int i = 0;
+        for (int end = data.length - 7; i < end; i += 8) {
+            if ((long) LONGS.get(data, i) != 0L) return true;
+        }
+        for (; i < data.length; i++) {
+            if (data[i] != 0) return true;
         }
         return false;
     }
