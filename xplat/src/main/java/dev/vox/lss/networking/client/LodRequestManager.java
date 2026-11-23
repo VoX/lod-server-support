@@ -139,8 +139,9 @@ public class LodRequestManager {
         long latest = this.deliveryVersions.get(receipt.packed);
         if (latest == receipt.version) {
             this.mapFill.onMapOutcome(receipt.packed, receipt.mapWritten(), receipt.fillAnswer);
-        } else if (latest == 0L && receipt.mapWritten()) {
-            this.mapFill.onWrittenAfterPrune(receipt.packed, receipt.fillAnswer);
+        } else if (latest == 0L) {
+            if (receipt.mapWritten()) this.mapFill.onWrittenAfterPrune(receipt.packed, receipt.fillAnswer);
+            else this.mapFill.onLetGoAfterPrune(receipt.fillAnswer);
         }
     }
 
@@ -894,8 +895,13 @@ public class LodRequestManager {
             STARTED,
             /** The cache is still loading; the fill starts when it has. */
             WAITING_FOR_CACHE,
+            /** A fill is already under way: {@code columns} are still to go here. */
+            RUNNING,
             /** A map is being written and it is owed nothing in range. */
             NOTHING_OWED,
+            /** Nothing can be asked from here, and the request stands for terrain the map is
+             *  missing elsewhere in this cache (or inside the view). */
+            NOTHING_HERE,
             /** No map is being written (no map mod, the setting is off, the server asks
              *  for no map ingestion, or the map is not written in this dimension). */
             NO_MAP,
@@ -913,6 +919,14 @@ public class LodRequestManager {
         if (!this.mapWritingProbe.getAsBoolean()) {
             return new MapFillRequest(MapFillRequest.Outcome.NO_MAP, 0);
         }
+        if (this.mapFill.working()) {
+            // A second press while a fill runs (the button has no confirm screen): nothing
+            // is restarted. Its answers in the map's queue are not owed just now, so a fresh
+            // start would find nothing to ask and would end the request under them.
+            int toGo = this.mapFill.pending() + this.mapFill.owedInRange(this.lastChunkX, this.lastChunkZ,
+                    this.lastViewDistance, this.scanner.getEffectiveLodDistance());
+            if (toGo > 0) return new MapFillRequest(MapFillRequest.Outcome.RUNNING, toGo);
+        }
         if (!this.mapFill.press()) {
             return new MapFillRequest(MapFillRequest.Outcome.WAITING_FOR_CACHE, 0);
         }
@@ -922,7 +936,8 @@ public class LodRequestManager {
             // Nothing to ask from here. The request stands only if this cache owes the map
             // terrain elsewhere.
             this.mapFill.nothingHere();
-            return new MapFillRequest(MapFillRequest.Outcome.NOTHING_OWED, 0);
+            return new MapFillRequest(this.mapFill.requested() ? MapFillRequest.Outcome.NOTHING_HERE
+                    : MapFillRequest.Outcome.NOTHING_OWED, 0);
         }
         return new MapFillRequest(MapFillRequest.Outcome.STARTED, owed);
     }
@@ -940,11 +955,16 @@ public class LodRequestManager {
         if (!this.mapFill.requested()) return 0;
         int picked = this.mapFill.append(this.sendPositionBuffer, this.sendTimestampBuffer, walked,
                 this.scanner.getLastBudget(), playerCx, playerCz, viewDistance,
-                this.scanner.getEffectiveLodDistance(), mapFillPossible());
+                this.scanner.getEffectiveLodDistance(), mapFillPossible(), !this.pendingDeliveries.isEmpty());
         var finish = this.mapFill.pollFinish();
         if (finish != null) {
-            mapFillLine(finish.unfilled() > 0 ? "lss.mapfill.finished.partial" : "lss.mapfill.finished",
-                    finish.delivered(), finish.unfilled());
+            if (finish.unfilled() > 0) {
+                mapFillLine("lss.mapfill.finished.partial", finish.delivered(), finish.unfilled());
+            } else if (finish.stands()) {
+                mapFillLine("lss.mapfill.done_here", finish.delivered());
+            } else {
+                mapFillLine("lss.mapfill.finished", finish.delivered(), finish.unfilled());
+            }
         }
         return picked;
     }
@@ -979,17 +999,20 @@ public class LodRequestManager {
     private int lastViewDistance;
 
     /** See {@link MapFill#isFillAnswer}; also never while an earlier delivery of the column
-     *  is still on its way to the consumers, and only while a map takes it. */
+     *  is still on its way to the consumers. */
     boolean isMapFillAnswer(long packed, ResourceKey<Level> dimension, long arrivingStamp) {
         return isMapFillAsked(packed, dimension)
                 && this.latestPendingDelivery.get(packed) == null
-                && this.mapFill.isFillAnswer(packed, arrivingStamp)
-                && this.mapWritingProbe.getAsBoolean();
+                && this.mapFill.isFillAnswer(packed, arrivingStamp);
     }
 
     /** The column was asked for the map and is still owed (see {@link MapFill#isFillAsked}). */
     boolean isMapFillAsked(long packed, ResourceKey<Level> dimension) {
-        return dimension.equals(this.lastDimension) && this.mapFill.isFillAsked(packed);
+        // Only while a map takes it: an answer that arrives after the map stopped being
+        // written (a server deny, the setting switched off) is plain terrain, owed like any
+        // other, and not a refusal by the map.
+        return dimension.equals(this.lastDimension) && this.mapWritingProbe.getAsBoolean()
+                && this.mapFill.isFillAsked(packed);
     }
 
     /**

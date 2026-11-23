@@ -72,8 +72,10 @@ final class MapFill {
         DROPPED
     }
 
-    /** What a fill that ran out of columns to ask for did. */
-    record Finish(long delivered, int unfilled) {}
+    /** What a fill that ran out of columns to ask for from here did.
+     *  @param stands the request goes on: for columns inside the view, or for terrain the
+     *                map is missing elsewhere in this cache */
+    record Finish(long delivered, int unfilled, boolean stands) {}
 
     /** A fill that stopped because the map took none of its last answers. */
     record Stall(long delivered, int notWritten) {}
@@ -276,11 +278,18 @@ final class MapFill {
      * Whether this cache may still owe the map something: a column held here is owed; or
      * debt left memory when the player moved on (the cache file still holds it); or the
      * cache could not be read, and nothing is known. Columns of unknown history count only
-     * after a press, which makes the file's owed at the save.
+     * after a press, which makes the file's owed at the save. Answers still in a map's queue
+     * need no term here: neither caller decides while one is pending (a second press during
+     * a fill is answered before it gets this far, and settle waits for every delivery).
      */
     private boolean debtLeft() {
         return !this.cacheRead || this.columns.mapOwedCount() > 0 || this.columns.prunedMapOwed()
                 || (this.fileUnknownBecomeOwed && this.columns.prunedMapUnknown());
+    }
+
+    /** A fill's answers the map has not finished with. */
+    int pending() {
+        return this.pendingMapOnly;
     }
 
     /** The player asked for a fill during this stay: the record must hear of it, also when
@@ -410,6 +419,14 @@ final class MapFill {
         }
     }
 
+    /** A map let go of a column after the player had moved on and the column had left
+     *  memory. The record on disk stands as it was (owed, if it was), and this session can no
+     *  longer see that debt: it counts as debt that left memory, so a request stands for it. */
+    void onLetGoAfterPrune(boolean fillAnswer) {
+        this.columns.notePrunedMapOwed();
+        if (fillAnswer) this.unwritten++;
+    }
+
     /** The map dropped a column that was sent for it alone and asked for it again: the
      *  held column stands, the debt returns. */
     void onMapOnlyFailed(long packed) {
@@ -509,10 +526,14 @@ final class MapFill {
      *
      * @param possible a fill can ask now (a map is being written, the session downloads);
      *                 when not, the scan's declarations are still noted for the grace
+     * @param deliveriesPending a column of this stay (the fill's or any other) is still on
+     *                 its way to the consumers: whether the fill is done here is not decided
+     *                 before the map has finished with all of them
      * @return how many entries were added
      */
     int append(long[] positions, long[] timestamps, int walked, int budget,
-               int playerCx, int playerCz, int viewDistance, int lodDistance, boolean possible) {
+               int playerCx, int playerCz, int viewDistance, int lodDistance, boolean possible,
+               boolean deliveriesPending) {
         if (!this.requested) return 0;
         long now = this.clock.getAsLong();
         if (now - this.walkedSince > WALK_GRACE_NANOS) {
@@ -545,7 +566,7 @@ final class MapFill {
             timestamps[walked + i] = -1L;
             this.askedNow.add(positions[walked + i]);
         }
-        if (picked == 0 && now - this.lastSettle >= SETTLE_INTERVAL_NANOS) {
+        if (picked == 0 && !deliveriesPending && now - this.lastSettle >= SETTLE_INTERVAL_NANOS) {
             this.lastSettle = now;
             settle(playerCx, playerCz, lodDistance, inView);
         }
@@ -578,7 +599,7 @@ final class MapFill {
         }
         if (this.endOwed) {
             this.endOwed = false;
-            this.finish = new Finish(this.delivered - this.deliveredBefore, unfilled);
+            this.finish = new Finish(this.delivered - this.deliveredBefore, unfilled, this.requested);
         }
     }
 

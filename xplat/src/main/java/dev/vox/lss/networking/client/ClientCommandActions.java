@@ -94,7 +94,9 @@ public final class ClientCommandActions {
         return switch (request.outcome()) {
             case STARTED -> Component.translatable("lss.mapfill.started", request.columns());
             case WAITING_FOR_CACHE -> Component.translatable("lss.mapfill.waiting");
+            case RUNNING -> Component.translatable("lss.mapfill.running", request.columns());
             case NOTHING_OWED -> Component.translatable("lss.mapfill.nothing");
+            case NOTHING_HERE -> Component.translatable("lss.mapfill.nothing_here");
             case NO_MAP -> Component.translatable("lss.mapfill.no_map");
             case UNAVAILABLE -> Component.translatable("lss.mapfill.unavailable");
         };

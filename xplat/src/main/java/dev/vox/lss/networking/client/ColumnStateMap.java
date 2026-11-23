@@ -1070,6 +1070,12 @@ class ColumnStateMap {
         return this.prunedMapOwed;
     }
 
+    /** A map let go of a column that had already left memory while it was in the map's
+     *  queue: the cache file may owe it, and this map can no longer say. */
+    void notePrunedMapOwed() {
+        this.prunedMapOwed = true;
+    }
+
     boolean prunedMapUnknown() {
         return this.prunedMapUnknown;
     }

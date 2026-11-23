@@ -1316,6 +1316,7 @@ class ClientColumnProcessorTest {
         assertEquals(24, rig.manager.getMapFillDelivered());
         assertEquals(0, rig.manager.mapFillForTest().pendingForTest(), "every delivery ended");
         assertFalse(rig.manager.mapFillForTest().working());
+        assertFalse(rig.manager.mapFillForTest().requested(), "nothing is left to owe: the request ended");
         assertEquals(7000L, rig.manager.getColumnTimestamp(1, 1), "and no held stamp moved");
     }
 

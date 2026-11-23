@@ -245,7 +245,15 @@ class MapFillRequestTest {
     }
 
     private boolean finished() {
-        return notices.stream().anyMatch(n -> n.startsWith("lss.mapfill.finished"));
+        return notices.stream().anyMatch(n -> n.startsWith("lss.mapfill.finished")
+                || n.startsWith("lss.mapfill.done_here"));
+    }
+
+    /** The settled-debt bit the next save takes to the record (not merely "not owed", which a
+     *  column on its way to a map is too). Consumes the state: call it last. */
+    private boolean settledForTheRecord(long position) {
+        var settled = columns().detachForSave().mapSettled;
+        return (settled.get(ColumnStateMap.leafKeyFor(position)) & (1L << ColumnStateMap.bitIndexFor(position))) != 0;
     }
 
     /** Scans and serves until the fill says it is done. */
@@ -545,6 +553,14 @@ class MapFillRequestTest {
         Offered answer = receive(position, columns().timestampFor(position));
         assertFalse(answer.mapOnly());
         assertTrue(manager.isMapOwed(position));
+        assertEquals(0, manager.mapFillForTest().unwritten(),
+                "no map was there to refuse it: not a strike, and no step towards 'the map takes nothing'");
+        assertEquals(0, manager.mapFillForTest().pendingForTest());
+
+        mapWriting = true;
+        assertTrue(fire().has(position), "asked again when a map is written again");
+        assertTrue(receive(position, columns().timestampFor(position)).mapOnly());
+        assertFalse(manager.isMapOwed(position));
     }
 
     /** The server answers every declaration, and an answer does not say which one it answers.
@@ -930,12 +946,18 @@ class MapFillRequestTest {
             heldByMap.get(0).write();
             for (int i = 1; i < 48; i++) heldByMap.get(i).letGo();
             px = far;
+            // The player plays on where they are now: the scan runs, and the fill decides
+            // whether it is done. It is done here, and it stands for what the map let go.
+            mapDoes = MapDoes.WRITES;
+            converge();
+            for (int i = 0; i < 3; i++) serve(fire());
+            assertEquals("lss.mapfill.done_here[1]", lastNotice());
+            assertTrue(manager.mapFillForTest().requested(), "the debt left memory in the map's queue");
             manager.saveCache();
 
             var loaded = ColumnCacheStore.loadStateAsync(bucket, dim).join();
             var map = new ColumnStateMap();
             map.adoptLoaded(loaded);
-            assertEquals(48, map.size(), "the cache file still holds the columns");
             assertFalse(map.isMapOwed(written), "the one the map wrote is settled");
             assertTrue(map.isMapOwed(letGo), "the ones it let go are still owed");
             assertEquals(47, map.mapOwedCount());
@@ -943,6 +965,62 @@ class MapFillRequestTest {
         } finally {
             ColumnCacheStore.clearForServer(bucket);
         }
+    }
+
+    /** Whether a fill is done here is not decided while any column is still in a map's queue,
+     *  the fill's or not: an ordinary column the map then lets go is a debt the fill pays. */
+    @Test
+    void theFillIsNotDoneWhileTheMapStillHoldsAnOrdinaryColumn() {
+        pressAfterADownloadWithoutAMap(3);
+        long changed = p(2, 2);
+        manager.onDirtyColumns(new long[]{changed}); // the server says this column changed
+        mapDoesAt.put(changed, MapDoes.HOLDS);
+        assertFalse(receive(changed, columns().timestampFor(changed) + 1).mapOnly(), "premise: terrain for everyone");
+        assertEquals(1, heldByMap.size());
+
+        for (int i = 0; i < 12; i++) serve(fire());
+        assertEquals(0, manager.getMapOwedColumns(), "premise: the fill has paid everything else");
+        assertFalse(finished(), "the map still holds a column: nothing is said yet");
+        assertTrue(manager.mapFillForTest().requested());
+
+        mapDoesAt.clear();
+        heldByMap.get(0).letGo(); // the map gives it up
+        assertTrue(manager.isMapOwed(changed));
+        fillToTheEnd();
+        assertEquals("lss.mapfill.finished[48, 0]", lastNotice(), "and the fill paid that one too");
+    }
+
+    /** The button has no confirm screen, so it gets pressed twice. While the map holds the
+     *  fill's answers nothing is owed in range, and a fresh start would find nothing to ask
+     *  and end the request under them. A second press changes nothing. */
+    @Test
+    void aSecondPressWhileTheMapHoldsTheAnswersChangesNothing() {
+        pressAfterADownloadWithoutAMap(3);
+        mapDoes = MapDoes.HOLDS;
+        serve(fire());
+        assertEquals(48, heldByMap.size(), "premise: every answer is in the map's queue");
+        assertEquals(0, manager.getMapOwedColumns());
+
+        MapFillRequest again = manager.requestMapFill();
+        assertEquals(MapFillRequest.Outcome.RUNNING, again.outcome());
+        assertEquals(48, again.columns(), "what is still to go");
+        assertTrue(manager.mapFillForTest().requested());
+
+        mapDoes = MapDoes.WRITES;
+        heldByMap.get(0).letGo(); // one comes back as a debt
+        for (int i = 1; i < 48; i++) heldByMap.get(i).write();
+        fillToTheEnd();
+        assertEquals("lss.mapfill.finished[48, 0]", lastNotice(), "the first press's fill runs to its end");
+
+        // And a press while it is still asking from here does not restart the count either.
+        pressAfterADownloadWithoutAMap(9);
+        Batch batch = fire();
+        int half = batch.positions().length / 2;
+        serve(new Batch(Arrays.copyOf(batch.positions(), half), Arrays.copyOf(batch.timestamps(), half)));
+        assertTrue(manager.getMapFillDelivered() > 0 && manager.getMapOwedColumns() > 0, "premise: part-way");
+        assertEquals(MapFillRequest.Outcome.RUNNING, manager.requestMapFill().outcome());
+        fillToTheEnd();
+        assertEquals("lss.mapfill.finished[360, 0]", lastNotice());
     }
 
     /** The session ends while columns sit in the map's queue: the record keeps what was known
@@ -1045,6 +1123,7 @@ class MapFillRequestTest {
         assertEquals(ColumnStateMap.MAP_SETTLED, columns().mapState(written));
         queuedEvents.forEach(Runnable::run); // and running the queue afterwards changes nothing
         assertTrue(columns().isMapOwed(letGo));
+        assertTrue(settledForTheRecord(written), "the written one is a fact for the record");
     }
 
     /** With cave layers a column is several tiles: the surface can be on the map while a cave
@@ -1072,6 +1151,7 @@ class MapFillRequestTest {
         answer.delivery().written(); // the surface; the lease is for the cave tile
         manager.cancelDelivery(answer.delivery());
         assertFalse(manager.isMapOwed(position));
+        assertTrue(settledForTheRecord(position), "and the record is told: not merely 'on its way'");
     }
 
     // ---- the view ----
@@ -1097,7 +1177,8 @@ class MapFillRequestTest {
         MapFillRequest request = manager.requestMapFill();
         assertEquals(360 - inView.size(), request.columns(), "what can be asked for from here");
         fillToTheEnd();
-        assertEquals("lss.mapfill.finished[" + (360 - inView.size()) + ", 0]", lastNotice());
+        assertEquals("lss.mapfill.done_here[" + (360 - inView.size()) + "]", lastNotice(),
+                "the line says that the fill goes on");
         assertTrue(mapAsks.longStream().noneMatch(inView::contains), "none of them was asked for");
         assertEquals(inView.size(), manager.getMapOwedColumns(), "their debt stands");
         assertTrue(manager.mapFillForTest().requested(), "and so does the request");
@@ -1297,8 +1378,10 @@ class MapFillRequestTest {
         fire();
         assertEquals("lss.mapfill.stalled[" + MapFill.STALL_LIMIT + ", " + takers + "]", lastNotice());
         assertEquals(takers, manager.getMapFillDelivered(), "every column the map takes is on it");
+        assertTrue(budget < 900, "premise: a batch is small beside the refused half: " + budget);
         assertTrue(mapAsks.size() <= 2400 + MapFill.STALL_LIMIT + budget,
                 "asked " + mapAsks.size() + ": the refused half was not tried three times");
+        assertTrue(mapAsks.size() < 2400 + refused, "not even once more each: " + mapAsks.size());
         assertFalse(finished());
     }
 
@@ -1341,7 +1424,7 @@ class MapFillRequestTest {
         int behind = owed - request.columns();
         assertTrue(behind >= 20, "premise: owed columns are held that are out of reach from here: " + behind);
         fillToTheEnd();
-        assertEquals("lss.mapfill.finished[" + request.columns() + ", 0]", lastNotice());
+        assertEquals("lss.mapfill.done_here[" + request.columns() + "]", lastNotice());
         assertEquals(behind, manager.getMapOwedColumns());
         assertFalse(manager.mapFillForTest().working(), "nothing more to do here");
         assertTrue(manager.mapFillForTest().requested(), "but the request stands for the rest");
@@ -1367,7 +1450,7 @@ class MapFillRequestTest {
         int far = 4 * manager.scannerForTest().getPruneDistance();
         manager.tickMovementPhase(far, 0); // the player is far from all of it
         px = far;
-        assertEquals(MapFillRequest.Outcome.NOTHING_OWED, manager.requestMapFill().outcome());
+        assertEquals(MapFillRequest.Outcome.NOTHING_HERE, manager.requestMapFill().outcome());
         converge(); // the terrain here is downloaded, and written to the map
         for (int i = 0; i < 4; i++) serve(fire());
         assertTrue(notices.isEmpty(), "nothing more is said: " + notices);
@@ -1393,7 +1476,7 @@ class MapFillRequestTest {
             manager.tickMovementPhase(far, 0); // far from all of it
             px = far;
             assertEquals(0, columns().size(), "premise: nothing is held here");
-            assertEquals(MapFillRequest.Outcome.NOTHING_OWED, manager.requestMapFill().outcome());
+            assertEquals(MapFillRequest.Outcome.NOTHING_HERE, manager.requestMapFill().outcome());
             assertTrue(manager.mapFillForTest().requested(), "the debt that left memory is still this cache's");
             manager.saveCache(); // the session ends holding no column
 
@@ -1432,7 +1515,7 @@ class MapFillRequestTest {
             for (int i = 0; i < 4; i++) serve(fire());
             assertFalse(manager.mapFillForTest().requested(), "unknown is not owed: nothing to stand for");
 
-            assertEquals(MapFillRequest.Outcome.NOTHING_OWED, manager.requestMapFill().outcome());
+            assertEquals(MapFillRequest.Outcome.NOTHING_HERE, manager.requestMapFill().outcome());
             assertTrue(manager.mapFillForTest().requested(), "after a press it is");
             manager.saveCache();
 
@@ -1505,7 +1588,7 @@ class MapFillRequestTest {
         assertNull(manager.mapFillForTest().forSave().fillRequested(), "the record's own word stands");
         converge();
         assertEquals(0, manager.getMapOwedColumns(), "what arrives is written to the map");
-        assertEquals(MapFillRequest.Outcome.NOTHING_OWED, manager.requestMapFill().outcome(),
+        assertEquals(MapFillRequest.Outcome.NOTHING_HERE, manager.requestMapFill().outcome(),
                 "the press is answered, not parked for a load that never comes");
         for (int i = 0; i < 3; i++) serve(fire());
         assertEquals(Boolean.TRUE, manager.mapFillForTest().forSave().fillRequested(),
@@ -1570,6 +1653,10 @@ class MapFillRequestTest {
                 key(ClientCommandActions.fillMapLine(new MapFillRequest(MapFillRequest.Outcome.WAITING_FOR_CACHE, 0))));
         assertEquals("lss.mapfill.nothing",
                 key(ClientCommandActions.fillMapLine(new MapFillRequest(MapFillRequest.Outcome.NOTHING_OWED, 0))));
+        assertEquals("lss.mapfill.nothing_here",
+                key(ClientCommandActions.fillMapLine(new MapFillRequest(MapFillRequest.Outcome.NOTHING_HERE, 0))));
+        assertEquals("lss.mapfill.running",
+                key(ClientCommandActions.fillMapLine(new MapFillRequest(MapFillRequest.Outcome.RUNNING, 7))));
         assertEquals("lss.mapfill.no_map",
                 key(ClientCommandActions.fillMapLine(new MapFillRequest(MapFillRequest.Outcome.NO_MAP, 0))));
         assertEquals("lss.mapfill.unavailable",
