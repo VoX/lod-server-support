@@ -300,6 +300,14 @@ final class JourneyMapSession {
         return session != null && !session.dead && LSSClientConfig.CONFIG.mapIngestionEnabled();
     }
 
+    /** Whether a column arriving now is written to JourneyMap: the consumer is registered,
+     *  the session is active and not inert, and the server allows it. Client thread. */
+    static boolean isWriting() {
+        var session = instance;
+        return session != null && session.registered && session.active()
+                && session.serverAllowsWrites.getAsBoolean();
+    }
+
     /** The conditional {@code /lss diag} line, or null when JourneyMap is not installed. */
     static String diagLine() {
         var session = instance;
@@ -582,14 +590,33 @@ final class JourneyMapSession {
         final LSSApi.IngestFailureHandle handle = LSSApi.captureIngestFailureHandle();
         final Runnable release = this.handle == null ? () -> {} : this.handle.deferAcceptance();
         final AtomicBoolean closed = new AtomicBoolean();
+        private volatile boolean written;
 
         boolean active() {
             return !this.closed.get() && this.generation == acquisitionGeneration.get()
                     && (this.handle == null || this.handle.isActive());
         }
 
+        /** The column is on JourneyMap's map, or JourneyMap draws these chunks itself. */
+        void markWritten() {
+            this.written = true;
+        }
+
         void close() {
-            if (this.closed.compareAndSet(false, true)) this.release.run();
+            if (!this.closed.compareAndSet(false, true)) return;
+            if (this.handle != null && this.written) {
+                // Issue #380: the delivery learns that the column is on the map. Said here,
+                // before the lease below is released, and only for a column that was
+                // rendered: a delivery that ends without it leaves the map OWED the column,
+                // so every path that lets one go (switched off, not allowed here, inert,
+                // out of memory, a cleared queue) is covered without saying anything.
+                try {
+                    this.handle.written();
+                } catch (Throwable t) {
+                    if (t instanceof Error err && !(t instanceof AssertionError)) throw err;
+                }
+            }
+            this.release.run();
         }
 
         /** Report for a bounded re-serve (main thread, no locks held); always closes. */
@@ -1266,12 +1293,16 @@ final class JourneyMapSession {
             this.replay.removeFirst();
         }
         for (var e : r.rendered) {
+            e.receipt.markWritten();
             e.receipt.close();
             if (this.replay.size() >= REPLAY_CAPACITY) this.replay.removeFirst();
             this.replay.addLast(new Rendered(e.dimension, e.chunkX, e.chunkZ, batch.identity.worldDir(), now));
         }
         this.rendered.addAndGet(r.rendered.size());
-        r.skippedLive.forEach(e -> e.receipt.close()); // JourneyMap renders live chunks itself
+        r.skippedLive.forEach(e -> { // JourneyMap renders live chunks itself: the map has them
+            e.receipt.markWritten();
+            e.receipt.close();
+        });
         this.skippedLive.addAndGet(r.skippedLive.size());
         r.renderFailed.forEach(e -> e.receipt.report(e.dimension, e.chunkX, e.chunkZ));
         this.renderFailed.addAndGet(r.renderFailed.size());

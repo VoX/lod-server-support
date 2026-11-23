@@ -115,8 +115,11 @@ public final class BenchmarkHook {
         // Register a no-op consumer so the handshake includes CAPABILITY_VOXEL_COLUMNS.
         // -Dlss.soak.mapOnly=true skips it for the map-only live gate (map-policy plan A4):
         // a map mod on the client is then the session's only consumer.
+        // It counts what it is given: a map fill's answers must never reach it.
+        var consumerColumns = new java.util.concurrent.atomic.AtomicLong();
         if (!Boolean.getBoolean("lss.soak.mapOnly")) {
-            LSSApi.registerColumnConsumer((level, dimension, chunkX, chunkZ, columnData) -> {});
+            LSSApi.registerColumnConsumer((level, dimension, chunkX, chunkZ, columnData) ->
+                    consumerColumns.incrementAndGet());
         }
 
         int[] actionAt = {-1};
@@ -168,7 +171,9 @@ public final class BenchmarkHook {
                     fireClientAction(outputFile, actionName[0], actionAt[0]);
                 }
             }
-            latest.set(ClientMetricsExporter.buildClientSnapshot());
+            var snapshot = ClientMetricsExporter.buildClientSnapshot();
+            if (snapshot.containsKey("map_fill")) snapshot.put("soak_consumer_columns", consumerColumns.get());
+            latest.set(snapshot);
             if (clientTick[0] % (5 * LSSConstants.TICKS_PER_SECOND) == 0) {
                 appendSoakClientRow(outputFile, "snapshot", latest.get());
             }
@@ -259,6 +264,12 @@ public final class BenchmarkHook {
             } else {
                 LSSLogger.warn("[Soak] Client action clearcache skipped — no request manager");
             }
+        } else if ("fillmap".equals(action)) {
+            // The Fill Map button and /lss fillmap (issue #380).
+            var manager = LSSClientNetworking.getRequestManager();
+            var request = manager == null ? null : manager.requestMapFill();
+            LSSLogger.info("[Soak] Client action: fillmap -> " + (request == null ? "no request manager"
+                    : request.outcome() + " (" + request.columns() + " columns)"));
         } else {
             LSSLogger.warn("[Soak] Unknown client action '" + action + "' — row logged, nothing executed");
         }
