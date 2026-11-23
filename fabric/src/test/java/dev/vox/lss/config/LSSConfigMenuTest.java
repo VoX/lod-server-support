@@ -193,7 +193,11 @@ class LSSConfigMenuTest {
     @Test
     void thePageButtonsFollowTheOptionGroupsAndOpenThroughTheDispatcher() {
         var builder = new RecordingConfigBuilder();
+        dev.vox.lss.networking.client.ClientCommandActions.setMenuButtonsForTest(false);
         register(builder);
+        assertTrue(dev.vox.lss.networking.client.ClientCommandActions.menuHasButtons(),
+                "chat lines may name the buttons once this page has them");
+        dev.vox.lss.networking.client.ClientCommandActions.setMenuButtonsForTest(false);
         List<PageSpec> catalog = ClientOptionCatalog.pages();
         int buttonsBuilt = 0;
         for (int p = 0; p < catalog.size(); p++) {

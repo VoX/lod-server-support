@@ -1512,6 +1512,7 @@ class MapFillRequestTest {
         long paid = manager.getMapFillDelivered();
         int left = manager.getMapOwedColumns();
         assertTrue(paid > 0 && left > 0, "premise: part-way");
+        mapDoes = MapDoes.WRITES;
 
         var said = new java.util.ArrayList<String>();
         ClientCommandActions.stopFillMap(line -> said.add(key(line)), manager);
@@ -1519,6 +1520,15 @@ class MapFillRequestTest {
         assertFalse(manager.mapFillForTest().requested());
         int asked = mapAsks.size();
         int noticesBefore = notices.size();
+
+        // The answers that were already on their way are still the map's.
+        long stampOfOne = columns().timestampFor(batch.positions()[half]);
+        Offered late = receive(batch.positions()[half], stampOfOne);
+        assertTrue(late.mapOnly(), "asked before the stop: it goes to the map alone");
+        assertEquals(stampOfOne, columns().timestampFor(batch.positions()[half]), "and the held column is untouched");
+        left--;
+        assertEquals(left, manager.getMapOwedColumns(), "and the map having written it settles that debt");
+
         for (int i = 0; i < 6; i++) serve(fire());
         assertEquals(asked, mapAsks.size(), "nothing more is asked for the map");
         assertEquals(noticesBefore, notices.size(), "and nothing is said: no 'finished', no 'your map is missing terrain'");
@@ -1532,9 +1542,60 @@ class MapFillRequestTest {
         assertEquals("lss.mapfill.not_running", said.get(2), "nor has a stop outside a session");
 
         assertEquals(MapFillRequest.Outcome.STARTED, manager.requestMapFill().outcome());
+        assertFalse(manager.mapFillForTest().stopped(), "a press after a stop: the stop is over");
         fillToTheEnd();
         assertEquals(0, manager.getMapOwedColumns());
-        assertEquals(360 - paid, manager.getMapFillDelivered() - paid, "the later press paid the rest");
+        assertEquals(360, manager.getMapFillDelivered(), "the later press paid the rest");
+    }
+
+    /** A stop with nothing to stop changes nothing. A fill that ended by itself (the map took
+     *  none of its answers) says "Map fill stopped: …"; a player who then types the stop
+     *  command must not undo what the press had decided for the save. */
+    @Test
+    void aStopWithNothingToStopChangesNothing() {
+        pressAfterADownloadWithoutAMap(24);
+        mapDoes = MapDoes.LETS_GO;
+        for (int i = 0; i < 40 && manager.mapFillForTest().requested(); i++) serve(fire());
+        assertFalse(manager.mapFillForTest().requested(), "premise: the fill ended by itself");
+        var before = manager.mapFillForTest().forSave();
+        assertTrue(before.fileUnknownBecomeOwed(), "premise: the press stands for the save");
+
+        assertFalse(manager.stopMapFill());
+        assertEquals(before, manager.mapFillForTest().forSave());
+        assertFalse(manager.mapFillForTest().stopped());
+    }
+
+    /** Right after a join the cache is still loading, and whether its record holds a request
+     *  is not known yet. A stop typed then is not lost: the request the record turns out to
+     *  hold does not start, and the record hears of it. A stop is this dimension's. */
+    @Test
+    void aStopWhileTheCacheIsStillLoadingHoldsForTheRequestInTheRecord() {
+        start(3, LSSConstants.PROTOCOL_VERSION, false);
+        mapWriting = true;
+        assertTrue(manager.stopMapFill(), "whatever the record holds is taken back");
+        manager.mapFillForTest().onCacheLoaded(true, true); // the record held a request
+        assertFalse(manager.mapFillForTest().requested(), "it does not go on");
+        assertEquals(new ColumnStateMap.MapDebt(false, false, true, true), manager.mapFillForTest().forSave(),
+                "and the record is told");
+
+        manager.mapFillForTest().reset(); // the player changes dimension
+        assertFalse(manager.mapFillForTest().stopped(), "the next dimension knows nothing of that stop");
+
+        // With no request in the record there is nothing for the record to hear.
+        start(3, LSSConstants.PROTOCOL_VERSION, false);
+        mapWriting = true;
+        assertTrue(manager.stopMapFill());
+        manager.mapFillForTest().onCacheLoaded(false, false);
+        assertFalse(manager.mapFillForTest().stopped());
+        assertFalse(manager.mapFillForTest().requested());
+
+        // And when the record cannot be read, the save says that no request stands.
+        start(3, LSSConstants.PROTOCOL_VERSION, false);
+        mapWriting = true;
+        assertTrue(manager.stopMapFill());
+        manager.mapFillForTest().onCacheUnavailable();
+        assertEquals(Boolean.FALSE, manager.mapFillForTest().forSave().fillRequested());
+        assertTrue(manager.mapFillForTest().stopped());
     }
 
     /** A stop reaches the record also from a session that holds no column: a request left
