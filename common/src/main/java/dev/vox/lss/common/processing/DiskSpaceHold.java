@@ -125,6 +125,10 @@ public final class DiskSpaceHold {
         if (usable < 0) {
             return false;
         }
+        // Zero is a reading: a server restarted by its panel after the disk ran full reads
+        // exactly that, and is the case the hold is for. A volume that reports no free
+        // space while it takes writes (some network mounts) is held too; the log line says
+        // how to move the floor.
         boolean next = this.held ? usable < this.releaseAt : usable < this.holdBelow;
         if (next == this.held) {
             return false;

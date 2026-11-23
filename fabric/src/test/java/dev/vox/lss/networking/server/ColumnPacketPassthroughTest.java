@@ -161,6 +161,44 @@ class ColumnPacketPassthroughTest {
         }
     }
 
+    /** A handler another mod puts between this one and the compressor after the install
+     *  must see every packet. The frame is written at the compressor, past that handler, so
+     *  a column then goes the normal way: through the other handler and deflated. */
+    @Test
+    void aHandlerPutBetweenThisOneAndTheCompressorSeesTheColumn() {
+        byte[] raw = new byte[35_318];
+        new Random(5).nextBytes(raw);
+        byte[] packet = columnPacket(compressedColumn(raw));
+        var server = server(true);
+        var seen = new java.util.concurrent.atomic.AtomicInteger();
+        server.pipeline().addAfter(ColumnPacketPassthrough.COMPRESS, "other_mod",
+                new io.netty.channel.ChannelOutboundHandlerAdapter() {
+                    @Override
+                    public void write(io.netty.channel.ChannelHandlerContext ctx, Object msg,
+                                      io.netty.channel.ChannelPromise promise) throws Exception {
+                        seen.incrementAndGet();
+                        super.write(ctx, msg, promise);
+                    }
+                });
+        long packets = ColumnPacketPassthrough.packets();
+        long displaced = ColumnPacketPassthrough.displaced();
+
+        byte[] wire = send(server, packet);
+
+        assertEquals(1, seen.get(), "the other handler saw the column");
+        assertEquals(packets, ColumnPacketPassthrough.packets(), "no frame was written past it");
+        assertEquals(displaced + 1, ColumnPacketPassthrough.displaced());
+        assertArrayEquals(packet, receive(wire), "and the client reads the same packet");
+        assertTrue(ColumnPacketPassthrough.diagLineOrNull().contains("another mod's handler"));
+
+        // A handler on the far side of this one is nobody's business: it has seen the packet.
+        var behind = server(true);
+        behind.pipeline().addAfter(ColumnPacketPassthrough.NAME, "encoder_side", new io.netty.channel.ChannelOutboundHandlerAdapter());
+        long before = ColumnPacketPassthrough.packets();
+        assertArrayEquals(packet, receive(send(behind, packet)));
+        assertEquals(before + 1, ColumnPacketPassthrough.packets());
+    }
+
     /** The same packet without the handler is a different frame that decodes to the same
      *  bytes: the handler changes the framing and nothing else. */
     @Test
