@@ -98,6 +98,7 @@ final class MapFill {
      *  being written is new debt and takes it back. */
     private boolean hinted;
     private boolean hintKnown;
+    private boolean stopped;
     private int notWrittenInARow;
     private Stall stall;
     /** The player was told this stay that a fill runs: its end is told too. */
@@ -215,7 +216,34 @@ final class MapFill {
     /** What the next save records. */
     ColumnStateMap.MapDebt forSave() {
         return new ColumnStateMap.MapDebt(this.requestKnown ? this.requested : null, this.fileUnknownBecomeOwed,
-                this.hintKnown ? this.hinted : null);
+                this.hintKnown ? this.hinted : null, this.stopped);
+    }
+
+    /**
+     * The player takes the request back ({@code /lss fillmap stop}). A request stands across
+     * sessions until the cache owes the map nothing, which on a large cache is a long
+     * download; this is the way out that does not clear the cache. What the map is owed
+     * stays owed, so a later press fills it. Nothing more is asked for the map until then,
+     * and the part of the cache this request had not got to keeps "unknown". Answers already
+     * on their way are still the map's.
+     *
+     * @return false when no request stood
+     */
+    boolean stop() {
+        boolean stood = this.requested || this.pressPending;
+        this.pressPending = false;
+        this.requested = false;
+        this.requestKnown = true;
+        this.fileUnknownBecomeOwed = false;
+        this.stopped = stood || this.stopped;
+        // Nothing else to undo: without a request nothing is asked, nothing is settled and no
+        // line is owed, and the player was told about the debt when they pressed.
+        return stood;
+    }
+
+    /** A request was taken back in this session (see {@link #stop}). */
+    boolean stopped() {
+        return this.stopped;
     }
 
     /** Whether the player was already told about the debt this cache holds. */
@@ -245,6 +273,7 @@ final class MapFill {
         // file at the next save.
         this.columns.markUnknownMapOwed();
         this.fileUnknownBecomeOwed = true;
+        this.stopped = false;
         this.settled.clear();
         this.failures.clear();
         this.noData.clear();

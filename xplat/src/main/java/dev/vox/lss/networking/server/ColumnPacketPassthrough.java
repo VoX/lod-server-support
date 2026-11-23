@@ -49,6 +49,7 @@ public final class ColumnPacketPassthrough extends ChannelOutboundHandlerAdapter
     private static final AtomicLong PACKETS = new AtomicLong();
     private static final AtomicLong BYTES = new AtomicLong();
     private static final AtomicLong FALLBACKS = new AtomicLong();
+    private static final AtomicLong DISPLACED = new AtomicLong();
 
     /** Column packets sent without a second compression since start. */
     public static long packets() {
@@ -65,14 +66,22 @@ public final class ColumnPacketPassthrough extends ChannelOutboundHandlerAdapter
         return FALLBACKS.get();
     }
 
+    /** Columns that went the normal way because another handler stood between this one
+     *  and the compressor (expected: 0; another mod changed the connection). */
+    public static long displaced() {
+        return DISPLACED.get();
+    }
+
     /** The diag line, or null while nothing was sent this way. */
     public static String diagLineOrNull() {
         long packets = PACKETS.get();
-        if (packets == 0 && FALLBACKS.get() == 0) {
+        if (packets == 0 && FALLBACKS.get() == 0 && DISPLACED.get() == 0) {
             return null;
         }
         return "Compression: " + packets + " column packets sent without a second compression"
-                + (FALLBACKS.get() > 0 ? ", " + FALLBACKS.get() + " fell back" : "");
+                + (FALLBACKS.get() > 0 ? ", " + FALLBACKS.get() + " fell back" : "")
+                + (DISPLACED.get() > 0 ? ", " + DISPLACED.get()
+                        + " compressed the normal way (another mod's handler sits at the compressor)" : "");
     }
 
     /** Puts the handler on the player's connection if it has vanilla's compressor. Safe to
@@ -110,15 +119,18 @@ public final class ColumnPacketPassthrough extends ChannelOutboundHandlerAdapter
 
     @Override
     public void write(ChannelHandlerContext ctx, Object msg, ChannelPromise promise) throws Exception {
-        if (msg instanceof ByteBuf packet) {
-            // Looked up for every write: compression can be reconfigured or removed
+        // The test on the buffer comes first: every outgoing packet of the player passes
+        // here, and nearly all of them fail it on their second byte.
+        if (msg instanceof ByteBuf packet && packet.readableBytes() <= MAX_PACKET_BYTES
+                && startsLikeColumn(packet, packet.readableBytes())) {
+            // Looked up for every column: compression can be reconfigured or removed
             // while the connection lives, and a frame only makes sense in front of the
             // compressor it stands in for.
             ChannelHandlerContext compress = ctx.pipeline().context(COMPRESS);
             if (compress != null && compress.handler() instanceof CompressionEncoder encoder) {
                 int length = packet.readableBytes();
-                if (length >= encoder.getThreshold() && length <= MAX_PACKET_BYTES
-                        && startsLikeColumn(packet, length) && isCompressedColumn(packet, length)) {
+                if (length >= encoder.getThreshold() && isCompressedColumn(packet, length)
+                        && directlyBehindCompress(ctx)) {
                     ByteBuf framed = frame(ctx, packet, length);
                     if (framed != null) {
                         packet.release();
@@ -134,6 +146,26 @@ public final class ColumnPacketPassthrough extends ChannelOutboundHandlerAdapter
             }
         }
         ctx.write(msg, promise);
+    }
+
+    /**
+     * True while nothing sits between this handler and the compressor. The frame is
+     * written at the compressor's context, so a handler another mod put between the two
+     * after this one was installed would never see a column packet: whatever it does to
+     * outgoing packets (rewriting for another protocol version, counting, encrypting)
+     * would be skipped for columns alone, and the player's client would read bytes that
+     * were never meant for it. Then the packet goes the normal way, through that handler
+     * and the compressor. Asked last, only for a packet that is a compressed column: the
+     * list of names is a small allocation.
+     */
+    private static boolean directlyBehindCompress(ChannelHandlerContext ctx) {
+        var names = ctx.pipeline().names();
+        int compress = names.indexOf(COMPRESS);
+        boolean adjacent = compress >= 0 && compress + 1 < names.size() && NAME.equals(names.get(compress + 1));
+        if (!adjacent) {
+            DISPLACED.incrementAndGet();
+        }
+        return adjacent;
     }
 
     /** The cheap part of the test, on the buffer itself: every outgoing packet at or

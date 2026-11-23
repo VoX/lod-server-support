@@ -910,6 +910,11 @@ public class LodRequestManager {
         }
     }
 
+    /** {@code /lss fillmap stop}: the request no longer stands. False when none did. */
+    boolean stopMapFill() {
+        return this.mapFill.stop();
+    }
+
     /** The Fill Map button and {@code /lss fillmap}. Main client thread. */
     public MapFillRequest requestMapFill() {
         if (!this.acquisitionActive || this.sessionConfig == null
@@ -974,7 +979,10 @@ public class LodRequestManager {
     private void announceMapDebt(int playerCx, int playerCz, int viewDistance) {
         this.lastViewDistance = viewDistance;
         var stall = this.mapFill.pollStall();
-        if (stall != null) mapFillLine("lss.mapfill.stalled", stall.notWritten(), stall.delivered());
+        if (stall != null) {
+            mapFillLine(ClientCommandActions.menuHasButtons() ? "lss.mapfill.stalled" : "lss.mapfill.stalled.command",
+                    stall.notWritten(), stall.delivered(), dev.vox.lss.common.Brand.clientCommand());
+        }
         if (this.pendingCacheLoad != null || !mapFillPossible() || !this.mapFill.pollAnnounce()) return;
         int owed = this.mapFill.owedInRange(playerCx, playerCz, viewDistance,
                 this.scanner.getEffectiveLodDistance());
@@ -984,7 +992,10 @@ public class LodRequestManager {
                 this.mapFill.noteResumeAnnounced();
             }
         } else if (owed >= MapFill.HINT_MINIMUM && !this.mapFill.hinted()) {
-            mapFillLine("lss.mapfill.owed", owed, dev.vox.lss.common.Brand.clientCommand());
+            // Name the button only where the options screen has one (Sodium 0.8 or newer):
+            // on Sodium 0.6, or with no Sodium at all, the command is the only way.
+            mapFillLine(ClientCommandActions.menuHasButtons() ? "lss.mapfill.owed" : "lss.mapfill.owed.command",
+                    owed, dev.vox.lss.common.Brand.clientCommand());
             this.mapFill.noteHinted();
         }
     }
@@ -1679,7 +1690,7 @@ public class LodRequestManager {
         // debts of columns the cache file holds, or in which the player asked for a fill,
         // must still tell the record.
         if (!this.columns.isEmptyMap() || this.columns.hasPersistentRemovals() || this.columns.hasMapSettled()
-                || this.mapFill.pressed()) {
+                || this.mapFill.pressed() || this.mapFill.stopped()) {
             var state = this.columns.detachForSave();
             state.mapDebt = this.mapFill.forSave();
             ColumnCacheStore.mergeSaveDetachedAsync(this.serverAddress, this.lastDimension,
