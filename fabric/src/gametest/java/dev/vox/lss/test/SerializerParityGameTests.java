@@ -407,6 +407,13 @@ public class SerializerParityGameTests {
                     }
                     var fg = fgResult.get();
                     helper.assertTrue(fg != null, "waiting for the foreground read result");
+                    if (fg.timedOut()) {
+                        // See the background read below: a read that ran out of time is read again.
+                        fgResult.set(null);
+                        foreground.submitReadDirect(fgId, registration(fgId), LSSConstants.DIM_STR_OVERWORLD, level, cx, cz, 0, 0L);
+                        helper.assertTrue(false, "the foreground read ran out of time; reading again; reader="
+                                + foreground.getDiagnostics());
+                    }
                     helper.assertTrue(!fg.notFound() && !fg.saturated() && fg.sectionBytes() != null,
                             "foreground read of the saved superflat chunk must return content: " + fg
                                     + "; reader=" + foreground.getDiagnostics());
@@ -422,6 +429,18 @@ public class SerializerParityGameTests {
                     }
                     var bg = bgResult.get();
                     helper.assertTrue(bg != null, "waiting for the background read result");
+                    if (bg.timedOut()) {
+                        // The reader gave this read up after its own 10 s. On a loaded machine a
+                        // background-priority read waits behind every other test's saves, and
+                        // that says the disk was slow, nothing about what the read returns
+                        // (2026-11-23: the gate's one red, with "Disk read timed out (>10s)" for
+                        // exactly this chunk nine seconds earlier). Read again; the test's tick
+                        // budget bounds it, and a result that is not a timeout is judged below.
+                        bgResult.set(null);
+                        background.submitReadDirect(bgId, registration(bgId), LSSConstants.DIM_STR_OVERWORLD, level, cx, cz, 0, 0L);
+                        helper.assertTrue(false, "the background read ran out of time; reading again; reader="
+                                + background.getDiagnostics());
+                    }
                     helper.assertTrue(!bg.notFound() && !bg.saturated() && bg.sectionBytes() != null,
                             "background-priority read must return content, not not-found/saturated");
                     // B3 liveness receipt (review F2): byte parity alone cannot distinguish
