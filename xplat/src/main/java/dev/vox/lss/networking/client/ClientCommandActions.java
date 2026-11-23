@@ -113,7 +113,7 @@ public final class ClientCommandActions {
     }
 
     /** Test seam. */
-    static void setMenuButtonsForTest(boolean buttons) {
+    public static void setMenuButtonsForTest(boolean buttons) {
         menuButtons = buttons;
     }
 

@@ -2584,6 +2584,10 @@ class OffThreadProcessorDiskResultTest {
             }
             assertEquals(0, rig.proc.getDiagnostics().getTotalGenRefusedOutsideBorder(),
                     "the good read started the count again");
+            missAt(rig, 20, 0, false);
+            drainUntil(rig.proc, received(rig.uuid, LSSConstants.RESPONSE_NOT_GENERATED,
+                    PositionUtil.packPosition(20, 0)));
+            assertEquals(1, rig.proc.getDiagnostics().getTotalGenRefusedOutsideBorder(), "and the third in a row is answered");
         } finally {
             rig.proc.shutdown();
         }

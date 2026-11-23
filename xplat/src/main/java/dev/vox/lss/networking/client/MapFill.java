@@ -99,6 +99,7 @@ final class MapFill {
     private boolean hinted;
     private boolean hintKnown;
     private boolean stopped;
+    private boolean stopBeforeLoad;
     private int notWrittenInARow;
     private Stall stall;
     /** The player was told this stay that a fill runs: its end is told too. */
@@ -158,6 +159,8 @@ final class MapFill {
         this.askedSince = 0;
         this.hinted = false;
         this.hintKnown = false;
+        this.stopped = false; // a stop is this dimension's, like the request it took back
+        this.stopBeforeLoad = false;
         this.notWrittenInARow = 0;
         this.stall = null;
         this.endOwed = false;
@@ -185,7 +188,15 @@ final class MapFill {
         this.loaded = true;
         this.cacheRead = true;
         this.requestKnown = true;
-        this.requested |= fillRequested;
+        if (this.stopBeforeLoad) {
+            // The player stopped while this was loading: a request found in the record is
+            // the one they meant, and the record has to hear that it no longer stands.
+            this.stopBeforeLoad = false;
+            this.requested = false;
+            this.stopped = fillRequested;
+        } else {
+            this.requested |= fillRequested;
+        }
         if (!this.hintKnown) {
             this.hinted = hinted;
             this.hintKnown = true;
@@ -199,6 +210,13 @@ final class MapFill {
      *  changes it. */
     void onCacheUnavailable() {
         this.loaded = true;
+        if (this.stopBeforeLoad) {
+            // Stopped while loading, and the record cannot be read: the save says "none".
+            this.stopBeforeLoad = false;
+            this.requested = false;
+            this.requestKnown = true;
+            this.stopped = true;
+        }
         startIfPressed();
     }
 
@@ -225,20 +243,29 @@ final class MapFill {
      * download; this is the way out that does not clear the cache. What the map is owed
      * stays owed, so a later press fills it. Nothing more is asked for the map until then,
      * and the part of the cache this request had not got to keeps "unknown". Answers already
-     * on their way are still the map's.
+     * on their way are still the map's. Like the request, a stop is this dimension's.
      *
-     * @return false when no request stood
+     * @return false when no request stood: then nothing changes (a fill that ended by itself,
+     *         for one, keeps what its press had decided for the save)
      */
     boolean stop() {
-        boolean stood = this.requested || this.pressPending;
-        this.pressPending = false;
+        if (!this.loaded) {
+            // The cache is still loading, so whether its record holds a request is not known
+            // yet. Take back a press made meanwhile, and whatever the record turns out to hold.
+            this.pressPending = false;
+            this.stopBeforeLoad = true;
+            return true;
+        }
+        if (!this.requested) {
+            return false;
+        }
         this.requested = false;
         this.requestKnown = true;
         this.fileUnknownBecomeOwed = false;
-        this.stopped = stood || this.stopped;
+        this.stopped = true;
         // Nothing else to undo: without a request nothing is asked, nothing is settled and no
         // line is owed, and the player was told about the debt when they pressed.
-        return stood;
+        return true;
     }
 
     /** A request was taken back in this session (see {@link #stop}). */
