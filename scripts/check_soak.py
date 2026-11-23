@@ -432,7 +432,10 @@ KNOWN_CLIENT_KEYS = {
                  "summary",
                  # Map ingestion (map-ingestion plan §3.8/§4.4): present only when the
                  # client runs with Xaero's World Map / JourneyMap installed.
-                 "xaero", "journeymap"},
+                 "xaero", "journeymap",
+                 # The map's debt and its fill (issue #380), and what the harness client's
+                 # own consumer was given: beside the map groups, with a map mod only.
+                 "map_fill", "soak_consumer_columns"},
     # One scripted client-side action (-Dlss.soak.clientActionAt); resets the request
     # metrics, so the loader treats it as a client segment boundary.
     "action": {"event", "wallMs", "action", "atSeconds"},

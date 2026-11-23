@@ -536,7 +536,12 @@ final class XaeroSession {
      *  ingest-failure cap (the runaway-loop belt). */
     @SuppressWarnings("unchecked")
     static void reportDroppedProduction(Object dimension, int chunkX, int chunkZ) {
-        LSSApi.reportIngestFailure((ResourceKey<Level>) dimension, chunkX, chunkZ);
+        var key = (ResourceKey<Level>) dimension;
+        // Without a delivery to name, say that it is a map that dropped the column: one
+        // that was sent for the map alone then keeps its stamp (issue #380).
+        if (!LSSApi.reportThroughCurrentHandle(key, chunkX, chunkZ)) {
+            dev.vox.lss.networking.client.ClientNetGlue.reportMapDrop(key, chunkX, chunkZ);
+        }
     }
 
     /** Disconnect body — session teardown (queue, latches, registration). */
@@ -550,6 +555,14 @@ final class XaeroSession {
      *  §2.2): while the bridge can write map tiles, the cache must stay per-address. */
     static boolean isArmed() {
         return instance != null && LSSClientConfig.CONFIG.mapIngestionEnabled();
+    }
+
+    /** Whether a column arriving now is written to Xaero's map: the consumer is registered,
+     *  writes are open, and Xaero's own two map-writing switches are not both off (the
+     *  offer path refuses those columns). Client thread. */
+    static boolean isWriting() {
+        var bridge = instance;
+        return bridge != null && bridge.registered && bridge.writesOpen() && !bridge.settingsWritesOff;
     }
 
     /** The conditional {@code /lss diag} line, or null when Xaero was never detected. */
@@ -830,6 +843,10 @@ final class XaeroSession {
         final long generation;
         final LSSApi.IngestFailureHandle handle;
         final boolean live;
+        /** The column's surface tile: what "the map has this column" means. Cave tiles and
+         *  band-fill tiles say nothing about it. */
+        final boolean surface;
+        private volatile boolean written;
         final Runnable release;
         final java.util.concurrent.atomic.AtomicBoolean closed = new java.util.concurrent.atomic.AtomicBoolean();
 
@@ -838,11 +855,21 @@ final class XaeroSession {
         }
 
         Origin(Receipt receipt, boolean live) {
+            this(receipt, live, false);
+        }
+
+        Origin(Receipt receipt, boolean live, boolean surface) {
             this.receipt = receipt;
             this.generation = receipt.generation;
             this.handle = receipt.handle;
             this.live = live;
+            this.surface = surface;
             this.release = !live || this.handle == null ? () -> {} : this.handle.deferAcceptance();
+        }
+
+        /** The tile is on the map, or Xaero's own writer covers these chunks. */
+        void markWritten() {
+            this.written = true;
         }
 
         boolean active() {
@@ -855,7 +882,21 @@ final class XaeroSession {
         }
 
         void close() {
-            if (this.closed.compareAndSet(false, true)) this.release.run();
+            if (!this.closed.compareAndSet(false, true)) return;
+            if (this.live && this.surface && this.handle != null) {
+                // Issue #380: the delivery learns that the column is on the map. Said here,
+                // before the lease below is released, and only for a tile that was written:
+                // a delivery that ends without it leaves the map OWED the column, so every
+                // path that lets a tile go (switched off, blocked by the server, Xaero's
+                // own switches, an expired deferral, a cleared queue, an early return
+                // before any tile existed) is covered without having to say anything.
+                try {
+                    if (this.written) this.handle.written();
+                } catch (Throwable t) {
+                    if (t instanceof Error err && !(t instanceof AssertionError)) throw err;
+                }
+            }
+            this.release.run();
         }
     }
 
@@ -1277,7 +1318,7 @@ final class XaeroSession {
             var targets = planTargets(dimension, chunkX, chunkZ, level);
             var held = new ArrayList<Origin>(targets.size());
             for (var target : targets) {
-                held.add(new Origin(receipt, true));
+                held.add(new Origin(receipt, true, !target.cave()));
             }
             origins = held;
             // §12.8: offers are ACCEPTED during pump pauses — the queue is the
@@ -2225,6 +2266,7 @@ final class XaeroSession {
                     // clean-flag anyway — never fight it (plan §2.6) — but only in the
                     // layer it writes, within its distance (§B5).
                     if (this.acquisition.removeIfCurrent(pending.key(), pending.entry(), pending.tile())) {
+                        pending.origin().markWritten(); // the map has it, from the real chunks
                         pending.origin().close();
                         this.skippedNative.incrementAndGet();
                         // The native writer covers it in this layer: a fill need not.
@@ -2247,6 +2289,7 @@ final class XaeroSession {
                 switch (outcome) {
                     case COMMITTED -> {
                         this.acquisition.removeIfCurrent(pending.key(), pending.entry(), pending.tile());
+                        pending.origin().markWritten();
                         pending.origin().close();
                         if (this.openRegionCap > 0) admitToWindow(regionKey, 0L);
                         this.written.incrementAndGet();

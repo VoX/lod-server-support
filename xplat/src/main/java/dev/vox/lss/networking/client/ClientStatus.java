@@ -206,6 +206,8 @@ public final class ClientStatus {
                 dev.vox.lss.compat.VoxyLightStats.borderHolds(),
                 dev.vox.lss.compat.VoxyLightStats.borderWaiting(),
                 dev.vox.lss.compat.VoxyLightStats.borderOldestWaitMillis(System.nanoTime()),
+                manager.getMapOwedColumns(),
+                manager.getMapFillDelivered(),
                 ClientNetGlue.getConnectionStartMs(),
                 ClientNetGlue.getQueuedColumnCount(),
                 LSSClientConfig.CONFIG.lodColumnsPerSecondLimit(),
@@ -213,7 +215,8 @@ public final class ClientStatus {
                 farActive ? tracker.diagLine() : null,
                 farActive && FarPlayerRenderer.RENDER_AVAILABLE ? FarPlayerRenderer.diagLine() : null,
                 dev.vox.lss.compat.ModCompat.xaeroDiagLine(),
-                dev.vox.lss.compat.ModCompat.journeyMapDiagLine());
+                dev.vox.lss.compat.ModCompat.journeyMapDiagLine(),
+                manager.mapFillDiagLine());
     }
     private ClientStatus() {}
 }

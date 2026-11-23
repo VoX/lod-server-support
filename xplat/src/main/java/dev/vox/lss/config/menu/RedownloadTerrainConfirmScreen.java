@@ -160,6 +160,26 @@ public final class RedownloadTerrainConfirmScreen extends ConfirmScreen {
         answer(false);
     }
 
+    /**
+     * The Fill Map button (issue #380). It clears nothing, so it asks nothing: it runs what
+     * {@code /lss fillmap} runs and says the outcome in a toast (the settings screen hides
+     * chat) and in chat. Here because the toast call differs by game version and this is
+     * the menu's one version-specific file.
+     */
+    static void fillMap() {
+        try {
+            List<Component> lines = new ArrayList<>();
+            ClientCommandActions.fillMap(lines::add);
+            if (lines.isEmpty()) return;
+            SystemToast.add(Minecraft.getInstance().gui.toastManager(),
+                    SystemToast.SystemToastId.PERIODIC_NOTIFICATION,
+                    Component.translatable("lss.config.fill_map"), lines.get(0));
+            lines.forEach(ClientStatusScreen::sendChatFeedback);
+        } catch (RuntimeException failure) {
+            LSSLogger.warn("Fill Map did not finish", failure);
+        }
+    }
+
     private void answer(boolean confirmed) {
         if (answered) {
             return;

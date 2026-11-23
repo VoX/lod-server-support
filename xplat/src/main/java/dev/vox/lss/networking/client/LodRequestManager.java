@@ -35,14 +35,32 @@ public class LodRequestManager {
     void executeDeliveryEvent(Runnable event) { this.deliveryExecutor.accept(event); }
 
     ColumnDelivery trackDelivery(ResourceKey<Level> dimension, long packed, long preClearStamp) {
+        return trackDelivery(dimension, packed, preClearStamp, false, false, ColumnStateMap.MAP_SETTLED);
+    }
+
+    /** @param mapOnly        the column goes to the map backends alone (see {@link MapFill})
+     *  @param fillAnswer     the column answers a fill's request (also when it goes to everyone)
+     *  @param mapStateBefore {@link #mapStateBeforeDelivery} as it was before the receive */
+    ColumnDelivery trackDelivery(ResourceKey<Level> dimension, long packed, long preClearStamp,
+                                 boolean mapOnly, boolean fillAnswer, byte mapStateBefore) {
         if (!this.acquisitionActive || !dimension.equals(this.lastDimension)) return null;
         long version = ++this.deliverySequence;
         this.deliveryVersions.put(packed, version);
+        if (mapOnly || fillAnswer) this.mapFill.onMapOnlyTracked();
         var receipt = new ColumnDelivery(this, dimension, packed, version,
-                this.deliveryDimensionGeneration, preClearStamp, this.serverAddress);
+                this.deliveryDimensionGeneration, preClearStamp, this.serverAddress, mapOnly, fillAnswer,
+                mapStateBefore);
         this.pendingDeliveries.add(receipt);
         this.latestPendingDelivery.put(packed, receipt);
         return receipt;
+    }
+
+    /** What was known about the column and the map before the deliveries that have not
+     *  reached a consumer yet (the stamp's rule, {@link #contentStampBeforeDelivery}): a
+     *  second delivery while the first is pending must not record the first's guess. */
+    byte mapStateBeforeDelivery(long packed) {
+        var pending = this.latestPendingDelivery.get(packed);
+        return pending != null && !pending.accepted() ? pending.mapStateBefore : this.columns.mapState(packed);
     }
 
     long contentStampBeforeDelivery(long packed) {
@@ -57,6 +75,20 @@ public class LodRequestManager {
 
     void onDeliveryFailed(ColumnDelivery receipt) {
         if (!receipt.isActive()) return; // cancellation may overtake the posted report event
+        if (receipt.mapOnly) {
+            // The map did not take a column every other consumer already holds: the stamp
+            // stands and the debt returns (a normal failure would unstamp the column and
+            // have the server send it to everyone again). Not when a map already wrote the
+            // column: the report is then for a cave tile of it, which is the bridge's own
+            // business (it refills cave layers from its copy), and the surface is on the map.
+            if (receipt.mapWritten()) return;
+            if (currentDelivery(receipt)) {
+                this.mapFill.onMapOnlyFailed(receipt.packed);
+            } else if (!receipt.dimension.equals(this.lastDimension) && receipt.bucket != null) {
+                ColumnCacheStore.markMapOwedAsync(receipt.bucket, receipt.dimension, receipt.packed);
+            }
+            return;
+        }
         if (currentDelivery(receipt)) {
             onIngestFailure(receipt.dimension, receipt.packed);
         } else if (!receipt.dimension.equals(this.lastDimension) && receipt.bucket != null) {
@@ -67,19 +99,70 @@ public class LodRequestManager {
     }
 
     void finishDelivery(ColumnDelivery receipt) {
-        if (receipt.settled()) {
-            this.pendingDeliveries.remove(receipt);
-            this.latestPendingDelivery.remove(receipt.packed, receipt);
+        if (!receipt.settled()) return;
+        if (this.pendingDeliveries.remove(receipt)) {
+            // Only for this stay's count: a delivery from before a cache flush or a
+            // dimension change must not settle an answer of the fill that runs now.
+            if (receipt.fillAnswer && receipt.dimensionGeneration == this.deliveryDimensionGeneration) {
+                this.mapFill.onMapOnlySettled();
+            }
+            if (receipt.isActive()) applyMapEnd(receipt);
+        }
+        this.latestPendingDelivery.remove(receipt.packed, receipt);
+    }
+
+    /**
+     * What the end of a delivery means for the map's debt; applied once per delivery. The
+     * debt is settled only by a map that said it wrote the column
+     * ({@code LSSApi.IngestFailureHandle#written}, before the last lease is released). A
+     * delivery that ends without that leaves the map owed the column, whatever the receive
+     * assumed: no map took it, or one let it go. A failed delivery is not owed: its column
+     * is sent again (or, for a fill's answer, the debt already returned).
+     *
+     * <p>The latest delivery of a position decides. A position the movement prune has
+     * dropped since (the player moved on while the column was in the map's queue) is in the
+     * cache file only: a map that wrote it settles the record, one that did not leaves the
+     * record as it is. A column of a dimension the client has left is corrected in that
+     * dimension's record.
+     */
+    private void applyMapEnd(ColumnDelivery receipt) {
+        if (!receipt.claimMapEnd()) return;
+        // A failed delivery is sent again, or (a fill's answer) already gave its debt back.
+        // Except a fill's answer a map wrote: that report was for a cave tile of it.
+        if (receipt.failed() && !(receipt.mapOnly && receipt.mapWritten())) return;
+        if (receipt.dimensionGeneration != this.deliveryDimensionGeneration) {
+            if (!receipt.mapWritten() && !receipt.dimension.equals(this.lastDimension) && receipt.bucket != null) {
+                ColumnCacheStore.markMapOwedAsync(receipt.bucket, receipt.dimension, receipt.packed);
+            }
+            return;
+        }
+        long latest = this.deliveryVersions.get(receipt.packed);
+        if (latest == receipt.version) {
+            this.mapFill.onMapOutcome(receipt.packed, receipt.mapWritten(), receipt.fillAnswer);
+        } else if (latest == 0L && receipt.mapWritten()) {
+            this.mapFill.onWrittenAfterPrune(receipt.packed, receipt.fillAnswer);
         }
     }
 
     void cancelDelivery(ColumnDelivery receipt) {
+        // A delivery that has already ended, with its end still queued for this thread,
+        // ends here: what the map did with it is a fact, not something to put back.
+        if (receipt.settled() && !receipt.cancelled()) applyMapEnd(receipt);
         receipt.cancel(); // a dimension transition keeps the manager alive, not this receipt
         if (!currentDelivery(receipt)) return;
         this.deliveryVersions.remove(receipt.packed);
         if (receipt.accepted()) return;
         this.tracker.removeByPosition(receipt.packed);
+        if (receipt.mapOnly) {
+            // A fill's answer never touched the column held: only the map's debt goes back,
+            // unless the map already wrote the surface (a cave tile is what is still queued).
+            if (receipt.mapWritten()) this.columns.setMapOwed(receipt.packed, false);
+            else this.columns.restoreMapState(receipt.packed, receipt.mapStateBefore);
+            return;
+        }
         this.columns.onIngestCancelled(receipt.packed, receipt.preClearStamp);
+        // The receive decided the map's debt for a column that now never reaches a consumer.
+        this.columns.restoreMapState(receipt.packed, receipt.mapStateBefore);
         if (this.pendingCacheLoad != null) {
             // The file-wins load must not restore the receipt that OFF just cancelled.
             this.cancelledDuringCacheLoad.put(receipt.packed, receipt.preClearStamp);
@@ -90,6 +173,7 @@ public class LodRequestManager {
         for (var receipt : this.pendingDeliveries) cancelDelivery(receipt);
         this.pendingDeliveries.clear();
         this.latestPendingDelivery.clear();
+        this.mapFill.clearPending();
     }
 
     void retireAcquisition() {
@@ -141,6 +225,13 @@ public class LodRequestManager {
 
     // Per-column state: timestamps + dirty/retry/validated marks (single owner)
     private final ColumnStateMap columns = new ColumnStateMap();
+    // ---- The map's debt and its fill (issue #380; see MapFill) ----
+    private final MapFill mapFill = new MapFill(this.columns);
+    /** Whether a column arriving now is written to a map. Seam for tests. */
+    java.util.function.BooleanSupplier mapWritingProbe = dev.vox.lss.compat.ModCompat::isMapWriting;
+    /** Where the fill's chat lines go. Seam for tests. */
+    java.util.function.Consumer<net.minecraft.network.chat.Component> mapFillNotice =
+            ClientStatusScreen::sendChatFeedback;
 
     // Positions declared in the last want-set that have not yet been answered
     private final InFlightTracker tracker = new InFlightTracker();
@@ -664,10 +755,14 @@ public class LodRequestManager {
                 var loaded = this.pendingCacheLoad.getNow(null);
                 if (loaded != null && this.lastDimension != null) {
                     this.columns.adoptLoaded(loaded);
+                    this.mapFill.onCacheLoaded(loaded.mapFillRequested, loaded.mapHinted);
+                } else {
+                    this.mapFill.onCacheUnavailable();
                 }
             } catch (Exception e) {
                 // The session goes on without its saved progress and downloads again.
                 FaultCounters.global().record(FaultCounters.Site.CLIENT_CACHE_LOAD, e);
+                this.mapFill.onCacheUnavailable();
             }
             this.pendingCacheLoad = null;
             for (var entry : this.cancelledDuringCacheLoad.long2LongEntrySet()) {
@@ -750,14 +845,17 @@ public class LodRequestManager {
                     + ",\"near_rings\":" + this.scanner.getNearRings());
         }
         if (scanned >= 0) {
-            this.tracker.replaceWith(this.sendPositionBuffer, scanned);
+            // A map fill rides behind the scan's own wants (see MapFill.append): the
+            // declaration is the walk's entries plus the owed columns that still fit.
+            int declared = scanned + appendMapFill(scanned, playerCx, playerCz, viewDistance);
+            this.tracker.replaceWith(this.sendPositionBuffer, declared);
             // Arm/disarm the adaptive fast cadence beside the tracker replace, so
             // "lastSentCount == what the awaiting set holds" is true by construction
             // (a 0-count converged walk disarms; sendRequests' catch re-disarms a
             // failed send before the next tick's predicate can read it).
-            this.scanner.noteDeclared(scanned);
-            if (scanned > 0 && sendRequests(this.sendPositionBuffer,
-                    this.sendTimestampBuffer, scanned)) {
+            this.scanner.noteDeclared(declared);
+            if (declared > 0 && sendRequests(this.sendPositionBuffer,
+                    this.sendTimestampBuffer, declared)) {
                 // The governor's window-limited latch (ramp-window-limited-credit-
                 // plan.md §3.2): a SUCCESSFULLY-SENT, COMPLETION-CLOCKED (fast-
                 // fired) walk that the GOVERNED burst cap truncated — the cap was
@@ -783,7 +881,187 @@ public class LodRequestManager {
                 }
             }
         }
+        announceMapDebt(playerCx, playerCz, viewDistance);
         return scanned;
+    }
+
+    // ---- The map's debt and its fill (issue #380; see MapFill) ----
+
+    /** What a Fill Map request did. {@code columns} is how many owed columns are in range. */
+    public record MapFillRequest(Outcome outcome, int columns) {
+        public enum Outcome {
+            /** The fill is running: {@code columns} will be asked for the map. */
+            STARTED,
+            /** The cache is still loading; the fill starts when it has. */
+            WAITING_FOR_CACHE,
+            /** A map is being written and it is owed nothing in range. */
+            NOTHING_OWED,
+            /** No map is being written (no map mod, the setting is off, the server asks
+             *  for no map ingestion, or the map is not written in this dimension). */
+            NO_MAP,
+            /** This session cannot ask (terrain download is off, or an older server dialect). */
+            UNAVAILABLE
+        }
+    }
+
+    /** The Fill Map button and {@code /lss fillmap}. Main client thread. */
+    public MapFillRequest requestMapFill() {
+        if (!this.acquisitionActive || this.sessionConfig == null
+                || this.sessionConfig.protocolVersion() != LSSConstants.PROTOCOL_VERSION) {
+            return new MapFillRequest(MapFillRequest.Outcome.UNAVAILABLE, 0);
+        }
+        if (!this.mapWritingProbe.getAsBoolean()) {
+            return new MapFillRequest(MapFillRequest.Outcome.NO_MAP, 0);
+        }
+        if (!this.mapFill.press()) {
+            return new MapFillRequest(MapFillRequest.Outcome.WAITING_FOR_CACHE, 0);
+        }
+        int owed = this.mapFill.owedInRange(this.lastChunkX, this.lastChunkZ, this.lastViewDistance,
+                this.scanner.getEffectiveLodDistance());
+        if (owed == 0) {
+            // Nothing to ask from here. The request stands only if this cache owes the map
+            // terrain elsewhere.
+            this.mapFill.nothingHere();
+            return new MapFillRequest(MapFillRequest.Outcome.NOTHING_OWED, 0);
+        }
+        return new MapFillRequest(MapFillRequest.Outcome.STARTED, owed);
+    }
+
+    /** A fill can ask: this session downloads terrain in the current dialect and a map is
+     *  being written. */
+    private boolean mapFillPossible() {
+        return this.acquisitionActive && this.sessionConfig != null
+                && this.sessionConfig.protocolVersion() == LSSConstants.PROTOCOL_VERSION
+                && this.mapWritingProbe.getAsBoolean();
+    }
+
+    private int appendMapFill(int walked, int playerCx, int playerCz, int viewDistance) {
+        this.mapFill.onScan();
+        if (!this.mapFill.requested()) return 0;
+        int picked = this.mapFill.append(this.sendPositionBuffer, this.sendTimestampBuffer, walked,
+                this.scanner.getLastBudget(), playerCx, playerCz, viewDistance,
+                this.scanner.getEffectiveLodDistance(), mapFillPossible());
+        var finish = this.mapFill.pollFinish();
+        if (finish != null) {
+            mapFillLine(finish.unfilled() > 0 ? "lss.mapfill.finished.partial" : "lss.mapfill.finished",
+                    finish.delivered(), finish.unfilled());
+        }
+        return picked;
+    }
+
+    /** Once per dimension entry, when a map is being written: say what it is owed, or that
+     *  a fill asked for earlier goes on. */
+    private void announceMapDebt(int playerCx, int playerCz, int viewDistance) {
+        this.lastViewDistance = viewDistance;
+        var stall = this.mapFill.pollStall();
+        if (stall != null) mapFillLine("lss.mapfill.stalled", stall.notWritten(), stall.delivered());
+        if (this.pendingCacheLoad != null || !mapFillPossible() || !this.mapFill.pollAnnounce()) return;
+        int owed = this.mapFill.owedInRange(playerCx, playerCz, viewDistance,
+                this.scanner.getEffectiveLodDistance());
+        if (this.mapFill.requested()) {
+            if (owed > 0) {
+                mapFillLine("lss.mapfill.resumed", owed);
+                this.mapFill.noteResumeAnnounced();
+            }
+        } else if (owed >= MapFill.HINT_MINIMUM && !this.mapFill.hinted()) {
+            mapFillLine("lss.mapfill.owed", owed, dev.vox.lss.common.Brand.clientCommand());
+            this.mapFill.noteHinted();
+        }
+    }
+
+    private void mapFillLine(String key, Object... args) {
+        this.mapFillNotice.accept(net.minecraft.network.chat.Component
+                .literal("[" + dev.vox.lss.common.Brand.shortName() + "] ")
+                .append(net.minecraft.network.chat.Component.translatable(key, args))
+                .withStyle(net.minecraft.ChatFormatting.GRAY));
+    }
+
+    private int lastViewDistance;
+
+    /** See {@link MapFill#isFillAnswer}; also never while an earlier delivery of the column
+     *  is still on its way to the consumers, and only while a map takes it. */
+    boolean isMapFillAnswer(long packed, ResourceKey<Level> dimension, long arrivingStamp) {
+        return isMapFillAsked(packed, dimension)
+                && this.latestPendingDelivery.get(packed) == null
+                && this.mapFill.isFillAnswer(packed, arrivingStamp)
+                && this.mapWritingProbe.getAsBoolean();
+    }
+
+    /** The column was asked for the map and is still owed (see {@link MapFill#isFillAsked}). */
+    boolean isMapFillAsked(long packed, ResourceKey<Level> dimension) {
+        return dimension.equals(this.lastDimension) && this.mapFill.isFillAsked(packed);
+    }
+
+    /**
+     * A fill's answer arrived (see {@link #isMapFillAnswer}): the map alone takes it, so
+     * nothing about the column held changes, not its stamp either (the server's stamp for
+     * the same content may differ from the one held). The same guards as
+     * {@link #onColumnReceived}.
+     *
+     * @return false for the out-of-range drop: the caller then skips the dispatch too
+     */
+    boolean onMapOnlyColumn(long packed, ResourceKey<Level> dimension) {
+        if (this.lastDimension != null && !this.lastDimension.equals(dimension)) return true;
+        if (PositionUtil.isOutOfRange(packed, this.lastChunkX, this.lastChunkZ,
+                this.scanner.getPruneDistance())) {
+            return false;
+        }
+        if (ClientTraceLog.enabled()) {
+            ClientTraceLog.event("col_map", "\"pos\":[" + PositionUtil.unpackX(packed) + ","
+                    + PositionUtil.unpackZ(packed) + "]");
+        }
+        this.tracker.removeByPosition(packed);
+        this.mapFill.onMapOnlyReceived(packed);
+        // A change notice that crossed this request marks the held column for a request of
+        // its own (as for every terminal answer): the map then gets the change with everyone.
+        consumeStaleCrossing(packed);
+        this.metrics.recordColumnReceived(packed, System.currentTimeMillis());
+        return true;
+    }
+
+    boolean isMapOwed(long packed) {
+        return this.columns.isMapOwed(packed);
+    }
+
+    /** Held columns no map has been given (this dimension, in memory). */
+    public int getMapOwedColumns() {
+        return this.columns.mapOwedCount();
+    }
+
+    public long getMapFillDelivered() {
+        return this.mapFill.delivered();
+    }
+
+    /** The {@code Map fill:} diag line, or null when there is nothing to say: no fill was
+     *  asked for and no map is being written that is owed anything. */
+    public String mapFillDiagLine() {
+        int owed = this.columns.mapOwedCount();
+        boolean filling = this.mapFill.working();
+        if (!filling && this.mapFill.delivered() == 0 && (owed == 0 || !this.mapWritingProbe.getAsBoolean())) {
+            return null;
+        }
+        return "Map fill: owed=" + owed + ", unknown=" + this.columns.mapUnknownCount()
+                + ", filling=" + filling + ", asked_for=" + this.mapFill.requested()
+                + ", delivered=" + this.mapFill.delivered()
+                + ", without_data=" + this.mapFill.withoutData() + ", failed=" + this.mapFill.failed()
+                + ", unwritten=" + this.mapFill.unwritten();
+    }
+
+    MapFill mapFillForTest() { return this.mapFill; }
+
+    /** The harness client's {@code map_fill} group (exported when a map mod is installed). */
+    public java.util.Map<String, Object> mapFillMetrics() {
+        var out = new java.util.LinkedHashMap<String, Object>();
+        out.put("owed", this.columns.mapOwedCount());
+        out.put("unknown", this.columns.mapUnknownCount());
+        out.put("requested", this.mapFill.requested());
+        out.put("working", this.mapFill.working());
+        out.put("pending", this.mapFill.pendingForTest());
+        out.put("delivered", this.mapFill.delivered());
+        out.put("without_data", this.mapFill.withoutData());
+        out.put("failed", this.mapFill.failed());
+        out.put("unwritten", this.mapFill.unwritten());
+        return out;
     }
 
     // --- Request sending and callbacks ---
@@ -905,6 +1183,8 @@ public class LodRequestManager {
         }
         this.tracker.removeByPosition(packed);
         this.columns.onReceived(packed, columnTimestamp);
+        // The map's debt is decided where the column arrives: owed unless a map takes it.
+        this.mapFill.onReceived(packed, this.mapWritingProbe.getAsBoolean());
         if (authoritativeClear) this.columns.markAuthoritativeClear(packed, preClearStamp);
         consumeStaleCrossing(packed); // a dirty that crossed this in-flight first serve forces a re-request
         this.metrics.recordColumnReceived(packed, System.currentTimeMillis()); // RTT sample + counter
@@ -1145,6 +1425,23 @@ public class LodRequestManager {
         return this.columns.ingestParkedCount();
     }
 
+    /**
+     * A map backend dropped a column and names no delivery (JourneyMap's replay after a
+     * late world id reports the renders it no longer holds). If the column's last delivery
+     * went to the map alone, every other consumer holds it: the stamp stands and the debt
+     * returns. Anything else is an ingest failure like any other. Only the map backends
+     * come through here: a report without a handle from another consumer (Voxy, another
+     * mod's reader) is always an ingest failure, or its hole would keep a false stamp.
+     */
+    public void onMapDrop(ResourceKey<Level> dimension, long packed) {
+        if (this.lastDimension != null && this.lastDimension.equals(dimension) && this.mapFill.wasMapOnly(packed)) {
+            this.tracker.removeByPosition(packed);
+            this.mapFill.onMapOnlyFailed(packed);
+            return;
+        }
+        onIngestFailure(dimension, packed);
+    }
+
     public void onIngestFailure(ResourceKey<Level> dimension, long packed) {
         if (this.lastDimension == null || !this.lastDimension.equals(dimension)) {
             // A report for another dimension (a consumer rejected asynchronously after the
@@ -1194,6 +1491,7 @@ public class LodRequestManager {
         }
         this.tracker.removeByPosition(packed);
         this.metrics.discardRttStamp(packed); // terminal non-column answer: the RTT stamp is dead
+        this.mapFill.onAnsweredWithoutData(packed, true); // a fill's request the server cannot serve: the debt is dropped
         if (v16TransientNotGenerated() && this.columns.timestampFor(packed) <= 0) {
             // Legacy-server transient miss on a FIRST-SERVE position (stamp <=0, which Tier B
             // rewrote to a generate trigger and the old server bounced on a full gen slot): leave
@@ -1235,6 +1533,27 @@ public class LodRequestManager {
         }
         this.tracker.removeByPosition(packed);
         this.metrics.discardRttStamp(packed); // terminal non-column answer: the RTT stamp is dead
+        // Only while the scan has no question of its own open for this column: an answer to
+        // the scan's question (a stamp to validate, a change announced) is the scan's, also
+        // when the fill asked for the same column a moment ago.
+        var noData = this.columns.classify(packed) == ColumnStateMap.SATISFIED
+                ? this.mapFill.onAnsweredWithoutData(packed, false) : MapFill.NoData.NOT_ASKED;
+        if (noData != MapFill.NoData.NOT_ASKED) {
+            // A fill asked for this column as "I hold nothing". "Up to date" to that means
+            // the server has nothing to send: the column is air now. It answers the
+            // request, not the stamp this client holds, so it never validates the held
+            // column; and the first such answer is not believed (it may have been meant
+            // for a question the scan asked earlier): the fill asks once more. When it is
+            // believed, the debt is dropped and the held stamp is asked about instead (the
+            // server then sends the clear, or confirms the stamp).
+            if (noData == MapFill.NoData.DROPPED && this.columns.markDirtyIfKnown(packed)) {
+                this.scanner.reopenRing(Math.max(
+                        Math.abs(PositionUtil.unpackX(packed) - this.lastChunkX),
+                        Math.abs(PositionUtil.unpackZ(packed) - this.lastChunkZ)));
+            }
+            this.metrics.recordUpToDate();
+            return;
+        }
         this.columns.onUpToDate(packed);
         consumeStaleCrossing(packed); // a dirty that crossed this in-flight first serve forces a re-request
         this.metrics.recordUpToDate();
@@ -1278,6 +1597,7 @@ public class LodRequestManager {
         this.deliveryVersions.clear();
         this.cancelledDuringCacheLoad.clear();
         this.columns.clear();
+        this.mapFill.reset();
         this.tracker.clear();
         this.metrics.reset();
     }
@@ -1332,9 +1652,15 @@ public class LodRequestManager {
         // is DETACHED into the save — no render-thread copy — which resets the per-column
         // map. Both callers (onDimensionChange, the session-gate teardown) clear or drop
         // this manager immediately after, so the reset replaces a copy-then-discard.
-        if (!this.columns.isEmptyMap() || this.columns.hasPersistentRemovals()) {
+        // And a session that holds nothing here any more (the player moved on) but settled
+        // debts of columns the cache file holds, or in which the player asked for a fill,
+        // must still tell the record.
+        if (!this.columns.isEmptyMap() || this.columns.hasPersistentRemovals() || this.columns.hasMapSettled()
+                || this.mapFill.pressed()) {
+            var state = this.columns.detachForSave();
+            state.mapDebt = this.mapFill.forSave();
             ColumnCacheStore.mergeSaveDetachedAsync(this.serverAddress, this.lastDimension,
-                    this.columns.detachForSave(), this.lastChunkX, this.lastChunkZ);
+                    state, this.lastChunkX, this.lastChunkZ);
         }
     }
 
@@ -1481,6 +1807,8 @@ public class LodRequestManager {
         this.failuresDuringCacheLoad.clear();
         this.dirtyDuringCacheLoad.clear();
         resetRequestState();
+        // The cleared cache holds nothing: no fill is asked for, and what arrives is recorded.
+        this.mapFill.onCacheLoaded(false, false);
         this.scanner.reset();
     }
 
@@ -1505,8 +1833,16 @@ public class LodRequestManager {
         this.pendingCacheLoad = future.thenApply(ColumnStateMap::buildLoaded);
     }
 
+    /** Inject a cache load as the cache store builds it (stamps and the map's record). */
+    void setPendingStateLoadForTest(CompletableFuture<ColumnStateMap.LoadedState> future) {
+        this.pendingCacheLoad = future;
+    }
+
     /** Skip the first-tick async cache load — tick-phase tests drive the gate explicitly. */
-    void markCacheLoadedForTest() { this.cacheLoaded = true; }
+    void markCacheLoadedForTest() {
+        this.cacheLoaded = true;
+        this.mapFill.onCacheLoaded(false, false); // as an empty cache loads
+    }
 
     // --- Public getters ---
 

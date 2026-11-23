@@ -77,6 +77,29 @@ public final class ClientCommandActions {
                 client.getConnection() != null, client.hasSingleplayerServer());
     }
 
+    /** /lss fillmap, and the Fill Map button: have the server send again, for the map alone,
+     *  the terrain that was downloaded while no map was being written (issue #380). */
+    public static void fillMap(Consumer<Component> feedback) {
+        fillMap(feedback, ClientNetGlue.getRequestManager());
+    }
+
+    /** Package-private: the unit tests pass a manager. */
+    static void fillMap(Consumer<Component> feedback, LodRequestManager manager) {
+        feedback.accept(fillMapLine(manager == null ? null : manager.requestMapFill()));
+    }
+
+    /** What a Fill Map request did, as the line the player reads ({@code null}: no session). */
+    static Component fillMapLine(LodRequestManager.MapFillRequest request) {
+        if (request == null) return Component.translatable("lss.mapfill.unavailable");
+        return switch (request.outcome()) {
+            case STARTED -> Component.translatable("lss.mapfill.started", request.columns());
+            case WAITING_FOR_CACHE -> Component.translatable("lss.mapfill.waiting");
+            case NOTHING_OWED -> Component.translatable("lss.mapfill.nothing");
+            case NO_MAP -> Component.translatable("lss.mapfill.no_map");
+            case UNAVAILABLE -> Component.translatable("lss.mapfill.unavailable");
+        };
+    }
+
     /** /lss clearcache, and the Re-download Terrain button. */
     public static void clearCache(Consumer<Component> feedback) {
         clearCache(feedback, ClientNetGlue.getRequestManager());
@@ -277,6 +300,10 @@ public final class ClientCommandActions {
         return literal.apply(root)
                 .then(literal.apply("clearcache").executes(context -> {
                     clearCache(feedback.apply(context.getSource()));
+                    return Command.SINGLE_SUCCESS;
+                }))
+                .then(literal.apply("fillmap").executes(context -> {
+                    fillMap(feedback.apply(context.getSource()));
                     return Command.SINGLE_SUCCESS;
                 }))
                 // Issue #4: the reset subtree (incl. `voxy-force`) is built once, here.
@@ -492,6 +519,12 @@ public final class ClientCommandActions {
         var journeyMapLine = details.journeyMapDiagLine();
         if (journeyMapLine != null) {
             feedback.accept(Component.literal(journeyMapLine).withStyle(ChatFormatting.GRAY));
+        }
+        // Map fill (issue #380, conditional): what a map that is being written is owed,
+        // and how far a fill has come.
+        var mapFillLine = details.mapFillDiagLine();
+        if (mapFillLine != null) {
+            feedback.accept(Component.literal(mapFillLine).withStyle(ChatFormatting.GRAY));
         }
     }
 }
