@@ -6,7 +6,7 @@ tool takes `--version` and reads the rest from the tags.
 
 | Tool | What it does |
 | --- | --- |
-| `gate.sh <worktree>` | The local release gate for one line: catalog checks, the full Gradle build with gametests on a private display, `release_check.py`, artifact checks, the cross-line check and the Python suites. Keeps every step's log, the JUnit totals and the built jars. |
+| `gate.sh <worktree>` | The local release gate for one line: catalog checks, the full Gradle build with gametests on a private display, `release_check.py`, artifact checks, the cross-line check, the settings inventory and reference checks, and the Python suites. Keeps every step's log, the JUnit totals and the built jars. |
 | `gate-locked.sh <worktree>` | The same, holding the shared harness lock. Use it whenever anything else may be building. |
 | `tag_chain.sh <version>` | Pushes the tags one at a time, oldest line first and the Latest line last; watches each release run and verifies it before the next. |
 | `verify_lss.py --version V <line>` | Checks a published line: GitHub release, Modrinth versions, and that the published jars equal the gated ones entry by entry. |

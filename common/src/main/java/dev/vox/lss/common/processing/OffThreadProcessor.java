@@ -5,6 +5,7 @@ import dev.vox.lss.common.Brand;
 import dev.vox.lss.common.LSSLogger;
 import dev.vox.lss.common.PositionUtil;
 import dev.vox.lss.common.voxel.ColumnTimestampCache;
+import it.unimi.dsi.fastutil.longs.Long2IntOpenHashMap;
 import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
 
 import java.nio.file.Path;
@@ -85,7 +86,19 @@ public abstract class OffThreadProcessor<PlayerState extends AbstractPlayerReque
     private final AbstractChunkDiskReader diskReader;
     private final SendActionBatcher sendActionBatcher = new SendActionBatcher();
 
+    /** Whether a miss may become a generation ticket right now: what the settings say
+     *  ({@link #policyGeneration}), unless the disk is nearly full ({@link #diskHold}). */
     private boolean generationAvailable;
+    /** {@code generation.enabled} as last adopted from the settings. */
+    private boolean policyGeneration;
+    /** Low disk holds generation exactly as {@code generation.enabled: false} would.
+     *  Volatile only for the test seam that swaps it in after start. */
+    private volatile DiskSpaceHold diskHold;
+    /** The hold as the platforms read it, to tell clients generation is off or on again.
+     *  Written after the switch above has been applied. */
+    private volatile boolean generationHeldForDisk;
+    /** Where generation is allowed (the world borders), published by the server thread. */
+    private volatile GenerationBounds generationBounds = GenerationBounds.NONE;
     private volatile long adoptedSettingsRevision;
     private final java.util.concurrent.atomic.AtomicBoolean settingsStopped = new java.util.concurrent.atomic.AtomicBoolean();
     private record PolicyUpdate(boolean generation, long cacheBytes, long missTtlNanos, long revision,
@@ -114,23 +127,85 @@ public abstract class OffThreadProcessor<PlayerState extends AbstractPlayerReque
             try {
                 if (settingsStopped.get() || update.revision() < adoptedSettingsRevision)
                     throw new java.util.concurrent.CancellationException("Settings policy superseded or stopped");
-                if (update.generation() && !generationAvailable) {
-                    for (var state : players.values()) state.resetGenerationPolicyTerminals();
-                    // Outcomes admitted before the refresh may drain, but cannot issue a
-                    // permanent failure or publish a done bit into the refreshed session.
-                    for (var entry : generationInFlight.entrySet())
-                        for (var dimension : entry.getValue().entrySet())
-                            generationStale.computeIfAbsent(entry.getKey(), k -> new HashMap<>())
-                                    .computeIfAbsent(dimension.getKey(), k -> new LongOpenHashSet())
-                                    .addAll(dimension.getValue());
-                }
-                generationAvailable = update.generation();
-                requestRouter.updateGenerationPolicy(update.generation());
+                policyGeneration = update.generation();
+                applyGenerationAvailability(policyGeneration && !diskHold.held());
                 timestampCache.adoptPolicy(update.cacheBytes(), update.missTtlNanos());
                 adoptedSettingsRevision = update.revision();
                 update.receipt().complete(null);
             } catch (Throwable failure) { update.receipt().completeExceptionally(failure); }
         }
+    }
+
+    /** The one switch for "may a miss become a ticket": the settings reload and the disk
+     *  hold both go through it, so a hold that ends revives sessions exactly as turning
+     *  {@code generation.enabled} back on does. */
+    private void applyGenerationAvailability(boolean available) {
+        if (available && !generationAvailable) {
+            for (var state : players.values()) state.resetGenerationPolicyTerminals();
+            // Outcomes admitted before the refresh may drain, but cannot issue a
+            // permanent failure or publish a done bit into the refreshed session.
+            for (var entry : generationInFlight.entrySet())
+                for (var dimension : entry.getValue().entrySet())
+                    generationStale.computeIfAbsent(entry.getKey(), k -> new HashMap<>())
+                            .computeIfAbsent(dimension.getKey(), k -> new LongOpenHashSet())
+                            .addAll(dimension.getValue());
+        }
+        generationAvailable = available;
+        requestRouter.updateGenerationPolicy(available);
+    }
+
+    /** Reads the free disk space when a reading is due and starts or ends the hold. */
+    private void pollDiskHold() {
+        DiskSpaceHold hold = this.diskHold;
+        boolean changed = hold.poll(System.nanoTime());
+        boolean held = hold.held();
+        // Compared with what was last applied, not only with the hold's own last state: a
+        // hold that was swapped (the test seam) is brought in line at its next reading.
+        if (!changed && held == this.generationHeldForDisk) {
+            return;
+        }
+        long freeMb = hold.lastReadingBytes() >> 20;
+        applyGenerationAvailability(this.policyGeneration && !held);
+        this.generationHeldForDisk = held;
+        if (held) {
+            LSSLogger.warn("Terrain generation for distant terrain is on hold: only " + freeMb
+                    + " MB free on the world's disk (it resumes at "
+                    + (DiskSpaceHold.RELEASE_AT_BYTES >> 20) + " MB). Terrain that already exists"
+                    + " is still served. Free some space to resume. The floor is"
+                    + " -Dlss.lowDiskHoldMiB (default 2048; 0 turns the hold off).");
+        } else {
+            LSSLogger.info("Terrain generation for distant terrain resumed: " + freeMb
+                    + " MB free on the world's disk.");
+        }
+    }
+
+    /** True while low disk space holds generation. Any thread. */
+    public boolean generationHeldForDisk() {
+        return this.generationHeldForDisk;
+    }
+
+    /** Server thread: where generation is allowed now. Pass {@link GenerationBounds#NONE}
+     *  to lift the rule. */
+    public void publishGenerationBounds(GenerationBounds bounds) {
+        this.generationBounds = bounds == null ? GenerationBounds.NONE : bounds;
+    }
+
+    /** Whether a miss at this position may be generated (inside the world border, or the
+     *  rule is off). The processing thread asks it for every miss and the router for its
+     *  memo rung; any thread may read it. */
+    public boolean generationAllowedAt(String dimension, int cx, int cz) {
+        return this.generationBounds.allows(dimension, cx, cz);
+    }
+
+    /** Test seam: the disk reading. */
+    public void setDiskSpaceHoldForTest(DiskSpaceHold hold) {
+        this.diskHold = hold;
+    }
+
+    /** What the Generation line of the diag adds: refusals at the border and the hold. */
+    public String generationBoundsDiag() {
+        return ", outside_border=" + this.ctx.diagnostics().getTotalGenRefusedOutsideBorder()
+                + (this.generationHeldForDisk ? ", ON HOLD: low disk" : "");
     }
 
     private void cancelSettingsPolicies() {
@@ -303,11 +378,15 @@ public abstract class OffThreadProcessor<PlayerState extends AbstractPlayerReque
         this.players = players;
         this.diskReader = diskReader;
         this.generationAvailable = generationAvailable;
+        this.policyGeneration = generationAvailable;
         // normalize(): both platforms derive this from getWorldPath(LevelResource.ROOT), which
         // ends in "/." and otherwise prints as "./world/./data/..." in every cache log line (#32)
         this.dataDir = dataDir == null ? null : dataDir.normalize();
         this.saveScheduler = this.dataDir == null ? null
                 : new TimestampSaveScheduler(this.saveExecutor, this.dataDir);
+        // The data directory is inside the world folder: its volume is the one generated
+        // chunks land on. No directory (test rigs) never holds.
+        this.diskHold = DiskSpaceHold.forDirectory(this.dataDir);
         this.timestampCache = new ColumnTimestampCache(
                 perDimensionTimestampCacheSizeMB * 1024L * 1024L,
                 java.util.concurrent.TimeUnit.SECONDS.toNanos(
@@ -764,6 +843,7 @@ public abstract class OffThreadProcessor<PlayerState extends AbstractPlayerReque
     private void processingLoop() {
         while (true) {
             adoptSettingsPolicies();
+            pollDiskHold();
             MailboxTake take;
             synchronized (this.mailboxLock) {
                 while (this.pendingSnapshot == null && this.settingsUpdates.isEmpty()) {
@@ -1636,6 +1716,33 @@ public abstract class OffThreadProcessor<PlayerState extends AbstractPlayerReque
             this.ctx.sendActions().add(new SendAction.ColumnNotGenerated(playerUuid, packed, state));
             return;
         }
+        if (this.generationAvailable && !generationAllowedAt(dimension, cx, cz)) {
+            // Wholly outside the world border (0.24.0 plan §2): LSS does not grow a world
+            // past the limit its operator set. Before the memo write, like the
+            // generation-off branch below, and the same answer.
+            if (!authoritativeMiss) {
+                // A read that failed, timed out or was overtaken by an edit says nothing
+                // about whether the chunk exists. Inside the border such a miss goes on to
+                // generation, which loads the chunk if it is there; here that road is
+                // closed, so it takes the transient drop and the next declaration reads
+                // again. Never the permanent answer off a read that proved nothing...
+                if (!staleAgainstEdit && unreadableOutsideBorder(dimension, packed)) {
+                    // ...unless it fails every time: a chunk that cannot be read and may
+                    // not be generated is one this server cannot serve. Without this end a
+                    // region entry that throws would be read again at every declaration of
+                    // every player in range, for as long as they stay.
+                    this.ctx.diagnostics().addGenRefusedOutsideBorder(1);
+                    this.ctx.sendActions().add(new SendAction.ColumnNotGenerated(playerUuid, packed, state));
+                    return;
+                }
+                this.ctx.diagnostics().addSuperseded(1);
+                this.ctx.diagnostics().addMissDropped(1); // law A5: a miss with no submit, no answer
+                return;
+            }
+            this.ctx.diagnostics().addGenRefusedOutsideBorder(1);
+            this.ctx.sendActions().add(new SendAction.ColumnNotGenerated(playerUuid, packed, state));
+            return;
+        }
         if (authoritativeMiss && this.generationAvailable) {
             // Memoize the miss BEFORE the gen ladder runs — a gated or slot-full drop still
             // learned the chunk is absent, and the memo is what stops the next 1 Hz
@@ -1655,6 +1762,31 @@ public abstract class OffThreadProcessor<PlayerState extends AbstractPlayerReque
         }
         escalateMissToGeneration(playerUuid, state, packed, cx, cz, pending.clientTimestamp(),
                 dimension, "miss");
+    }
+
+    /** How often in a row a read outside the border may fail before it is answered. */
+    static final int UNREADABLE_OUTSIDE_BORDER_TRIES = 3;
+    private static final int UNREADABLE_OUTSIDE_BORDER_CAP = 4096;
+    private static final long UNREADABLE_OUTSIDE_BORDER_FORGET_NANOS = 600_000_000_000L; // 10 min
+
+    /** Failed reads outside the world border, by position. Small and short-lived: emptied
+     *  when full and every ten minutes, so an old failure cannot count against a chunk
+     *  that reads again. Processing thread only. */
+    private final Long2IntOpenHashMap unreadableOutsideBorder = new Long2IntOpenHashMap();
+    private long unreadableOutsideBorderSince;
+
+    /** Counts one failed read outside the border; true from the third for a position. */
+    private boolean unreadableOutsideBorder(String dimension, long packed) {
+        long now = System.nanoTime();
+        if (this.unreadableOutsideBorder.isEmpty()) {
+            this.unreadableOutsideBorderSince = now;
+        } else if (this.unreadableOutsideBorder.size() >= UNREADABLE_OUTSIDE_BORDER_CAP
+                || now - this.unreadableOutsideBorderSince > UNREADABLE_OUTSIDE_BORDER_FORGET_NANOS) {
+            this.unreadableOutsideBorder.clear();
+            this.unreadableOutsideBorderSince = now;
+        }
+        long key = packed ^ (dimension.hashCode() * 0x9E3779B97F4A7C15L);
+        return this.unreadableOutsideBorder.addTo(key, 1) + 1 >= UNREADABLE_OUTSIDE_BORDER_TRIES;
     }
 
     /** Admission-order diagnosis (-Dlss.admissionTrace=true, dev servers only — see

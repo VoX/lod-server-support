@@ -393,6 +393,15 @@ public final class ClientCommandActions {
         if (lightLine != null) {
             feedback.accept(Component.literal(lightLine).withStyle(ChatFormatting.GRAY));
         }
+        // Voxy light line (conditional): what reached Voxy without sky light, and what the
+        // border fill is holding back until its sky light can be read (issue #429). Zero
+        // everywhere means the terrain was lit when it was handed over.
+        String voxyLight = dev.vox.lss.compat.VoxyLightStats.diagLineOrNull(
+                details.getVoxySectionsWithoutSky(), details.getBorderFillSkyHolds(),
+                details.getBorderFillSkyWaiting(), details.getBorderFillSkyOldestWaitMs());
+        if (voxyLight != null) {
+            feedback.accept(Component.literal(voxyLight).withStyle(ChatFormatting.GRAY));
+        }
 
         // Responses line
         feedback.accept(Component.literal(String.format(

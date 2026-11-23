@@ -8,6 +8,19 @@ import java.util.function.Function;
 
 /** Authoritative path/type/default/timing metadata, independent of Minecraft and UI widgets. */
 public final class SettingsSchema<T> {
+    /**
+     * Server keys the templates carry as a comment only, with the default the schema gives
+     * them. A version that does not know a key refuses a file that has it (decision 0009),
+     * so a file this version creates, or a migration writes, must not contain these until
+     * an operator sets one. Path, then the legacy JSON name a migration looks for.
+     */
+    static final Map<String, Object> COMMENTED_SERVER_KEYS = Map.of(
+            "service.show_permission_refusal", true,
+            "generation.outside_world_border", false);
+    static final Map<String, String> COMMENTED_SERVER_LEGACY_NAMES = Map.of(
+            "service.show_permission_refusal", "showPermissionRefusal",
+            "generation.outside_world_border", "generateOutsideWorldBorder");
+
     public enum Timing { H, S, R }
     public enum Platform { ALL, MOD, PAPER }
     public enum Kind { BOOLEAN, INTEGER, NUMBER, STRING, STRING_LIST, STRING_GROUPS, STRING_MAP, INTEGER_MAP }
@@ -58,7 +71,7 @@ public final class SettingsSchema<T> {
             // Not in the server templates (a commented line there): a file this version creates
             // must still load on 0.22.0. Default on (VoX, 2026-11-13, plan §8.1): a player the
             // permission gate leaves out is told, so they stop debugging their own setup.
-            if (!client && raw==null && spec.path().equals("service.show_permission_refusal")) raw=true;
+            if (!client && raw==null && COMMENTED_SERVER_KEYS.containsKey(spec.path())) raw=COMMENTED_SERVER_KEYS.get(spec.path());
             if (paper && spec.path().equals("storage.lod_store.resweep_interval_seconds")) raw=300;
             Object value=typed(spec,raw);
             defs.put(spec.path(),value);
@@ -73,6 +86,8 @@ public final class SettingsSchema<T> {
                 case "far_players.extend_far_plane" -> "Draw far players past the game's far clipping plane, out to the farthest far player; it only acts while an LOD mod such as Voxy is drawing and not while a shader pack is on, and fog can still hide very distant players (turn off the LOD mod's fog).";
                 default -> "";
             };
+            if (!client && spec.path().equals("generation.outside_world_border"))
+                inline="[restart] Also generate terrain that lies wholly outside the world border; false (the default) = distant terrain is generated up to the border only, and beyond it only terrain that already exists is shown.";
             if (!client && spec.path().equals("service.show_permission_refusal"))
                 inline="With require_permission on, a player without the permission is told \"distant terrain here needs a permission you don't have\" (the default); false = they see the general \"switched off here\". Courtesy, not secrecy: a player can compare with a friend.";
             if (inline.isEmpty()) inline=inlineComment(resource("server"),spec.path());

@@ -367,12 +367,19 @@ public final class StoreBackfill {
                 // unmarked, so freeing space and restarting resumes here. (v0.9.0
                 // review — nothing in the codebase consulted free space at all.)
                 long usable = usableSpaceBytes();
-                if (usable >= 0 && usable < MIN_FREE_SPACE_BYTES) {
-                    this.statusLine = "stopped: low disk (" + (usable >> 20) + " MB free), "
+                // Also while the store itself refuses deposits for low disk: its hold ends
+                // at a higher mark than this floor, and a walk through that gap would read
+                // and serialize every column for a deposit that is dropped.
+                boolean belowFloor = usable >= 0 && usable < MIN_FREE_SPACE_BYTES;
+                if (belowFloor || this.store.depositsHeldForDisk()) {
+                    String why = belowFloor ? (usable >> 20) + " MB free" : "the store is refusing new rows";
+                    this.statusLine = "stopped: low disk (" + why + "), "
                             + regionsDone + " regions done, " + (plan.size() - ri) + " unwalked";
-                    LSSLogger.warn("Store backfill stopped — only " + (usable >> 20)
-                            + " MB free on the store volume (floor "
-                            + (MIN_FREE_SPACE_BYTES >> 20) + " MB). " + (plan.size() - ri)
+                    LSSLogger.warn("Store backfill stopped — " + (belowFloor
+                            ? "only " + (usable >> 20) + " MB free on the store volume (floor "
+                                    + (MIN_FREE_SPACE_BYTES >> 20) + " MB). "
+                            : "the store is refusing new rows until more disk space is free. ")
+                            + (plan.size() - ri)
                             + " regions left unwalked; they resume once space is freed. "
                             + "Set storage.lod_store.max_size_mib and reload to bound the store, or disable storage.lod_store.enabled and restart.");
                     return;

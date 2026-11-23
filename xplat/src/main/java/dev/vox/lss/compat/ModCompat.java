@@ -59,6 +59,7 @@ public final class ModCompat {
     }
 
     public static void onDisconnect() {
+        VoxyLightStats.reset();
         VoxyCompat.retireVanillaBorder();
         XaeroMapCompat.onDisconnect();
         if (journeyMapLoaded) JourneyMapCompat.onDisconnect();
