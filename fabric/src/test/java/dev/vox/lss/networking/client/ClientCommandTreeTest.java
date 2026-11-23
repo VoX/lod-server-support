@@ -36,7 +36,7 @@ class ClientCommandTreeTest {
         var dispatcher = new CommandDispatcher<Object>();
         dispatcher.register(tree("vss"));
         dispatcher.register(tree("lss"));
-        var expected = Set.of("clearcache", "reset", "reload", "status", "diagnostics", "diag", "trace");
+        var expected = Set.of("clearcache", "fillmap", "reset", "reload", "status", "diagnostics", "diag", "trace");
         for (String root : List.of("vss", "lss")) {
             var children = dispatcher.getRoot().getChild(root).getChildren().stream()
                     .map(node -> node.getName()).collect(Collectors.toSet());

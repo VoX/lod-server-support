@@ -174,8 +174,214 @@ public class ColumnCacheStore {
     static CompletableFuture<ColumnStateMap.LoadedState> loadStateAsync(
             String serverAddress, ResourceKey<Level> dimension) {
         boolean ignoreMapOnly = !mapOnlyProbe.getAsBoolean();
-        return CompletableFuture.supplyAsync(
-                () -> ColumnStateMap.buildLoaded(load(serverAddress, dimension, ignoreMapOnly)), IO_EXECUTOR);
+        return CompletableFuture.supplyAsync(() -> loadState(serverAddress, dimension, ignoreMapOnly), IO_EXECUTOR);
+    }
+
+    /** IO-thread body of {@link #loadStateAsync}; package-visible so tests can run it inline. */
+    static ColumnStateMap.LoadedState loadState(String serverAddress, ResourceKey<Level> dimension,
+                                                boolean ignoreMapOnly) {
+        var stamps = load(serverAddress, dimension, ignoreMapOnly);
+        var state = ColumnStateMap.buildLoaded(stamps);
+        if (stamps.isEmpty()) return state; // nothing held: nothing owed and nothing unknown
+        // Never let the record cost the stamps: whatever goes wrong reading it, the cache
+        // loads, and its columns have an unknown history.
+        MapOwedFile record = null;
+        try {
+            record = loadMapOwed(serverAddress, dimension);
+        } catch (RuntimeException e) {
+            LSSLogger.warn("The map record for " + dimensionKey(dimension) + " could not be read; ignoring it", e);
+        }
+        if (record == null) {
+            ColumnStateMap.applyMapRecord(state, null, null);
+            return state;
+        }
+        state.mapFillRequested = record.fillRequested();
+        state.mapHinted = record.hinted();
+        ColumnStateMap.applyMapRecord(state, record.known(), record.owed());
+        return state;
+    }
+
+    // ---- The map's debt (issue #380): <dimension>.mapowed beside the cache file ----
+    //
+    // Per 8x8 leaf of the column map, two 64-bit masks: the columns this record KNOWS
+    // about, and which of those no map has been given. A column the cache file holds and
+    // the record does not know (the whole file, for a cache from before the record; the
+    // columns another version added; the columns of a save that was cut short) has an
+    // unknown history, which is never read as "the map has it". Half a byte per column.
+    // A file of its own so the cache file's format does not change and older versions
+    // keep reading it; they ignore this one. It sits flat in the bucket, so a bucket clear
+    // deletes it and an adoption moves it.
+
+    private static final int MAP_OWED_MAGIC = 0x4C534D4F; // "LSMO"
+    private static final int MAP_OWED_VERSION = 1;
+    private static final int MAP_OWED_FILL_REQUESTED = 1;
+    private static final int MAP_OWED_HINTED = 2;
+    /** Header: magic, version, flags, leaf count. A leaf: key, known mask, owed mask. */
+    private static final int MAP_OWED_HEADER_BYTES = 16;
+    private static final int MAP_OWED_LEAF_BYTES = 24;
+
+    /** The record on disk, by leaf key. {@code owed} is a subset of {@code known}. */
+    record MapOwedFile(boolean fillRequested, boolean hinted, Long2LongOpenHashMap known,
+                       Long2LongOpenHashMap owed) {}
+
+    /**
+     * What the saving session knows, by leaf key: its flags, which columns it holds at all
+     * ({@code present}), which of those the map is owed and which have an unknown history,
+     * and the debts it settled (also of columns it no longer holds). For the columns it
+     * holds it is the authority; for the rest of the file the record stands.
+     */
+    record MapDebtSave(ColumnStateMap.MapDebt flags, Long2LongOpenHashMap present, Long2LongOpenHashMap owed,
+                       Long2LongOpenHashMap unknown, Long2LongOpenHashMap settled) {}
+
+    static Path mapOwedFile(String serverAddress, ResourceKey<Level> dimension) {
+        return getServerDir(serverAddress).resolve(dimensionKey(dimension) + ".mapowed");
+    }
+
+    /** The record, or null when there is none or it cannot be read. */
+    static MapOwedFile loadMapOwed(String serverAddress, ResourceKey<Level> dimension) {
+        var file = mapOwedFile(serverAddress, dimension);
+        if (!Files.exists(file)) return null;
+        try (var in = new DataInputStream(new BufferedInputStream(Files.newInputStream(file), IO_BUFFER_BYTES))) {
+            int magic = in.readInt();
+            int version = in.readInt();
+            if (magic != MAP_OWED_MAGIC || version != MAP_OWED_VERSION) {
+                LSSLogger.info("Map record " + file + " is not one this version reads; ignoring it");
+                return null;
+            }
+            int flags = in.readInt();
+            int count = in.readInt();
+            // Bounded by what the file can hold AND by what a cache can: a corrupt count
+            // must not size the maps (the cache file's own bound, one leaf per column).
+            long plausible = Math.max(0, (Files.size(file) - MAP_OWED_HEADER_BYTES) / MAP_OWED_LEAF_BYTES);
+            if (count < 0 || count > plausible || count > MAX_CACHE_ENTRIES) {
+                LSSLogger.warn("Map record " + file + " has an invalid leaf count " + count + ", ignoring it");
+                return null;
+            }
+            var known = new Long2LongOpenHashMap(Math.max(16, count));
+            var owed = new Long2LongOpenHashMap();
+            for (int i = 0; i < count; i++) {
+                long key = in.readLong();
+                long knownMask = in.readLong();
+                long owedMask = in.readLong() & knownMask;
+                if (knownMask != 0) known.put(key, knownMask);
+                if (owedMask != 0) owed.put(key, owedMask);
+            }
+            return new MapOwedFile((flags & MAP_OWED_FILL_REQUESTED) != 0, (flags & MAP_OWED_HINTED) != 0,
+                    known, owed);
+        } catch (IOException e) {
+            LSSLogger.warn("Failed to read the map record " + file, e);
+            return null;
+        }
+    }
+
+    private static void writeMapOwed(String serverAddress, ResourceKey<Level> dimension, boolean fillRequested,
+                                     boolean hinted, Long2LongOpenHashMap known, Long2LongOpenHashMap owed) {
+        var file = mapOwedFile(serverAddress, dimension);
+        var tmpFile = file.resolveSibling(file.getFileName() + ".tmp");
+        try {
+            Files.createDirectories(file.getParent());
+            try (var out = new DataOutputStream(new BufferedOutputStream(
+                    Files.newOutputStream(tmpFile), IO_BUFFER_BYTES))) {
+                out.writeInt(MAP_OWED_MAGIC);
+                out.writeInt(MAP_OWED_VERSION);
+                out.writeInt((fillRequested ? MAP_OWED_FILL_REQUESTED : 0) | (hinted ? MAP_OWED_HINTED : 0));
+                out.writeInt(known.size());
+                for (var entry : known.long2LongEntrySet()) {
+                    out.writeLong(entry.getLongKey());
+                    out.writeLong(entry.getLongValue());
+                    out.writeLong(owed.get(entry.getLongKey()) & entry.getLongValue());
+                }
+            }
+            try {
+                Files.move(tmpFile, file, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
+            } catch (AtomicMoveNotSupportedException e) {
+                Files.move(tmpFile, file, StandardCopyOption.REPLACE_EXISTING);
+            }
+        } catch (IOException e) {
+            LSSLogger.warn("Failed to save the map record " + file, e);
+            try { Files.deleteIfExists(tmpFile); } catch (IOException e2) {
+                LSSLogger.warn("Failed to clean up temporary map record " + tmpFile, e2);
+            }
+        }
+    }
+
+    private static void setBit(Long2LongOpenHashMap masks, long packed) {
+        long key = ColumnStateMap.leafKeyFor(packed);
+        masks.put(key, masks.get(key) | (1L << ColumnStateMap.bitIndexFor(packed)));
+    }
+
+    private static void clearBit(Long2LongOpenHashMap masks, long packed) {
+        long key = ColumnStateMap.leafKeyFor(packed);
+        long mask = masks.get(key);
+        if (mask == 0) return;
+        mask &= ~(1L << ColumnStateMap.bitIndexFor(packed));
+        if (mask == 0) masks.remove(key); else masks.put(key, mask);
+    }
+
+    /** Keeps only the bits of columns {@code stamps} holds (a positive stamp). */
+    private static void retainHeld(Long2LongOpenHashMap masks, Long2LongOpenHashMap stamps) {
+        var iter = masks.long2LongEntrySet().fastIterator();
+        while (iter.hasNext()) {
+            var entry = iter.next();
+            long mask = entry.getLongValue();
+            for (long bits = mask; bits != 0; bits &= bits - 1) {
+                int bit = Long.numberOfTrailingZeros(bits);
+                if (stamps.get(ColumnStateMap.positionFor(entry.getLongKey(), bit)) <= 0) mask &= ~(1L << bit);
+            }
+            if (mask == 0) iter.remove(); else entry.setValue(mask);
+        }
+    }
+
+    // A debt that returns for a dimension the client has left (a map let go of a column
+    // after the dimension's state was saved): set in that dimension's record on the IO
+    // thread, coalesced like the removals below.
+    private static final HashMap<String, LongOpenHashSet> PENDING_OWED = new HashMap<>();
+
+    /** Marks a held column of a saved dimension as owed to the map. Any thread. */
+    public static void markMapOwedAsync(String serverAddress, ResourceKey<Level> dimension, long packed) {
+        String key = sanitizeForFilePath(serverAddress) + "/" + dimensionKey(dimension);
+        synchronized (REMOVAL_LOCK) {
+            var pending = PENDING_OWED.get(key);
+            if (pending != null) {
+                pending.add(packed);
+                return;
+            }
+            var fresh = new LongOpenHashSet();
+            fresh.add(packed);
+            PENDING_OWED.put(key, fresh);
+        }
+        IO_EXECUTOR.execute(() -> {
+            LongOpenHashSet batch;
+            synchronized (REMOVAL_LOCK) {
+                batch = PENDING_OWED.remove(key);
+            }
+            if (batch == null || batch.isEmpty()) return;
+            try {
+                applyMapOwed(serverAddress, dimension, batch);
+            } catch (RuntimeException e) {
+                LSSLogger.warn("Failed to update the map record for " + dimensionKey(dimension), e);
+            }
+        });
+    }
+
+    /** IO-thread body of {@link #markMapOwedAsync}; package-visible for inline tests. */
+    static void applyMapOwed(String serverAddress, ResourceKey<Level> dimension, LongOpenHashSet positions) {
+        var stamps = load(serverAddress, dimension);
+        if (stamps.isEmpty()) return;
+        var record = loadMapOwed(serverAddress, dimension);
+        var known = record == null ? new Long2LongOpenHashMap() : record.known();
+        var owed = record == null ? new Long2LongOpenHashMap() : record.owed();
+        boolean changed = false;
+        var iter = positions.iterator();
+        while (iter.hasNext()) {
+            long packed = iter.nextLong();
+            if (stamps.get(packed) <= 0) continue; // not held any more: nothing is owed
+            setBit(known, packed);
+            setBit(owed, packed);
+            changed = true;
+        }
+        // New debt: the flags stand, but the player is told again (see MapFill.hinted).
+        if (changed) writeMapOwed(serverAddress, dimension, record != null && record.fillRequested(), false, known, owed);
     }
 
     /** Test-only queue-a-plain-save helper (FIFO/flush ordering tests). NOT for production:
@@ -290,7 +496,19 @@ public class ColumnCacheStore {
         var overlay = new Long2LongOpenHashMap(Math.max(16, state.entries));
         overlay.defaultReturnValue(-1L);
         state.forEachPresent(overlay::put);
-        mergeSave(serverAddress, dimension, overlay, state.removals, centerCx, centerCz, mapOnly);
+        MapDebtSave debt = null;
+        if (state.mapDebt != null) {
+            var present = new Long2LongOpenHashMap();
+            var owed = new Long2LongOpenHashMap();
+            var unknown = new Long2LongOpenHashMap();
+            state.forEachLeafMasks((leafKey, presentMask, owedMask, unknownMask) -> {
+                present.put(leafKey, presentMask);
+                if (owedMask != 0) owed.put(leafKey, owedMask);
+                if (unknownMask != 0) unknown.put(leafKey, unknownMask);
+            });
+            debt = new MapDebtSave(state.mapDebt, present, owed, unknown, state.mapSettled);
+        }
+        mergeSave(serverAddress, dimension, overlay, state.removals, centerCx, centerCz, mapOnly, debt);
     }
 
     /** IO-thread body of {@link #mergeSaveAsync}; package-visible so tests can run it inline. */
@@ -304,6 +522,14 @@ public class ColumnCacheStore {
     static void mergeSave(String serverAddress, ResourceKey<Level> dimension,
                           Long2LongOpenHashMap columns, LongOpenHashSet removals,
                           int centerCx, int centerCz, boolean mapOnly) {
+        mergeSave(serverAddress, dimension, columns, removals, centerCx, centerCz, mapOnly, null);
+    }
+
+    /** @param debt the saving session's record of the map's debt; null leaves the record on
+     *              disk untouched (the forms above: tests and the plain cache paths) */
+    static void mergeSave(String serverAddress, ResourceKey<Level> dimension,
+                          Long2LongOpenHashMap columns, LongOpenHashSet removals,
+                          int centerCx, int centerCz, boolean mapOnly, MapDebtSave debt) {
         Path marker = mapOnlyMarker(serverAddress, dimension);
         boolean marked = Files.exists(marker);
         if (mapOnly && !marked) {
@@ -319,13 +545,89 @@ public class ColumnCacheStore {
         // A session with another reader never inherits a map-only file's stamps: they would
         // answer up_to_date for terrain only the map received (its own load ignored them too).
         var merged = !mapOnly && marked ? emptyStamps() : load(serverAddress, dimension);
+        // The map's debt for the columns of the FILE, before the overlay: the record on
+        // disk. An ignored map-only file brings no record, like its stamps. A column the
+        // record does not know stays unknown, unless a fill was asked for: then it is owed.
+        Long2LongOpenHashMap knownMasks = null;
+        Long2LongOpenHashMap owedMasks = null;
+        boolean fillRequested = false;
+        boolean hinted = false;
+        if (debt != null) {
+            knownMasks = new Long2LongOpenHashMap();
+            owedMasks = new Long2LongOpenHashMap();
+            if (mapOnly || !marked) {
+                MapOwedFile record = null;
+                try {
+                    record = loadMapOwed(serverAddress, dimension);
+                } catch (RuntimeException e) {
+                    LSSLogger.warn("The map record for " + dimensionKey(dimension) + " could not be read; replacing it", e);
+                }
+                if (record != null) {
+                    knownMasks.putAll(record.known());
+                    owedMasks.putAll(record.owed());
+                    fillRequested = record.fillRequested();
+                    hinted = record.hinted();
+                }
+                if (debt.flags().fileUnknownBecomeOwed()) {
+                    for (var entry : merged.long2LongEntrySet()) {
+                        long packed = entry.getLongKey();
+                        if (entry.getLongValue() <= 0) continue;
+                        long leafKey = ColumnStateMap.leafKeyFor(packed);
+                        long bit = 1L << ColumnStateMap.bitIndexFor(packed);
+                        if ((knownMasks.get(leafKey) & bit) == 0) {
+                            knownMasks.put(leafKey, knownMasks.get(leafKey) | bit);
+                            owedMasks.put(leafKey, owedMasks.get(leafKey) | bit);
+                        }
+                    }
+                }
+            }
+            if (debt.flags().fillRequested() != null) fillRequested = debt.flags().fillRequested();
+            if (debt.flags().hinted() != null) hinted = debt.flags().hinted();
+        }
         var removalIter = removals.iterator();
         while (removalIter.hasNext()) {
-            merged.remove(removalIter.nextLong());
+            long removed = removalIter.nextLong();
+            merged.remove(removed);
+            if (owedMasks != null) {
+                clearBit(owedMasks, removed);
+                clearBit(knownMasks, removed);
+            }
         }
         merged.putAll(columns);
+        if (owedMasks != null) {
+            // Debts the session settled, also of columns it no longer holds (the movement
+            // prune): without this a debt paid by a map fill, whose stamp did not change,
+            // would come back from the record for every column the player walked away from.
+            for (var entry : debt.settled().long2LongEntrySet()) {
+                long key = entry.getLongKey();
+                long settled = entry.getLongValue();
+                if (settled == 0) continue;
+                long owed = owedMasks.get(key) & ~settled;
+                if (owed == 0) owedMasks.remove(key); else owedMasks.put(key, owed);
+                knownMasks.put(key, knownMasks.get(key) | settled);
+            }
+            // For every column the saving session holds: what it owes is owed (what it
+            // settled was cleared just above), and it is known unless the session itself
+            // holds it as unknown.
+            for (var entry : debt.present().long2LongEntrySet()) {
+                long key = entry.getLongKey();
+                long present = entry.getLongValue();
+                long owed = owedMasks.get(key) | debt.owed().get(key);
+                long known = (knownMasks.get(key) & ~present) | (present & ~debt.unknown().get(key));
+                if (owed == 0) owedMasks.remove(key); else owedMasks.put(key, owed);
+                if (known == 0) knownMasks.remove(key); else knownMasks.put(key, known);
+            }
+        }
         if (merged.size() > mergeEvictionCap) {
             merged = evictFarthest(merged, centerCx, centerCz, mergeEvictionCap);
+        }
+        if (owedMasks != null) {
+            // Evicted and removed columns are not in the record: they owe nothing, and
+            // if they come back they are told apart from columns the record knows.
+            retainHeld(knownMasks, merged);
+            retainHeld(owedMasks, merged);
+            // A fill that was asked for stands until this cache owes the map nothing.
+            if (owedMasks.isEmpty()) fillRequested = false;
         }
         boolean written;
         if (merged.isEmpty()) {
@@ -340,6 +642,21 @@ public class ColumnCacheStore {
                 Files.deleteIfExists(marker);
             } catch (IOException e) {
                 LSSLogger.warn("Failed to clear the map-only mark of the column cache for " + dimensionKey(dimension), e);
+            }
+        }
+        if (debt != null && written) {
+            // After the stamps, so the record never describes columns the file does not
+            // hold. A crash between the two leaves the older record: what this save added
+            // is then unknown to it (never "on the map"), and a debt it paid may be asked
+            // for the map once more.
+            if (merged.isEmpty()) {
+                try {
+                    Files.deleteIfExists(mapOwedFile(serverAddress, dimension));
+                } catch (IOException e) {
+                    LSSLogger.warn("Failed to delete the map record for " + dimensionKey(dimension), e);
+                }
+            } else {
+                writeMapOwed(serverAddress, dimension, fillRequested, hinted, knownMasks, owedMasks);
             }
         }
     }

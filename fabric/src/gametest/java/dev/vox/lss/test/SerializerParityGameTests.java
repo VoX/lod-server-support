@@ -72,6 +72,7 @@ public class SerializerParityGameTests {
     private static final int DISK_SEED_CHUNK_OFFSET = 112;
     private static final int ALL_AIR_TRANSITION_CHUNK_OFFSET = 128;
     private static final int BACKGROUND_READ_CHUNK_OFFSET = 144;
+    private static final int NATIVE_BODY_CHUNK_OFFSET = 304;
 
     /** Deprecated upstream without a replacement; it is the only factory that places a real
      *  ServerPlayer (player list entry + embedded-channel connection) inside a gametest. */
@@ -540,6 +541,9 @@ public class SerializerParityGameTests {
             chunk = endLevel.getChunk(cx, cz);
         }
         var live = SectionSerializer.serializeColumn(endLevel, chunk, cx, cz);
+        helper.assertTrue(SectionSerializer.nativeColumn(endLevel, chunk, cx, cz) == null
+                        && SectionSerializer.nativeColumnHash(endLevel, chunk, cx, cz, 77L) == 77L,
+                "an all-air column has no native body and hashes to the empty value");
         helper.assertTrue(live.serializedSections() == null,
                 "premise: no all-air End void column found near chunk (" + cx + ", " + baseCz + ")");
 
@@ -549,10 +553,11 @@ public class SerializerParityGameTests {
         helper.assertTrue(!filter.contentChanged(endLevel, chunk, dim),
                 "air-to-air save must stay quiet (ALL_AIR sentinel is stable)");
 
-        // A serve of this all-air column seeds null bytes; the next save of the same all-air
-        // chunk must hash to the same sentinel, or every void column re-marks after every save.
+        // A serve of this all-air column seeds its (empty) content; the next save of the same
+        // all-air chunk must hash to the same sentinel, or every void column re-marks after
+        // every save.
         var seededFilter = new DirtyContentFilter();
-        seededFilter.seed(dim, cx, cz, live.serializedSections());
+        seededFilter.seedServed(endLevel, chunk, dim);
         helper.assertTrue(!seededFilter.contentChanged(endLevel, chunk, dim),
                 "all-air save after an all-air serve seed must stay quiet");
 
@@ -679,6 +684,74 @@ public class SerializerParityGameTests {
                 }
                 default -> helper.fail("unexpected read-after-save step " + step.get());
             }
+        });
+    }
+
+    /**
+     * What the change detector hashes ({@code SectionSerializer.nativeColumn}) is the body
+     * the served bytes are translated from, on a real chunk: translating it gives exactly
+     * the served bytes, before and after an edit, and the edit changes both. So a hash of
+     * the native body decides "changed" exactly as a hash of the served bytes would, without
+     * the translation. Also pins the serve seed on a live chunk: a save of the content
+     * that was just served stays quiet, and an edit after the serve still marks.
+     */
+    @GameTest(template = "fabric-gametest-api-v1:empty", timeoutTicks = 200)
+    public void changeDetectorHashesTheBodyTheServedBytesAreTranslatedFrom(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        var origin = chunkAt(helper.absolutePos(BlockPos.ZERO));
+        int cx = origin.x() + NATIVE_BODY_CHUNK_OFFSET;
+        int cz = origin.z() + 5;
+        var chunkPos = chunkAt(cx, cz);
+        var chunkSource = level.getChunkSource();
+        var dim = LSSConstants.DIM_STR_OVERWORLD;
+        var editPos = new BlockPos(cx * 16 + 7, -61, cz * 16 + 9);
+        var before = new AtomicReference<byte[]>();
+        var seeded = new DirtyContentFilter();
+
+        holdChunk(chunkSource, chunkPos);
+        level.getChunk(cx, cz);
+
+        helper.runAfterDelay(2, () -> {
+            var chunk = level.getChunk(cx, cz);
+            byte[] nativeBody = SectionSerializer.nativeColumn(level, chunk, cx, cz);
+            byte[] served = SectionSerializer.serializeColumn(level, chunk, cx, cz).serializedSections();
+            helper.assertTrue(nativeBody != null && served != null, "premise: a superflat column has content");
+            helper.assertTrue(Arrays.equals(SectionSerializer.translate(nativeBody, level), served),
+                    "the served bytes must be the translation of the native body");
+            helper.assertTrue(Arrays.equals(nativeBody, SectionSerializer.nativeColumn(level, chunk, cx, cz)),
+                    "the native body must be the same bytes on a second read");
+            // The detector's own path writes into a reused buffer and hashes in place: it
+            // must be the hash of exactly these bytes, call after call.
+            long expected = dev.vox.lss.common.ContentHash64.hash(nativeBody);
+            for (int i = 0; i < 3; i++) {
+                helper.assertTrue(SectionSerializer.nativeColumnHash(level, chunk, cx, cz, 0L) == expected,
+                        "the in-place hash must be the hash of the native body (call " + i + ")");
+            }
+            before.set(nativeBody);
+            // The generation serve's seed, then the save of the same content.
+            seeded.seedServed(level, chunk, dim);
+            helper.assertTrue(!seeded.observeSave(level, chunk, dim).changed(),
+                    "a save of the content that was just served must not mark");
+            level.setBlock(editPos, Blocks.STONE.defaultBlockState(), 3);
+        });
+
+        helper.runAfterDelay(4, () -> {
+            var chunk = level.getChunk(cx, cz);
+            byte[] nativeBody = SectionSerializer.nativeColumn(level, chunk, cx, cz);
+            byte[] served = SectionSerializer.serializeColumn(level, chunk, cx, cz).serializedSections();
+            helper.assertTrue(!Arrays.equals(before.get(), nativeBody), "an edit must change the native body");
+            helper.assertTrue(SectionSerializer.nativeColumnHash(level, chunk, cx, cz, 0L)
+                            == dev.vox.lss.common.ContentHash64.hash(nativeBody),
+                    "after the edit the in-place hash is still the hash of the native body");
+            helper.assertTrue(Arrays.equals(SectionSerializer.translate(nativeBody, level), served),
+                    "after the edit the served bytes are still the translation of the native body");
+            helper.assertTrue(seeded.observeSave(level, chunk, dim).changed(),
+                    "an edit after the serve must still mark");
+            helper.assertTrue(!seeded.observeSave(level, chunk, dim).changed(),
+                    "and the next save of the edited content is quiet");
+            level.setBlock(editPos, Blocks.GRASS_BLOCK.defaultBlockState(), 3);
+            releaseChunk(chunkSource, chunkPos);
+            helper.succeed();
         });
     }
 

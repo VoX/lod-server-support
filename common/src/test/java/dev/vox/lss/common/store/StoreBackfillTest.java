@@ -113,6 +113,34 @@ class StoreBackfillTest {
         store.shutdown();
     }
 
+    /** The store's low-disk hold ends at a higher mark than the walk's own floor. In the gap
+     *  between the two the walk used to go on: every column read and serialized for a
+     *  deposit that was dropped, no region marked done, the whole of it again next boot. */
+    @Test
+    void theWalkStopsWhileTheStoreRefusesNewRowsForLowDisk() throws Exception {
+        writeRegion(0, 0, 5, 6);
+        writeRegion(3, 0, 0, 1);
+        SqliteLodStore store = openStore();
+        long[] free = {1L << 30};
+        store.setDepositHoldForTest(new dev.vox.lss.common.processing.DiskSpaceHold(() -> free[0], 0L));
+        for (int i = 0; i < 400 && !store.depositsHeldForDisk(); i++) {
+            store.deposit(OW, PositionUtil.packPosition(500, 500), new byte[]{1}, 100); // wakes the writer
+            Thread.sleep(25);
+        }
+        assertTrue(store.depositsHeldForDisk(), "premise: the store refuses new rows");
+        var reads = new ConcurrentLinkedQueue<Long>();
+        var bf = backfill(store, (dim, cx, cz) -> {
+            reads.add(PositionUtil.packPosition(cx, cz));
+            return new byte[]{2};
+        }, new AtomicBoolean(true), new AtomicBoolean(true));
+        bf.start();
+        awaitDone(bf);
+        assertTrue(reads.isEmpty(), "nothing is read for a deposit that would be dropped, got " + reads.size());
+        assertTrue(bf.statusLine().startsWith("stopped: low disk (the store is refusing new rows), 0 regions done, 2 unwalked"),
+                bf.statusLine());
+        store.shutdown();
+    }
+
     @Test
     void skipsColumnsTheStoreAlreadyHas() throws Exception {
         writeRegion(0, 0, 5, 6);

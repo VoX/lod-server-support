@@ -67,6 +67,9 @@ step release-check-selftest python3 scripts/release_check.py --selftest
 step check-artifacts python3 tools/tests/check_artifacts.py
 step compat-ci python3 tools/compat/ci.py
 rm -f compatibility-candidate-report.json
+# CI's settings job: the schema inventory and the generated reference must match the code.
+step settings-inventory python3 tools/settings/inventory.py --check
+step settings-reference python3 tools/settings/reference.py --check
 
 # The Python suites take the shared harness lock themselves, in subprocesses that cannot inherit
 # our descriptor. Give the lock back first (gate-locked.sh held it for the Gradle steps) and

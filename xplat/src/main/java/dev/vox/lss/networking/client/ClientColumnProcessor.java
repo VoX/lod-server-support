@@ -59,6 +59,12 @@ class ClientColumnProcessor {
     @FunctionalInterface
     interface ColumnDispatcher {
         void dispatch(ResourceKey<Level> dimension, int chunkX, int chunkZ, VoxelColumnData columnData);
+
+        /** The map backends alone (a map fill: the other consumers hold this column). A
+         *  dispatcher that does not tell consumers apart gives it to everyone. */
+        default void dispatchToMaps(ResourceKey<Level> dimension, int chunkX, int chunkZ, VoxelColumnData columnData) {
+            dispatch(dimension, chunkX, chunkZ, columnData);
+        }
     }
 
     private final FailureReporter failureReporter;
@@ -79,7 +85,11 @@ class ClientColumnProcessor {
      * {@code rawSize()} under the max(shipped, clamp(declared)) rule for codec-1 frames.
      */
     private record QueuedColumn(VoxelColumnS2CPayload payload, boolean resync, int charge,
-                                ColumnDelivery delivery) {}
+                                ColumnDelivery delivery, boolean mapOnly) {
+        QueuedColumn(VoxelColumnS2CPayload payload, boolean resync, int charge, ColumnDelivery delivery) {
+            this(payload, resync, charge, delivery, false);
+        }
+    }
 
     private final ConcurrentLinkedQueue<QueuedColumn> columnQueue = new ConcurrentLinkedQueue<>();
     private final AtomicInteger queueSize = new AtomicInteger();
@@ -159,11 +169,16 @@ class ClientColumnProcessor {
     }
 
     void offer(VoxelColumnS2CPayload payload, boolean resync, ColumnDelivery delivery) {
+        offer(payload, resync, delivery, false);
+    }
+
+    /** @param mapOnly the column is for the map backends alone (see {@link MapFill}) */
+    void offer(VoxelColumnS2CPayload payload, boolean resync, ColumnDelivery delivery, boolean mapOnly) {
         // Null/corrupt section bytes still traverse the queue (the drain reports them):
         // count them as zero rather than NPE here.
         int payloadBytes = chargeOf(payload);
         if (admits(this.queueSize.get(), this.queuedBytes.get(), payloadBytes)) {
-            this.columnQueue.add(new QueuedColumn(payload, resync, payloadBytes, delivery));
+            this.columnQueue.add(new QueuedColumn(payload, resync, payloadBytes, delivery, mapOnly));
             this.queueSize.incrementAndGet();
             this.queuedBytes.addAndGet(payloadBytes);
         } else {
@@ -255,8 +270,20 @@ class ClientColumnProcessor {
                         : bytes -> { throw new IllegalStateException(
                                 "identity resolver unavailable (see the construction"
                                         + " warn) — column reported as ingest failure"); },
-                (dimension, chunkX, chunkZ, columnData) ->
-                        LSSApi.dispatchColumn(level, dimension, chunkX, chunkZ, columnData),
+                new ColumnDispatcher() {
+                    @Override
+                    public void dispatch(ResourceKey<Level> dimension, int chunkX, int chunkZ,
+                                         VoxelColumnData columnData) {
+                        LSSApi.dispatchColumn(level, dimension, chunkX, chunkZ, columnData);
+                    }
+
+                    @Override
+                    public void dispatchToMaps(ResourceKey<Level> dimension, int chunkX, int chunkZ,
+                                               VoxelColumnData columnData) {
+                        LSSApi.dispatchColumn(level, dimension, chunkX, chunkZ, columnData,
+                                dev.vox.lss.compat.ModCompat::isMapConsumer);
+                    }
+                },
                 epoch);
     }
 
@@ -464,9 +491,17 @@ class ClientColumnProcessor {
                     delivery.report(); // inactive old owners ignore this; an active receipt must retry
                     continue;
                 }
+                boolean mapOnly = queued.mapOnly();
                 LSSApi.withIngestFailureHandle(payload.dimension(), payload.chunkX(), payload.chunkZ(),
-                        delivery, () -> dispatcher.dispatch(payload.dimension(),
-                                payload.chunkX(), payload.chunkZ(), columnData));
+                        delivery, () -> {
+                            if (mapOnly) {
+                                dispatcher.dispatchToMaps(payload.dimension(),
+                                        payload.chunkX(), payload.chunkZ(), columnData);
+                            } else {
+                                dispatcher.dispatch(payload.dimension(),
+                                        payload.chunkX(), payload.chunkZ(), columnData);
+                            }
+                        });
             } catch (Throwable t) {
                 // Throwable, not Exception: an OOME allocating section buffers (or a
                 // LinkageError from MC internals) escaping here would consume the column —

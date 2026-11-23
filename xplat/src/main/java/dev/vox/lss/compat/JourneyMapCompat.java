@@ -11,6 +11,7 @@ final class JourneyMapCompat {
     static void retireClientAcquisition() { JourneyMapSession.retireClientAcquisition(); }
     static boolean isSupported() { return JourneyMapSession.isSupported(); }
     static boolean isArmed() { return JourneyMapSession.isArmed(); }
+    static boolean isWriting() { return JourneyMapSession.isWriting(); }
     static dev.vox.lss.api.VoxelColumnConsumer mapConsumer() { return JourneyMapSession.mapConsumer(); }
     static String diagLine() { return JourneyMapSession.diagLine(); }
     static java.util.Map<String, Object> metrics() { return JourneyMapSession.metrics(); }

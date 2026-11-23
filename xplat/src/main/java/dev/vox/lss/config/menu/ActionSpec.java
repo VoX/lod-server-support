@@ -20,7 +20,9 @@ public record ActionSpec(String id, String nameKey, String tooltipKey, Action ac
     /** What a button does. Renderers hand it to the dispatcher and know nothing else about it. */
     public enum Action {
         /** Clear the download records so the server sends distant terrain again. */
-        REDOWNLOAD_TERRAIN
+        REDOWNLOAD_TERRAIN,
+        /** Have the server send again, for the map alone, the terrain no map was given. */
+        FILL_MAP
     }
 
     public ActionSpec {
