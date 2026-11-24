@@ -88,6 +88,35 @@ public final class ClientCommandActions {
         feedback.accept(fillMapLine(manager == null ? null : manager.requestMapFill()));
     }
 
+    /** /lss fillmap stop: take a fill request back. What the map is missing stays recorded. */
+    public static void stopFillMap(Consumer<Component> feedback) {
+        stopFillMap(feedback, ClientNetGlue.getRequestManager());
+    }
+
+    /** Package-private: the unit tests pass a manager. */
+    static void stopFillMap(Consumer<Component> feedback, LodRequestManager manager) {
+        feedback.accept(Component.translatable(manager != null && manager.stopMapFill()
+                ? "lss.mapfill.stopped" : "lss.mapfill.not_running"));
+    }
+
+    private static volatile boolean menuButtons;
+
+    /** The options screen that was built has the page's buttons (Sodium 0.8 or newer). The
+     *  older tabs have none, and a player without Sodium has no screen: chat lines then name
+     *  the command alone. */
+    public static void noteMenuButtons() {
+        menuButtons = true;
+    }
+
+    public static boolean menuHasButtons() {
+        return menuButtons;
+    }
+
+    /** Test seam. */
+    public static void setMenuButtonsForTest(boolean buttons) {
+        menuButtons = buttons;
+    }
+
     /** What a Fill Map request did, as the line the player reads ({@code null}: no session). */
     static Component fillMapLine(LodRequestManager.MapFillRequest request) {
         if (request == null) return Component.translatable("lss.mapfill.unavailable");
@@ -307,7 +336,10 @@ public final class ClientCommandActions {
                 .then(literal.apply("fillmap").executes(context -> {
                     fillMap(feedback.apply(context.getSource()));
                     return Command.SINGLE_SUCCESS;
-                }))
+                }).then(literal.apply("stop").executes(context -> {
+                    stopFillMap(feedback.apply(context.getSource()));
+                    return Command.SINGLE_SUCCESS;
+                })))
                 // Issue #4: the reset subtree (incl. `voxy-force`) is built once, here.
                 .then(resetSubtree(literal, feedback))
                 .then(reloadSubtree(literal, feedback))

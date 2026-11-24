@@ -1406,10 +1406,16 @@ class ColumnStateMap {
      * @param fileUnknownBecomeOwed a fill was requested: every held column of unknown history
      *                         that the FILE has and this state does not becomes owed too
      * @param hinted           the player was told about the debt (null like fillRequested)
+     * @param stopped          the player took a request back in this session: the record must
+     *                         hear of it also when the session holds nothing else to save
      */
-    record MapDebt(Boolean fillRequested, boolean fileUnknownBecomeOwed, Boolean hinted) {
+    record MapDebt(Boolean fillRequested, boolean fileUnknownBecomeOwed, Boolean hinted, boolean stopped) {
+        MapDebt(Boolean fillRequested, boolean fileUnknownBecomeOwed, Boolean hinted) {
+            this(fillRequested, fileUnknownBecomeOwed, hinted, false);
+        }
+
         MapDebt(Boolean fillRequested, boolean fileUnknownBecomeOwed) {
-            this(fillRequested, fileUnknownBecomeOwed, null);
+            this(fillRequested, fileUnknownBecomeOwed, null, false);
         }
     }
 
@@ -1433,7 +1439,8 @@ class ColumnStateMap {
          *  record of columns the cache file holds, and no press of Fill Map to record. */
         boolean isEmpty() {
             return this.entries == 0 && this.removals.isEmpty() && this.mapSettled.isEmpty()
-                    && (this.mapDebt == null || !this.mapDebt.fileUnknownBecomeOwed());
+                    && (this.mapDebt == null
+                            || (!this.mapDebt.fileUnknownBecomeOwed() && !this.mapDebt.stopped()));
         }
 
         /** Primitive visitor — a 2M-entry save must not box its way through the overlay. */

@@ -134,7 +134,13 @@ class MapFillRequestTest {
 
     @BeforeEach
     void setUp() {
+        ClientCommandActions.setMenuButtonsForTest(true); // the Sodium 0.8 options page, with its buttons
         start(9, LSSConstants.PROTOCOL_VERSION, true);
+    }
+
+    @org.junit.jupiter.api.AfterEach
+    void noMenu() {
+        ClientCommandActions.setMenuButtonsForTest(false);
     }
 
     private void start(int lodDistance, int protocol, boolean cacheLoaded) {
@@ -1331,6 +1337,7 @@ class MapFillRequestTest {
     @Test
     void aFillStopsWhenTheMapTakesNoneOfItsAnswers() {
         pressAfterADownloadWithoutAMap(24); // 2,400 owed
+        ClientCommandActions.setMenuButtonsForTest(false); // an options screen without buttons
         mapDoes = MapDoes.LETS_GO;
         int budget = 0;
         for (int i = 0; i < 30 && manager.mapFillForTest().requested(); i++) {
@@ -1342,7 +1349,8 @@ class MapFillRequestTest {
         assertNull(fire(), "and asks for nothing more");
         assertTrue(mapAsks.size() >= MapFill.STALL_LIMIT && mapAsks.size() <= MapFill.STALL_LIMIT + 2 * budget,
                 "asked " + mapAsks.size() + " with a budget of " + budget + ": not three times the disc");
-        assertTrue(lastNotice().startsWith("lss.mapfill.stalled["), String.valueOf(notices));
+        assertTrue(lastNotice().startsWith("lss.mapfill.stalled.command["), String.valueOf(notices));
+        assertTrue(lastNotice().endsWith(", " + dev.vox.lss.common.Brand.clientCommand() + "]"), "it names the command");
         assertFalse(finished(), "it is not called finished");
         assertEquals(2400, manager.getMapOwedColumns(), "the debt stands");
         assertTrue(offered.stream().filter(o -> o.delivery() != null && o.mapOnly()).count() == mapAsks.size(),
@@ -1376,7 +1384,8 @@ class MapFillRequestTest {
         }
         assertFalse(manager.mapFillForTest().requested(), "the request stopped");
         fire();
-        assertEquals("lss.mapfill.stalled[" + MapFill.STALL_LIMIT + ", " + takers + "]", lastNotice());
+        assertEquals("lss.mapfill.stalled[" + MapFill.STALL_LIMIT + ", " + takers + ", "
+                + dev.vox.lss.common.Brand.clientCommand() + "]", lastNotice());
         assertEquals(takers, manager.getMapFillDelivered(), "every column the map takes is on it");
         assertTrue(budget < 900, "premise: a batch is small beside the refused half: " + budget);
         assertTrue(mapAsks.size() <= 2400 + MapFill.STALL_LIMIT + budget,
@@ -1488,6 +1497,150 @@ class MapFillRequestTest {
         } finally {
             ColumnCacheStore.clearForServer(bucket);
         }
+    }
+
+    /** A request stands across sessions until the cache owes the map nothing, which on a
+     *  large cache is a long download. The player can take it back without clearing the
+     *  cache: nothing more is asked for the map, what the map is missing stays recorded,
+     *  and a later press fills it. */
+    @Test
+    void aStoppedRequestAsksNothingMoreAndALaterPressFillsTheRest() {
+        pressAfterADownloadWithoutAMap(9);
+        Batch batch = fire();
+        int half = batch.positions().length / 2;
+        serve(new Batch(Arrays.copyOf(batch.positions(), half), Arrays.copyOf(batch.timestamps(), half)));
+        long paid = manager.getMapFillDelivered();
+        int left = manager.getMapOwedColumns();
+        assertTrue(paid > 0 && left > 0, "premise: part-way");
+        mapDoes = MapDoes.WRITES;
+
+        var said = new java.util.ArrayList<String>();
+        ClientCommandActions.stopFillMap(line -> said.add(key(line)), manager);
+        assertEquals(List.of("lss.mapfill.stopped"), said);
+        assertFalse(manager.mapFillForTest().requested());
+        int asked = mapAsks.size();
+        int noticesBefore = notices.size();
+
+        // The answers that were already on their way are still the map's.
+        long stampOfOne = columns().timestampFor(batch.positions()[half]);
+        Offered late = receive(batch.positions()[half], stampOfOne);
+        assertTrue(late.mapOnly(), "asked before the stop: it goes to the map alone");
+        assertEquals(stampOfOne, columns().timestampFor(batch.positions()[half]), "and the held column is untouched");
+        left--;
+        assertEquals(left, manager.getMapOwedColumns(), "and the map having written it settles that debt");
+
+        for (int i = 0; i < 6; i++) serve(fire());
+        assertEquals(asked, mapAsks.size(), "nothing more is asked for the map");
+        assertEquals(noticesBefore, notices.size(), "and nothing is said: no 'finished', no 'your map is missing terrain'");
+        assertEquals(left, manager.getMapOwedColumns(), "what the map is missing stays recorded");
+        assertEquals(new ColumnStateMap.MapDebt(false, false, true, true), manager.mapFillForTest().forSave(),
+                "the record is told that no request stands, and not to make the rest of the file owed");
+
+        ClientCommandActions.stopFillMap(line -> said.add(key(line)), manager);
+        assertEquals("lss.mapfill.not_running", said.get(1), "a second stop has nothing to stop");
+        ClientCommandActions.stopFillMap(line -> said.add(key(line)), null);
+        assertEquals("lss.mapfill.not_running", said.get(2), "nor has a stop outside a session");
+
+        assertEquals(MapFillRequest.Outcome.STARTED, manager.requestMapFill().outcome());
+        assertFalse(manager.mapFillForTest().stopped(), "a press after a stop: the stop is over");
+        fillToTheEnd();
+        assertEquals(0, manager.getMapOwedColumns());
+        assertEquals(360, manager.getMapFillDelivered(), "the later press paid the rest");
+    }
+
+    /** A stop with nothing to stop changes nothing. A fill that ended by itself (the map took
+     *  none of its answers) says "Map fill stopped: …"; a player who then types the stop
+     *  command must not undo what the press had decided for the save. */
+    @Test
+    void aStopWithNothingToStopChangesNothing() {
+        pressAfterADownloadWithoutAMap(24);
+        mapDoes = MapDoes.LETS_GO;
+        for (int i = 0; i < 40 && manager.mapFillForTest().requested(); i++) serve(fire());
+        assertFalse(manager.mapFillForTest().requested(), "premise: the fill ended by itself");
+        var before = manager.mapFillForTest().forSave();
+        assertTrue(before.fileUnknownBecomeOwed(), "premise: the press stands for the save");
+
+        assertFalse(manager.stopMapFill());
+        assertEquals(before, manager.mapFillForTest().forSave());
+        assertFalse(manager.mapFillForTest().stopped());
+    }
+
+    /** Right after a join the cache is still loading, and whether its record holds a request
+     *  is not known yet. A stop typed then is not lost: the request the record turns out to
+     *  hold does not start, and the record hears of it. A stop is this dimension's. */
+    @Test
+    void aStopWhileTheCacheIsStillLoadingHoldsForTheRequestInTheRecord() {
+        start(3, LSSConstants.PROTOCOL_VERSION, false);
+        mapWriting = true;
+        assertTrue(manager.stopMapFill(), "whatever the record holds is taken back");
+        manager.mapFillForTest().onCacheLoaded(true, true); // the record held a request
+        assertFalse(manager.mapFillForTest().requested(), "it does not go on");
+        assertEquals(new ColumnStateMap.MapDebt(false, false, true, true), manager.mapFillForTest().forSave(),
+                "and the record is told");
+
+        manager.mapFillForTest().reset(); // the player changes dimension
+        assertFalse(manager.mapFillForTest().stopped(), "the next dimension knows nothing of that stop");
+
+        // With no request in the record there is nothing for the record to hear.
+        start(3, LSSConstants.PROTOCOL_VERSION, false);
+        mapWriting = true;
+        assertTrue(manager.stopMapFill());
+        manager.mapFillForTest().onCacheLoaded(false, false);
+        assertFalse(manager.mapFillForTest().stopped());
+        assertFalse(manager.mapFillForTest().requested());
+
+        // And when the record cannot be read, the save says that no request stands.
+        start(3, LSSConstants.PROTOCOL_VERSION, false);
+        mapWriting = true;
+        assertTrue(manager.stopMapFill());
+        manager.mapFillForTest().onCacheUnavailable();
+        assertEquals(Boolean.FALSE, manager.mapFillForTest().forSave().fillRequested());
+        assertTrue(manager.mapFillForTest().stopped());
+    }
+
+    /** A stop reaches the record also from a session that holds no column: a request left
+     *  standing in the file would go on at the next join. Through the real files. */
+    @Test
+    void aStopWhereNothingIsHeldStillReachesTheRecord() {
+        final String address = "map-fill-stop-far";
+        start(3, LSSConstants.PROTOCOL_VERSION, true, address);
+        String bucket = manager.cacheBucketForTest();
+        try {
+            converge(); // no map: 48 owed
+            mapWriting = true;
+            assertEquals(MapFillRequest.Outcome.STARTED, manager.requestMapFill().outcome());
+            manager.saveCache();
+            assertTrue(ColumnCacheStore.loadStateAsync(bucket, dim).join().mapFillRequested, "premise: the request is in the record");
+
+            rejoinAt(address, bucket, 3);
+            mapWriting = true;
+            int far = 4 * manager.scannerForTest().getPruneDistance();
+            manager.tickMovementPhase(far, 0); // far from all of it
+            px = far;
+            assertEquals(0, columns().size(), "premise: nothing is held here");
+            assertTrue(manager.stopMapFill());
+            manager.saveCache(); // the session ends holding no column
+
+            var loaded = ColumnCacheStore.loadStateAsync(bucket, dim).join();
+            assertFalse(loaded.mapFillRequested, "the stop reached the record");
+            var map = new ColumnStateMap();
+            map.adoptLoaded(loaded);
+            assertEquals(48, map.mapOwedCount(), "and what the map is missing is still there for a later press");
+        } finally {
+            ColumnCacheStore.clearForServer(bucket);
+        }
+    }
+
+    /** Chat lines name the Fill Map button only where the options screen has one. On
+     *  Sodium 0.6 (the usual one for Minecraft 1.21.1) or without Sodium, they name the
+     *  command alone. */
+    @Test
+    void withoutAButtonTheLinesNameTheCommandAlone() {
+        ClientCommandActions.setMenuButtonsForTest(false);
+        converge();
+        mapWriting = true;
+        assertNull(fire());
+        assertEquals(List.of("lss.mapfill.owed.command[360, " + dev.vox.lss.common.Brand.clientCommand() + "]"), notices);
     }
 
     /** The same far from a cache of before the record: its columns have an unknown history,
@@ -1624,6 +1777,14 @@ class MapFillRequestTest {
         assertEquals(MapFillRequest.Outcome.WAITING_FOR_CACHE, manager.requestMapFill().outcome());
         manager.mapFillForTest().onCacheLoaded(false, false);
         assertTrue(manager.mapFillForTest().requested(), "the request starts once the cache has loaded");
+
+        // A press that is still waiting for the cache can be taken back too.
+        start(3, LSSConstants.PROTOCOL_VERSION, false);
+        mapWriting = true;
+        assertEquals(MapFillRequest.Outcome.WAITING_FOR_CACHE, manager.requestMapFill().outcome());
+        assertTrue(manager.stopMapFill(), "there was a press to take back");
+        manager.mapFillForTest().onCacheLoaded(false, false);
+        assertFalse(manager.mapFillForTest().requested(), "and it does not start when the cache has loaded");
 
         start(3, LSSConstants.PROTOCOL_VERSION, true);
         mapWriting = true;

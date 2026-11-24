@@ -1473,8 +1473,10 @@ public abstract class OffThreadProcessor<PlayerState extends AbstractPlayerReque
         } else if (result.notFound()) {
             handleDiskNotFound(playerUuid, state, packed, cx, cz, pending, dimension,
                     result.authoritativeMiss() && !staleAgainstEdit, result.unservable(),
-                    staleAgainstEdit);
+                    staleAgainstEdit, result.timedOut());
         } else {
+            // The chunk reads: failures counted against it outside the border are over.
+            readableAgain(dimension, packed);
             // Store freshness rung (P1's delivery half): a store hit whose STORED
             // acquisition stamp is <= this recipient's declared stamp makes the bytes
             // redundant — the client's copy carries the same content claim ("current as
@@ -1680,7 +1682,7 @@ public abstract class OffThreadProcessor<PlayerState extends AbstractPlayerReque
     private void handleDiskNotFound(UUID playerUuid, PlayerState state, long packed,
                                      int cx, int cz, PendingRequest pending, String dimension,
                                      boolean authoritativeMiss, boolean unservable,
-                                     boolean staleAgainstEdit) {
+                                     boolean staleAgainstEdit, boolean readTimedOut) {
         if (pending == null) {
             // No live pending backs this delivery (duplicate/raced result). Under permanent
             // NOT_GENERATED semantics a wire answer here could session-satisfy a position off
@@ -1726,12 +1728,16 @@ public abstract class OffThreadProcessor<PlayerState extends AbstractPlayerReque
                 // generation, which loads the chunk if it is there; here that road is
                 // closed, so it takes the transient drop and the next declaration reads
                 // again. Never the permanent answer off a read that proved nothing...
-                if (!staleAgainstEdit && unreadableOutsideBorder(dimension, packed)) {
+                if (!staleAgainstEdit && !readTimedOut && unreadableOutsideBorder(dimension, packed)) {
                     // ...unless it fails every time: a chunk that cannot be read and may
                     // not be generated is one this server cannot serve. Without this end a
                     // region entry that throws would be read again at every declaration of
-                    // every player in range, for as long as they stay.
-                    this.ctx.diagnostics().addGenRefusedOutsideBorder(1);
+                    // every player in range, for as long as they stay. A read that ran out
+                    // of time is not such a failure: it is the disk being slow just now (a
+                    // backup, a backfill), and counting it would turn half a minute of slow
+                    // disk into "not generated" for every existing chunk past the border
+                    // that players were asking for, until they rejoin.
+                    refusedOutsideBorder();
                     this.ctx.sendActions().add(new SendAction.ColumnNotGenerated(playerUuid, packed, state));
                     return;
                 }
@@ -1739,7 +1745,7 @@ public abstract class OffThreadProcessor<PlayerState extends AbstractPlayerReque
                 this.ctx.diagnostics().addMissDropped(1); // law A5: a miss with no submit, no answer
                 return;
             }
-            this.ctx.diagnostics().addGenRefusedOutsideBorder(1);
+            refusedOutsideBorder();
             this.ctx.sendActions().add(new SendAction.ColumnNotGenerated(playerUuid, packed, state));
             return;
         }
@@ -1764,7 +1770,8 @@ public abstract class OffThreadProcessor<PlayerState extends AbstractPlayerReque
                 dimension, "miss");
     }
 
-    /** How often in a row a read outside the border may fail before it is answered. */
+    /** How often in a row a read outside the border may fail with an error before it is
+     *  answered. Timeouts are not counted, and a read that succeeds starts the count again. */
     static final int UNREADABLE_OUTSIDE_BORDER_TRIES = 3;
     private static final int UNREADABLE_OUTSIDE_BORDER_CAP = 4096;
     private static final long UNREADABLE_OUTSIDE_BORDER_FORGET_NANOS = 600_000_000_000L; // 10 min
@@ -1774,6 +1781,29 @@ public abstract class OffThreadProcessor<PlayerState extends AbstractPlayerReque
      *  that reads again. Processing thread only. */
     private final Long2IntOpenHashMap unreadableOutsideBorder = new Long2IntOpenHashMap();
     private long unreadableOutsideBorderSince;
+
+    private boolean borderRefusalSaid;
+
+    /** Counts a request refused at the world border, and says once per run why terrain
+     *  ends there: the counter alone ({@code outside_border=} in the diag) tells an owner
+     *  nothing about which setting it is. Processing thread only. */
+    private void refusedOutsideBorder() {
+        this.ctx.diagnostics().addGenRefusedOutsideBorder(1);
+        if (!this.borderRefusalSaid) {
+            this.borderRefusalSaid = true;
+            LSSLogger.info("Distant terrain is not generated outside the world border: players near it see"
+                    + " only the terrain that already exists beyond it. To have it generated there too, set"
+                    + " generation.outside_world_border: true in the server settings and restart."
+                    + " (Said once; the diag's Generation line counts these as outside_border=.)");
+        }
+    }
+
+    /** A read of the position succeeded: it is not unreadable. */
+    private void readableAgain(String dimension, long packed) {
+        if (!this.unreadableOutsideBorder.isEmpty()) {
+            this.unreadableOutsideBorder.remove(packed ^ (dimension.hashCode() * 0x9E3779B97F4A7C15L));
+        }
+    }
 
     /** Counts one failed read outside the border; true from the third for a position. */
     private boolean unreadableOutsideBorder(String dimension, long packed) {

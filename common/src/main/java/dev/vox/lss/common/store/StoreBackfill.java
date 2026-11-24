@@ -61,6 +61,10 @@ public final class StoreBackfill {
     static final double CAP_STOP_FRACTION = 0.95;
     /** Stop the walk with at least this much free on the store's volume. Sized to
      *  leave a server room to keep saving its own region files after LSS stops. */
+    // Fixed, and not -Dlss.lowDiskHoldMiB (which moves the floor for generation and for the
+    // deposits of what is served): this walk is the one bulk writer, about the size of the
+    // region files it reads, and an owner who turns the hold off on a small volume has not
+    // asked for that volume to be filled.
     static final long MIN_FREE_SPACE_BYTES = 2L << 30; // 2 GiB
 
     /** Free bytes on the store's volume, or -1 if it cannot be determined — in which

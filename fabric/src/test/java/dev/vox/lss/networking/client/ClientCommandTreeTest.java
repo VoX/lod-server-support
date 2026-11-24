@@ -41,7 +41,7 @@ class ClientCommandTreeTest {
             var children = dispatcher.getRoot().getChild(root).getChildren().stream()
                     .map(node -> node.getName()).collect(Collectors.toSet());
             assertEquals(expected, children, root);
-            for (String sub : List.of("status", "reload", "clearcache", "diag", "trace", "diagnostics export",
+            for (String sub : List.of("status", "reload", "clearcache", "fillmap", "fillmap stop", "diag", "trace", "diagnostics export",
                     "reset", "reset confirm", "reset voxy-force", "reset voxy-force confirm"))
                 assertTrue(reaches(dispatcher, root + " " + sub), root + " " + sub);
         }

@@ -2517,6 +2517,91 @@ class OffThreadProcessorDiskResultTest {
         }
     }
 
+    /** A read that ran out of time says the disk is slow now, not that the chunk cannot be
+     *  read. Half a minute of slow disk (a backup, a backfill) must not turn every existing
+     *  chunk past the border into "not generated" until the player rejoins: a timeout is
+     *  dropped and asked again however often it happens, and does not count towards the
+     *  three tries either. */
+    @Test
+    void outsideTheBorderAReadThatKeepsTimingOutIsNeverAnswered() throws Exception {
+        var rig = new Rig(true, 4, 4, 30);
+        try {
+            rig.proc.publishGenerationBounds(border512());
+            int rounds = OffThreadProcessor.UNREADABLE_OUTSIDE_BORDER_TRIES * 2;
+            for (int attempt = 1; attempt <= rounds; attempt++) {
+                int expected = attempt;
+                timeoutAt(rig, 20, 0);
+                waitFor(() -> rig.proc.getDiagnostics().getTotalMissDropped() == expected,
+                        "timeout " + attempt + " is dropped and asked again");
+            }
+            assertEquals(0, rig.proc.getDiagnostics().getTotalGenRefusedOutsideBorder());
+
+            // Two real failures after all those timeouts are still two: the third answers.
+            for (int failure = 1; failure < OffThreadProcessor.UNREADABLE_OUTSIDE_BORDER_TRIES; failure++) {
+                int expected = rounds + failure;
+                missAt(rig, 20, 0, false);
+                waitFor(() -> rig.proc.getDiagnostics().getTotalMissDropped() == expected,
+                        "failure " + failure + " is dropped");
+            }
+            assertEquals(0, rig.proc.getDiagnostics().getTotalGenRefusedOutsideBorder());
+            missAt(rig, 20, 0, false);
+            drainUntil(rig.proc, received(rig.uuid, LSSConstants.RESPONSE_NOT_GENERATED,
+                    PositionUtil.packPosition(20, 0)));
+            assertEquals(1, rig.proc.getDiagnostics().getTotalGenRefusedOutsideBorder());
+            assertNull(rig.proc.pollGenerationTicketRequest(), "never a ticket");
+        } finally {
+            rig.proc.shutdown();
+        }
+    }
+
+    /** "Three times" is three times in a row: a read that succeeds in between says the
+     *  chunk reads, and the count starts again. */
+    @Test
+    void outsideTheBorderAReadThatSucceedsStartsTheCountAgain() throws Exception {
+        var rig = new Rig(true, 4, 4, 30);
+        try {
+            rig.proc.publishGenerationBounds(border512());
+            for (int failure = 1; failure < OffThreadProcessor.UNREADABLE_OUTSIDE_BORDER_TRIES; failure++) {
+                int expected = failure;
+                missAt(rig, 20, 0, false);
+                waitFor(() -> rig.proc.getDiagnostics().getTotalMissDropped() == expected, "failure " + failure);
+            }
+            // The chunk reads.
+            int before = rig.proc.diskSubmits.size();
+            rig.state.enqueue(new IncomingRequest(20, 0, -1L));
+            rig.proc.postSnapshot(snapshot(DIM, rig.uuid), List.of());
+            waitFor(() -> rig.proc.diskSubmits.size() == before + 1, "the request reads the disk");
+            rig.inject(dataResult(rig.uuid, 20, 0, DIM, new byte[]{1, 2, 3}, COLUMN_TS, 1L));
+            rig.proc.postSnapshot(snapshot(DIM, rig.uuid), List.of());
+            waitFor(() -> !rig.proc.enqueuedColumns.isEmpty(), "the column is served");
+
+            // Two more failures are again only two.
+            int dropped = OffThreadProcessor.UNREADABLE_OUTSIDE_BORDER_TRIES - 1;
+            for (int failure = 1; failure < OffThreadProcessor.UNREADABLE_OUTSIDE_BORDER_TRIES; failure++) {
+                int expected = dropped + failure;
+                missAt(rig, 20, 0, false);
+                waitFor(() -> rig.proc.getDiagnostics().getTotalMissDropped() == expected, "failure " + failure + " after the good read");
+            }
+            assertEquals(0, rig.proc.getDiagnostics().getTotalGenRefusedOutsideBorder(),
+                    "the good read started the count again");
+            missAt(rig, 20, 0, false);
+            drainUntil(rig.proc, received(rig.uuid, LSSConstants.RESPONSE_NOT_GENERATED,
+                    PositionUtil.packPosition(20, 0)));
+            assertEquals(1, rig.proc.getDiagnostics().getTotalGenRefusedOutsideBorder(), "and the third in a row is answered");
+        } finally {
+            rig.proc.shutdown();
+        }
+    }
+
+    private static void timeoutAt(Rig rig, int cx, int cz) throws Exception {
+        int before = rig.proc.diskSubmits.size();
+        rig.state.enqueue(new IncomingRequest(cx, cz, -1L));
+        rig.proc.postSnapshot(snapshot(DIM, rig.uuid), List.of());
+        waitFor(() -> rig.proc.diskSubmits.size() == before + 1, "the request reads the disk");
+        rig.inject(ChunkReadResult.notFoundFromTimeout(rig.uuid, cx, cz, DIM, 1L));
+        rig.proc.postSnapshot(snapshot(DIM, rig.uuid), List.of());
+    }
+
     /** The memo is a fact about the world, written while the position was inside. Once the
      *  border no longer covers it, the memo rung must not turn it into a ticket, and no
      *  memo hit is counted for it (law A5 counts a hit as a miss that was dispositioned). */
