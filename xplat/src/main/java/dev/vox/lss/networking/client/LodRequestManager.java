@@ -912,6 +912,13 @@ public class LodRequestManager {
 
     /** {@code /lss fillmap stop}: the request no longer stands. False when none did. */
     boolean stopMapFill() {
+        if (!this.acquisitionActive || this.sessionConfig == null
+                || this.sessionConfig.protocolVersion() != LSSConstants.PROTOCOL_VERSION) {
+            // The press's own guard: this session downloads nothing, so no cache is loading
+            // and nothing here can be running. (Without it a stop "waited for the load" for
+            // ever and answered that it had stopped something.)
+            return false;
+        }
         return this.mapFill.stop();
     }
 
