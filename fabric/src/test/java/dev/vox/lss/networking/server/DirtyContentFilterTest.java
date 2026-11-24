@@ -8,6 +8,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -21,47 +22,96 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 class DirtyContentFilterTest {
 
-    // ---- Phase 3 save-hook deposits: the observation contract ----
+    // ---- The save hook's observation contract ----
 
-    /** observeSave must agree with contentChanged AND hand out the exact serialized
-     *  bytes on a change — the save-hook deposit's payload. */
+    /** A first observation is a change, an identical re-save is suppressed, and a
+     *  change of one byte is a change again. */
     @Test
-    void observeSaveHandsOutBytesOnChangeAndSuppressesUnchanged() {
-        byte[] first = {1, 2, 3};
-        byte[][] next = {first};
+    void observeSaveMarksAChangeAndSuppressesAnIdenticalResave() {
+        byte[][] next = {new byte[]{1, 2, 3}};
         var filter = new DirtyContentFilter((level, chunk, cx, cz) -> next[0]);
         var obs1 = filter.observeSave(null, null, 4, 5, "minecraft:overworld");
         assertTrue(obs1.changed(), "first observation is a change");
-        assertTrue(obs1.depositable());
-        assertArrayEquals(first, obs1.sectionBytes(), "the deposit payload is the hashed bytes");
+        assertTrue(obs1.contentRead());
 
+        next[0] = new byte[]{1, 2, 3}; // equal content in another array
         var obs2 = filter.observeSave(null, null, 4, 5, "minecraft:overworld");
         assertFalse(obs2.changed(), "identical re-save must be suppressed");
-        assertNull(obs2.sectionBytes(), "no bytes handed out for a suppressed save");
 
-        next[0] = new byte[]{9, 9};
+        next[0] = new byte[]{1, 2, 4};
         var obs3 = filter.observeSave(null, null, 4, 5, "minecraft:overworld");
-        assertTrue(obs3.changed());
-        assertArrayEquals(new byte[]{9, 9}, obs3.sectionBytes());
+        assertTrue(obs3.changed(), "one changed byte is a change");
+        assertTrue(obs3.contentRead());
+        assertEquals(1, filter.getTotalSuppressed());
     }
 
-    /** All-air columns observe as changed+depositable with NULL bytes (the store maps
-     *  that to byte[0]); a serializer exception fails open as changed but NOT
-     *  depositable — the caller must delete, never deposit stale/unknown bytes. */
+    /** All-air columns (null bytes) are content that was read; a serializer exception
+     *  fails open as changed with the content unread — the caller deletes the stored
+     *  row either way, never keeps pre-edit bytes. */
     @Test
-    void observeSaveAllAirIsDepositableAndFailOpenIsNot() {
+    void observeSaveAllAirIsReadContentAndFailOpenIsNot() {
         var allAir = new DirtyContentFilter((level, chunk, cx, cz) -> null);
         var obs = allAir.observeSave(null, null, 1, 1, "minecraft:the_end");
         assertTrue(obs.changed());
-        assertTrue(obs.depositable(), "all-air is valid content, depositable as byte[0]");
-        assertNull(obs.sectionBytes());
+        assertTrue(obs.contentRead(), "all-air is valid content");
+        assertFalse(allAir.observeSave(null, null, 1, 1, "minecraft:the_end").changed(),
+                "air to air stays quiet");
 
         var throwing = new DirtyContentFilter((level, chunk, cx, cz) -> {
             throw new IllegalStateException("boom");
         });
         var failOpen = throwing.observeSave(null, null, 1, 1, "minecraft:overworld");
         assertTrue(failOpen.changed(), "fail-open must still mark dirty");
-        assertFalse(failOpen.depositable(), "unknown bytes must never be deposited");
+        assertFalse(failOpen.contentRead(), "the content is unknown");
+        assertTrue(throwing.observeSave(null, null, 1, 1, "minecraft:overworld").changed(),
+                "and it stays fail-open: an error is never remembered as a baseline");
+    }
+
+    // ---- The generation serve's baseline ----
+
+    /** A serve seeds the baseline through the same serializer the save hook reads, so
+     *  the chunk's first save with unchanged content is suppressed, and a changed one
+     *  still marks. */
+    @Test
+    void aServeSeedSuppressesTheFirstSaveOfUnchangedContent() {
+        byte[][] live = {new byte[]{5, 6, 7, 8}};
+        var filter = new DirtyContentFilter((level, chunk, cx, cz) -> live[0]);
+        filter.seedServed(null, null, 9, -2, "minecraft:overworld");
+        assertFalse(filter.observeSave(null, null, 9, -2, "minecraft:overworld").changed(),
+                "the first save after a serve of the same content must not mark");
+        assertEquals(0, filter.getTotalSeededLoads(), "a serve seed is not a load seed");
+
+        filter.seedServed(null, null, 10, -2, "minecraft:overworld");
+        live[0] = new byte[]{5, 6, 7, 9};
+        assertTrue(filter.observeSave(null, null, 10, -2, "minecraft:overworld").changed(),
+                "content that changed after the serve still marks");
+    }
+
+    /** A serve seed that cannot read the chunk seeds nothing: the first save then reads
+     *  as a first observation, as it did before there were seeds. */
+    @Test
+    void aFailingServeSeedSeedsNothing() {
+        boolean[] fail = {true};
+        var filter = new DirtyContentFilter((level, chunk, cx, cz) -> {
+            if (fail[0]) throw new IllegalStateException("boom");
+            return new byte[]{1};
+        });
+        assertDoesNotThrow(() -> filter.seedServed(null, null, 1, 1, "minecraft:overworld"));
+        assertEquals(0, filter.entryCount());
+        fail[0] = false;
+        assertTrue(filter.observeSave(null, null, 1, 1, "minecraft:overworld").changed());
+    }
+
+    /** What is stored is the fast hash of the bytes, off the two sentinels. */
+    @Test
+    void theStoredHashIsTheContentHashOfTheBytes() {
+        byte[] bytes = {1, 2, 3, 4, 5, 6, 7, 8, 9};
+        assertEquals(dev.vox.lss.common.ContentHash64.hash(bytes), DirtyContentFilter.hashContent(bytes));
+        assertEquals(DirtyContentFilter.hashContent(null), DirtyContentFilter.hashContent(new byte[0]),
+                "null and empty are the same all-air content");
+        assertNotEquals(0L, DirtyContentFilter.hashContent(null));
+        assertNotEquals(DirtyContentFilter.hashContent(null), DirtyContentFilter.hashContent(new byte[]{0}),
+                "one zero byte is not all-air");
     }
 
     /** The two observation APIs share one baseline: a save observed via observeSave
@@ -77,13 +127,19 @@ class DirtyContentFilterTest {
 
     @Test
     void seedToleratesAllAirNullBytes() {
-        var filter = new DirtyContentFilter();
+        byte[][] live = {null};
+        var filter = new DirtyContentFilter((level, chunk, cx, cz) -> live[0]);
         assertDoesNotThrow(() -> {
-            filter.seed("minecraft:the_end", 10, 0, null);
-            filter.seed("minecraft:the_end", 10, 0, null);
-            filter.seed("minecraft:the_end", 10, 0, new byte[0]);
-            filter.seed("minecraft:the_end", 11, 0, new byte[]{1, 2, 3});
+            filter.seedServed(null, null, 10, 0, "minecraft:the_end");
+            filter.seedServed(null, null, 10, 0, "minecraft:the_end");
+            live[0] = new byte[0];
+            filter.seedServed(null, null, 10, 0, "minecraft:the_end");
         });
+        assertFalse(filter.observeSave(null, null, 10, 0, "minecraft:the_end").changed(),
+                "an all-air save after an all-air serve stays quiet");
+        live[0] = new byte[]{1, 2, 3};
+        assertTrue(filter.observeSave(null, null, 10, 0, "minecraft:the_end").changed(),
+                "air to built still marks");
     }
 
     /**
@@ -248,15 +304,15 @@ class DirtyContentFilterTest {
     /**
      * Absent-sentinel coupling: the per-dimension fastutil map uses defaultReturnValue(0), so
      * a stored hash of exactly 0 is indistinguishable from "never observed" — the FIRST save
-     * of such content would read as unchanged and the column would never mark dirty. fnv1a64
-     * therefore remaps a raw 0 result to 1 (no constructible input has a raw FNV-1a of 0,
-     * which is why the remap is pinned in isolation). If any assertion here fails, sentinel
-     * and remap have drifted apart — change them together.
+     * of such content would read as unchanged and the column would never mark dirty. The
+     * content hash is therefore remapped from a raw 0 to 1 (no input with a raw hash of 0
+     * is at hand, which is why the remap is pinned in isolation). If any assertion here
+     * fails, sentinel and remap have drifted apart — change them together.
      */
     @Test
-    void fnvZeroResultStoresAsOneOffTheAbsentSentinel() {
+    void zeroHashResultStoresAsOneOffTheAbsentSentinel() {
         assertEquals(1L, DirtyContentFilter.remapAbsentSentinel(0L),
-                "a raw FNV result of 0 must store as 1, never as the absent sentinel");
+                "a raw hash of 0 must store as 1, never as the absent sentinel");
         assertEquals(1L, DirtyContentFilter.remapAbsentSentinel(1L),
                 "remap target: raw 0 and raw 1 intentionally collide on 1");
         assertEquals(-1L, DirtyContentFilter.remapAbsentSentinel(-1L),

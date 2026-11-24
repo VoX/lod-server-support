@@ -206,7 +206,8 @@ public final class SettingsStore<T> {
             // (The commented line sits above a key in the template, not at the end of its
             // group: this output is re-emitted, and a comment block that ends a group comes
             // out at column 0, where deleting the "#" would make a top-level key.)
-            if(!oldKeys.contains("showPermissionRefusal"))emitted.remove("service.show_permission_refusal");
+            for(var commented:SettingsSchema.COMMENTED_SERVER_LEGACY_NAMES.entrySet())
+                if(!oldKeys.contains(commented.getValue()))emitted.remove(commented.getKey());
             if(!schema.isPaper()) {if(!oldKeys.contains("updateEvents"))emitted.remove("paper.update_events");if(((Map<?,?>)emitted.get("lod.distance.by_world")).isEmpty())emitted.remove("lod.distance.by_world");}
             if(schema.isPaper()) {
                 if(!oldKeys.contains("lodStoreBackfill"))emitted.remove("storage.lod_store.backfill.enabled");

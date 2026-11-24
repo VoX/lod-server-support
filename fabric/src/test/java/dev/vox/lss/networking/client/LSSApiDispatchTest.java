@@ -72,4 +72,48 @@ class LSSApiDispatchTest {
             LSSApi.removeColumnConsumer(lastRecorder);
         }
     }
+
+    /** A column sent for one kind of consumer alone (a map fill, issue #380) reaches the
+     *  consumers the audience accepts and no other, and when none of them is registered
+     *  the delivery is reported like any undispatched column. */
+    @Test
+    void anAudienceLimitsWhoGetsTheColumn() {
+        var dim = ResourceKey.create(Registries.DIMENSION, ResourceLocation.parse("lss_test:dispatch_audience"));
+        var columnData = new VoxelColumnData(new VoxelColumnData.SectionData[0], 42L);
+        List<Received> map = new ArrayList<>();
+        List<Received> renderer = new ArrayList<>();
+        VoxelColumnConsumer mapConsumer = (level, dimension, cx, cz, data) ->
+                map.add(new Received(cx, cz, dimension, data));
+        VoxelColumnConsumer rendererConsumer = (level, dimension, cx, cz, data) ->
+                renderer.add(new Received(cx, cz, dimension, data));
+        var reports = new java.util.concurrent.atomic.AtomicInteger();
+        LSSApi.IngestFailureHandle handle = new LSSApi.IngestFailureHandle() {
+            @Override public boolean isActive() { return true; }
+            @Override public void report() { reports.incrementAndGet(); }
+            @Override public Runnable deferAcceptance() { return () -> {}; }
+        };
+        LSSApi.registerColumnConsumer(rendererConsumer);
+        LSSApi.registerColumnConsumer(mapConsumer);
+        try {
+            LSSApi.withIngestFailureHandle(dim, 5, 6, handle,
+                    () -> LSSApi.dispatchColumn(null, dim, 5, 6, columnData, consumer -> consumer == mapConsumer));
+            assertEquals(1, map.size());
+            assertTrue(renderer.isEmpty(), "the renderer already holds this column");
+            assertEquals(0, reports.get());
+
+            LSSApi.withIngestFailureHandle(dim, 5, 6, handle,
+                    () -> LSSApi.dispatchColumn(null, dim, 5, 6, columnData));
+            assertEquals(2, map.size());
+            assertEquals(1, renderer.size(), "the plain form still reaches everyone");
+
+            LSSApi.removeColumnConsumer(mapConsumer);
+            LSSApi.withIngestFailureHandle(dim, 5, 6, handle,
+                    () -> LSSApi.dispatchColumn(null, dim, 5, 6, columnData, consumer -> consumer == mapConsumer));
+            assertEquals(1, reports.get(), "nobody in the audience took it: reported, never silently dropped");
+            assertEquals(1, renderer.size());
+        } finally {
+            LSSApi.removeColumnConsumer(mapConsumer);
+            LSSApi.removeColumnConsumer(rendererConsumer);
+        }
+    }
 }

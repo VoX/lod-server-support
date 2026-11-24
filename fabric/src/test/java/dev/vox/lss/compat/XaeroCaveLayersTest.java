@@ -168,15 +168,25 @@ class XaeroCaveLayersTest {
         return region.getChunk((chunkX >> 2) & 7, (chunkZ >> 2) & 7).getTile(chunkX & 3, chunkZ & 3);
     }
 
-    /** A delivery handle: counts leases, releases and reports. */
+    /** A delivery handle: counts leases, releases, reports and "the map has it". */
     private static final class Handle implements LSSApi.IngestFailureHandle {
         int leases;
         int released;
         int reports;
+        int written;
+        /** A "written" that came after every lease was released would arrive after the
+         *  delivery ended, which is when the map's debt is decided. */
+        boolean writtenTooLate;
 
         @Override
         public void report() {
             this.reports++;
+        }
+
+        @Override
+        public void written() {
+            this.written++;
+            if (this.leases > 0 && this.released == this.leases) this.writtenTooLate = true;
         }
 
         @Override
@@ -418,6 +428,92 @@ class XaeroCaveLayersTest {
         this.bridge.pump();
         assertEquals(2, this.bridge.counterForTest("dropped_stale"));
         assertEquals(1, this.reports.size(), "the receipt's CAS dedupes the DropReporter path");
+    }
+
+    // ---- the map's debt (issue #380): which deliveries learn that the map has the column ----
+
+    /** The surface tile is "the map has this column": said once per delivery however many
+     *  layers were written, and before the delivery's last lease is released. */
+    @Test
+    void aWrittenSurfaceTellsItsDeliveryOnceAndInTime() {
+        show(3);
+        var handle = new Handle();
+        offerWith(handle, 64, 64); // the surface and the band
+        assertEquals(2, handle.leases, "premise: two tiles");
+        assertEquals(0, handle.written, "nothing is said for a tile that is only queued");
+        this.bridge.pump();
+        assertEquals(2, this.bridge.counterForTest("written"), "premise: both committed");
+        assertEquals(1, handle.written, "the surface tile says it, the band tile does not");
+        assertFalse(handle.writtenTooLate);
+        assertEquals(2, handle.released);
+    }
+
+    /** Chunks Xaero's own writer covers are on the map from the real chunks: not owed. */
+    @Test
+    void aSurfaceTheNativeWriterCoversCountsAsOnTheMap() {
+        for (int x = 60; x <= 80; x++) {
+            for (int z = 60; z <= 70; z++) this.loadedChunks.add(((long) x << 32) | (z & 0xFFFFFFFFL));
+        }
+        this.player = new XaeroSession.PlayerPos(NETHER, 64 * 16 + 8, 70, 64 * 16 + 8);
+        show(SURFACE);
+        var handle = new Handle();
+        offerWith(handle, 64, 64);
+        this.bridge.pump();
+        assertEquals(1, this.bridge.counterForTest("skipped_native"), "premise: the native writer's");
+        assertEquals(0, this.bridge.counterForTest("written"));
+        assertEquals(1, handle.written);
+        assertFalse(handle.writtenTooLate);
+        assertEquals(1, handle.released);
+    }
+
+    /** A tile the bridge lets go says nothing: its delivery ends without "written", which
+     *  is what leaves the map owed the column. Each of these was a silent hole in the map
+     *  that nothing recorded. */
+    @Test
+    void aColumnTheBridgeLetsGoNeverSaysItIsOnTheMap() {
+        show(SURFACE);
+        var cleared = new Handle();
+        offerWith(cleared, 68, 64);
+        assertEquals(1, cleared.leases, "premise: queued");
+        // Xaero's own two map-writing switches go off while the tile is queued.
+        xaero.map.common.config.option.WorldMapProfiledConfigOptions.LOAD_NEW_CHUNKS.value = false;
+        xaero.map.common.config.option.WorldMapProfiledConfigOptions.UPDATE_CHUNKS.value = false;
+        try {
+            this.bridge.pump(); // the ladder observes both switches off and clears the queue
+            assertTrue(this.bridge.settingsWritesOff, "premise");
+            assertEquals(0, this.bridge.queuedForTest(), "premise: the queue was cleared");
+            assertEquals(0, this.bridge.counterForTest("written"));
+            assertEquals(1, cleared.released);
+            assertEquals(0, cleared.written);
+            assertEquals(0, cleared.reports, "and it is not sent again by itself either");
+
+            // While they are off, a column that arrives is let go as well.
+            var refused = new Handle();
+            offerWith(refused, 64, 64);
+            this.bridge.pump();
+            assertEquals(0, this.bridge.counterForTest("written"));
+            assertEquals(refused.leases, refused.released);
+            assertEquals(0, refused.written);
+            assertEquals(0, refused.reports);
+        } finally {
+            xaero.map.common.config.option.WorldMapProfiledConfigOptions.LOAD_NEW_CHUNKS.value = true;
+            xaero.map.common.config.option.WorldMapProfiledConfigOptions.UPDATE_CHUNKS.value = true;
+        }
+    }
+
+    /** A tile dropped because the player left its dimension is reported for a re-serve, as
+     *  before, and not as written. */
+    @Test
+    void aReportedDropIsNotOnTheMap() {
+        show(SURFACE);
+        var handle = new Handle();
+        offerWith(handle, 64, 64);
+        this.processor.mapWorld.currentDimensionId = OVERWORLD;
+        this.clientDimension = OVERWORLD;
+        this.bridge.pump();
+        assertEquals(1, handle.reports, "premise: reported");
+        assertEquals(0, handle.written);
+        assertEquals(1, handle.released);
     }
 
     // ---- the natively-writable skip ----

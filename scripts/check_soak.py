@@ -432,7 +432,10 @@ KNOWN_CLIENT_KEYS = {
                  "summary",
                  # Map ingestion (map-ingestion plan §3.8/§4.4): present only when the
                  # client runs with Xaero's World Map / JourneyMap installed.
-                 "xaero", "journeymap"},
+                 "xaero", "journeymap",
+                 # The map's debt and its fill (issue #380), and what the harness client's
+                 # own consumer was given: beside the map groups, with a map mod only.
+                 "map_fill", "soak_consumer_columns"},
     # One scripted client-side action (-Dlss.soak.clientActionAt); resets the request
     # metrics, so the loader treats it as a client segment boundary.
     "action": {"event", "wallMs", "action", "atSeconds"},
@@ -3191,7 +3194,7 @@ def check_store_save_storm(ctx):
     even pressures), the hook must NOT deposit (deposits <= serve-path misses: every
     surviving deposit is delivery-path, one miss upstream of each — a positive margin
     means the doomed write-through crept back), the hook must still PROCESS the wave
-    (marked_total), the mid-storm edit must re-serve fresh through the dirty pipeline,
+    (marked + suppressed: see the pin below), the mid-storm edit must re-serve fresh through the dirty pipeline,
     and after the clearcache the edited column must serve fresh (probe 20:0 freshness,
     disk re-read ceiling = the first-observation invalidation churn)."""
     acts = [a for a in ctx.run_actions.get(1, []) if a["action"] == "clearcache"]
@@ -3244,18 +3247,39 @@ def check_store_save_storm(ctx):
                         "deposits exceed serve-path misses — a non-delivery deposit "
                         "path (the retired save-hook write-through?) is live again",
                         {"deposits - misses": margin, "expected": "<= 0"})
-    # HOOK-AT-SCALE pin (recalibrated on live data: vanilla save-all SKIPS unchanged
-    # chunks entirely — suppressed_total stayed 0 through a 10x storm because nothing
-    # re-saved, so a suppression floor is unforceable from a scripted timeline; filter
-    # suppression itself is unit-pinned and live-pinned by check_dirty_resave_quiet).
-    # What the first save-all DOES force is the loaded set's first-observation wave
-    # through the hook — marked_total >= 200 proves the hook processed it at scale.
+    # HOOK-AT-SCALE pin, recalibrated twice on live data.
+    # (1) Vanilla save-all SKIPS unchanged chunks entirely, so a suppression floor
+    # cannot be forced from a scripted timeline by re-saving (filter suppression itself
+    # is unit-pinned and live-pinned by check_dirty_resave_quiet).
+    # (2) Since the chunk-load seed (2026-09-05, DirtyContentFilter.seedLoaded and the
+    # pending-load flush) a loaded chunk has its baseline BEFORE its first save, so the
+    # loaded set's first saves go through the hook as SUPPRESSIONS, not as marks. The
+    # form this pin had until 2026-11-21 (marked_total >= 200, "the first-observation
+    # wave") predates that seed and had been red ever since: 0.23.0 and 0.24.0 both end
+    # this scenario with seeded_load=466, suppressed_total=466, marked_total=1.
+    # What proves the hook processed the loaded set at scale is that it OBSERVED it
+    # (marked + suppressed), and what proves it still tells a real change from a
+    # metadata re-save is that the scripted mid-storm edit was marked.
     marked = get_path(srv_final, "dirty.marked_total")
-    if marked < 200:
+    suppressed = get_path(srv_final, "dirty.suppressed_total")
+    if marked + suppressed < 200:
         yield Violation("store-save-storm", "storm window",
-                        "the first save-all's first-observation wave never went "
-                        "through the hook (marked_total too low — hook dead or storm "
-                        "never ran)", {"dirty.marked_total": marked, "expected": ">= 200"})
+                        "the loaded set's first saves never went through the hook "
+                        "(marked + suppressed too low — hook dead or storm never ran)",
+                        {"dirty.marked_total": marked, "dirty.suppressed_total": suppressed,
+                         "expected": "marked + suppressed >= 200"})
+    if marked < 1:
+        yield Violation("store-save-storm", "storm window",
+                        "the scripted edit was not marked — the hook suppressed a real "
+                        "change", {"dirty.marked_total": marked, "expected": ">= 1"})
+    if marked > 100:
+        # The other direction: a baseline that does not hold. Before the load seed
+        # every loaded chunk's first save was a mark (449 of them in the recorded
+        # run), each one a broadcast and a re-download of unchanged terrain.
+        yield Violation("store-save-storm", "storm window",
+                        "the loaded set's first saves were marked as changes — the "
+                        "load-time baseline does not match the save-time hash",
+                        {"dirty.marked_total": marked, "expected": "<= 100"})
     hits_delta = get_path(srv_final, "store.hits") - get_path(srv_pre, "store.hits")
     if hits_delta < 800:
         yield Violation("store-save-storm", "re-serve leg",
@@ -5402,7 +5426,7 @@ def selftest():
     #  a positive deposits-misses margin is the R2-M2 write-through regression.)
     def sst_ctx(edited_pre=555, edited_final=777, deposits=2100, misses=2100,
                 drops=0, errors=0, hits_final=2100, disk_final=2150,
-                control_final=222, marked=441, actions=None):
+                control_final=222, marked=1, suppressed=466, actions=None):
         srv_first = _srv(20_000, over={"store.deposits": 2000, "store.misses": 2000,
                                        "store.hits": 0, "disk.submitted": 2000})
         srv_first["probe_hashes"] = {"20:0": 111, "-20:0": 222}
@@ -5415,6 +5439,7 @@ def selftest():
                                       "store.deposit_drops": drops,
                                       "store.errors": errors,
                                       "dirty.marked_total": marked,
+                                      "dirty.suppressed_total": suppressed,
                                       "disk.submitted": disk_final})
         srv_fin["probe_hashes"] = {"20:0": edited_final, "-20:0": control_final}
         return _ctx(
@@ -5425,7 +5450,9 @@ def selftest():
                 {"event": "action", "wallMs": 130_000, "action": "clearcache",
                  "atSeconds": 130}]},
             quiescent_server={2})
-    clean("store-save-storm clean save-hook pass (first-observation churn reads)",
+    # The shape 0.23.0 and 0.24.0 both recorded on 2026-11-21: every loaded chunk seeded
+    # at load, its first save suppressed, the one scripted edit marked.
+    clean("store-save-storm clean save-hook pass (loaded set suppressed, the edit marked)",
           list(check_store_save_storm(sst_ctx(disk_final=2075))))
     hits("store-save-storm deposits shed under storm",
          list(check_store_save_storm(sst_ctx(disk_final=2075, drops=7))),
@@ -5445,7 +5472,13 @@ def selftest():
     hits("store-save-storm re-serve leg re-read regions beyond churn",
          list(check_store_save_storm(sst_ctx(disk_final=2200))), "store-save-storm")
     hits("store-save-storm hook never processed the loaded set",
-         list(check_store_save_storm(sst_ctx(disk_final=2075, marked=12))),
+         list(check_store_save_storm(sst_ctx(disk_final=2075, marked=1, suppressed=11))),
+         "store-save-storm")
+    hits("store-save-storm the scripted edit was suppressed",
+         list(check_store_save_storm(sst_ctx(disk_final=2075, marked=0, suppressed=466))),
+         "store-save-storm")
+    hits("store-save-storm the loaded set's first saves were marked (the baseline does not hold)",
+         list(check_store_save_storm(sst_ctx(disk_final=2075, marked=441, suppressed=25))),
          "store-save-storm")
     hits("store-save-storm store did not serve the wave",
          list(check_store_save_storm(sst_ctx(disk_final=2075, hits_final=100))),

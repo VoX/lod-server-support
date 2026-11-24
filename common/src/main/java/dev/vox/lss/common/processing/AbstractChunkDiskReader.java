@@ -893,7 +893,9 @@ public abstract class AbstractChunkDiskReader {
             recordRealCompletion(System.nanoTime() - startNs);
             // Error/timeout TRIAGED as not-found (law A5's disk.errors fold) — says nothing
             // about existence, so it must never seed the miss memo.
-            addResult(registration, ChunkReadResult.notFoundFromError(playerUuid, chunkX, chunkZ, dimension, submissionOrder));
+            addResult(registration, e instanceof java.util.concurrent.TimeoutException
+                    ? ChunkReadResult.notFoundFromTimeout(playerUuid, chunkX, chunkZ, dimension, submissionOrder)
+                    : ChunkReadResult.notFoundFromError(playerUuid, chunkX, chunkZ, dimension, submissionOrder));
             // Deliberately NO Error re-throw (the pre-Phase-1 shape re-threw best-effort
             // into a FutureTask nobody inspects — provably unobservable): the last-resort
             // catch in the submit lambda would now see it and deliver a SECOND result,

@@ -44,6 +44,8 @@ public final class ClientOptionCatalog {
 
     /** A button, not a setting ({@link ActionSpec}): {@link #find} never resolves it. */
     public static final String ID_REDOWNLOAD_TERRAIN = "lss:redownload_terrain";
+    /** A button too: put the terrain a map was not given on the map (issue #380). */
+    public static final String ID_FILL_MAP = "lss:fill_map";
 
     public static final String PAGE_GENERAL = "general";
     public static final String PAGE_FAR_PLAYERS = "far_players";
@@ -205,12 +207,21 @@ public final class ClientOptionCatalog {
                 "lss.config.redownload_terrain.tooltip",
                 ActionSpec.Action.REDOWNLOAD_TERRAIN);
 
+        // Fill Map (issue #380): terrain that was downloaded while no map was being written is
+        // not on the map, and the server will not send it again by itself (the client says it
+        // has it). This asks for it again for the map alone. No confirm screen: nothing is
+        // cleared, and what it did is said in a toast and in chat.
+        var fillMap = new ActionSpec(ID_FILL_MAP,
+                "lss.config.fill_map",
+                "lss.config.fill_map.tooltip",
+                ActionSpec.Action.FILL_MAP);
+
         return new PageSpec(PAGE_GENERAL, "lss.config.page",
                 List.of(GroupSpec.of(receive),
                         GroupSpec.of(distance),
                         GroupSpec.of(rate, slowStart),
                         GroupSpec.of(maps, source)),
-                List.of(redownload));
+                List.of(redownload, fillMap));
     }
 
     /** Include ancestors so source-specific controls also follow the reception master. */

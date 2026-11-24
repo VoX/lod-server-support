@@ -1190,6 +1190,154 @@ class ClientColumnProcessorTest {
         assertEquals(0, processor.getSkyEstimatedColumns());
     }
 
+    // ---- a map fill's answer (issue #380), through the real queue, drain and delivery ----
+
+    /** Production wiring: the drain's map-only dispatch must name the map backends as its
+     *  audience. Falling back to the plain dispatch compiles, passes every test that brings
+     *  its own dispatcher, and sends every fill answer to Voxy as well. */
+    @Test
+    void theProductionDrainSendsAMapOnlyColumnToTheMapBackendsAlone() throws Exception {
+        String text = java.nio.file.Files.readString(dev.vox.lss.testutil.SourcePaths.mainSource(
+                "dev/vox/lss/networking/client/ClientColumnProcessor.java"));
+        int prodDrain = text.indexOf("private void drainColumnQueue(ClientLevel level");
+        assertTrue(prodDrain >= 0, "production drain entry missing");
+        int toMaps = text.indexOf("public void dispatchToMaps(", prodDrain);
+        assertTrue(toMaps >= 0, "the production dispatcher must override the map-only dispatch");
+        String body = text.substring(toMaps, text.indexOf("}", toMaps));
+        assertTrue(body.contains("ModCompat::isMapConsumer"), body);
+    }
+
+    /** The map-only flag of a queued column survives the real queue and the real drain. */
+    @Test
+    void aMapOnlyColumnReachesTheMapDispatchAndNobodyElse() {
+        var toMaps = new ArrayList<Dispatched>();
+        ClientColumnProcessor.ColumnDispatcher dispatcher = new ClientColumnProcessor.ColumnDispatcher() {
+            @Override
+            public void dispatch(ResourceKey<Level> d, int cx, int cz, VoxelColumnData data) {
+                dispatches.add(new Dispatched(cx, cz, data.sections().length));
+            }
+
+            @Override
+            public void dispatchToMaps(ResourceKey<Level> d, int cx, int cz, VoxelColumnData data) {
+                toMaps.add(new Dispatched(cx, cz, data.sections().length));
+            }
+        };
+        byte[] wire = sectionWire(1, 1);
+        processor.offer(new VoxelColumnS2CPayload(2, 2, dim, 5000L, wire), false, null, true);
+        processor.offer(new VoxelColumnS2CPayload(3, 3, dim, 5000L, wire), false, null);
+        processor.drainColumnQueue(dim, LEVEL_SECTIONS, 0, false, FACTORY, dispatcher,
+                processor.sessionEpochForTest());
+        assertEquals(List.of(new Dispatched(2, 2, 1)), toMaps);
+        assertEquals(List.of(new Dispatched(3, 3, 1)), dispatches);
+    }
+
+    /** A client that downloaded 24 columns with no map, and now has one. The test plays the
+     *  server (a column stamped 7000 for whatever is asked) and the map (inside the real
+     *  dispatch, with the real delivery handle, as the bridges do). */
+    private final class FillRig {
+        final LodRequestManager manager = new LodRequestManager();
+        final List<Dispatched> toMaps = new ArrayList<>();
+        final List<long[]> batches = new ArrayList<>();
+        boolean mapWriting;
+        boolean mapWrites = true;
+        long nanos;
+
+        final ClientColumnProcessor.ColumnDispatcher dispatcher = new ClientColumnProcessor.ColumnDispatcher() {
+            @Override
+            public void dispatch(ResourceKey<Level> d, int cx, int cz, VoxelColumnData data) {
+                dispatches.add(new Dispatched(cx, cz, data.sections().length));
+                if (mapWriting && mapWrites) LSSApi.captureIngestFailureHandle().written();
+            }
+
+            @Override
+            public void dispatchToMaps(ResourceKey<Level> d, int cx, int cz, VoxelColumnData data) {
+                toMaps.add(new Dispatched(cx, cz, data.sections().length));
+                if (mapWrites) LSSApi.captureIngestFailureHandle().written();
+            }
+        };
+
+        FillRig() {
+            manager.joinSlowStartEnabled = () -> false;
+            manager.deliveryExecutor = Runnable::run;
+            manager.mapWritingProbe = () -> mapWriting;
+            manager.mapFillNotice = line -> { };
+            manager.mapFillForTest().clock = () -> nanos;
+            manager.onSessionConfig(new SessionConfigS2CPayload(LSSConstants.PROTOCOL_VERSION, true,
+                    2, true), "lss-test-fill-drain");
+            manager.setLastDimensionForTest(dim);
+            manager.markCacheLoadedForTest();
+            manager.setBatchSenderForTest(p -> batches.add(java.util.Arrays.copyOf(p.packedPositions(), p.count())));
+        }
+
+        /** One second: the scan fires, the server answers every position with a column,
+         *  and the real drain runs. */
+        void second() {
+            nanos += 1_000_000_000L;
+            int before = batches.size();
+            for (int tick = 0; tick <= LSSConstants.TICKS_PER_SECOND; tick++) {
+                if (manager.tickScanPhase(0, 0, 0, 0, 0L, -1, () -> 0) >= 0) break;
+            }
+            if (batches.size() == before) return;
+            byte[] wire = sectionWire(1, 1);
+            for (long position : batches.get(batches.size() - 1)) {
+                // The download is stamped 7000. A column the client holds is answered with an
+                // older stamp (as below a ratcheted one): never newer, so it is the fill's.
+                long stamp = manager.getColumnTimestamp(PositionUtil.unpackX(position),
+                        PositionUtil.unpackZ(position)) > 0 ? 6000L : 7000L;
+                LSSClientNetworking.handleVoxelColumn(manager, processor, new VoxelColumnS2CPayload(
+                        PositionUtil.unpackX(position), PositionUtil.unpackZ(position), dim, stamp, wire));
+            }
+            processor.drainColumnQueue(dim, LEVEL_SECTIONS, 0, false, FACTORY, dispatcher,
+                    processor.sessionEpochForTest());
+        }
+
+        void downloadWithoutAMapThenPress() {
+            for (int i = 0; i < 6; i++) second();
+            assertEquals(24, dispatches.size(), "premise: the lod-2 disc but the player's own column");
+            assertEquals(24, manager.getMapOwedColumns(), "premise: no map was written");
+            assertTrue(toMaps.isEmpty());
+            dispatches.clear();
+            mapWriting = true;
+            assertEquals(LodRequestManager.MapFillRequest.Outcome.STARTED, manager.requestMapFill().outcome());
+        }
+    }
+
+    @Test
+    void aFillAnswerSettlesTheDebtThroughTheRealPipelineWhenTheMapWritesIt() {
+        var rig = new FillRig();
+        rig.downloadWithoutAMapThenPress();
+        for (int i = 0; i < 8; i++) rig.second();
+        assertEquals(24, rig.toMaps.size(), "every answer reached the map dispatch, once");
+        assertTrue(dispatches.isEmpty(), "and no other consumer");
+        assertTrue(rig.toMaps.stream().allMatch(d -> d.sectionCount() == 1),
+                "as sent: the resync air-fill is not for a map");
+        assertEquals(0, rig.manager.getMapOwedColumns());
+        assertEquals(24, rig.manager.getMapFillDelivered());
+        assertEquals(0, rig.manager.mapFillForTest().pendingForTest(), "every delivery ended");
+        assertFalse(rig.manager.mapFillForTest().working());
+        assertFalse(rig.manager.mapFillForTest().requested(), "nothing is left to owe: the request ended");
+        assertEquals(7000L, rig.manager.getColumnTimestamp(1, 1), "and no held stamp moved");
+    }
+
+    /** The map takes the column from the dispatch and writes nothing: no failure, no word.
+     *  The debt returns when the real drain completes the delivery, the column is asked for
+     *  again, and after three tries the fill leaves it: the bound on what a map that refuses
+     *  everything can cost the server. */
+    @Test
+    void aFillAnswerTheMapDoesNotWriteComesBackAndIsBoundedThroughTheRealPipeline() {
+        var rig = new FillRig();
+        rig.downloadWithoutAMapThenPress();
+        rig.mapWrites = false;
+        for (int i = 0; i < 20; i++) rig.second();
+        assertEquals(24 * MapFill.MAX_FAILURES, rig.toMaps.size(), "three tries for each, then no more");
+        assertTrue(dispatches.isEmpty());
+        assertEquals(24, rig.manager.getMapOwedColumns(), "still owed");
+        assertEquals(0, rig.manager.getMapFillDelivered());
+        assertEquals(7000L, rig.manager.getColumnTimestamp(1, 1), "and no held column was touched");
+        assertEquals(0, rig.manager.getTotalIngestFailures(), "it is not an ingest failure");
+        assertFalse(rig.manager.mapFillForTest().requested(), "the request ended");
+    }
+
     /** Source-regex pin (review C1-6, the dialectFlipFor precedent): the PRODUCTION
      *  ClientLevel drain must route bodies through the v20 translation (with the v16
      *  native-body gate) — a refactor onto the 7-arg identity-overload compiles clean

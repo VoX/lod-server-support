@@ -50,7 +50,7 @@ class SaveHookStoreBridgeTest {
     void changedSaveDeletesTheRowAndNeverDeposits() {
         var store = new RecordingStore();
         LSSServerNetworking.applySaveObservationToStore(store, OW, 7, -3,
-                new DirtyContentFilter.SaveObservation(true, true, new byte[]{1, 2, 3}));
+                new DirtyContentFilter.SaveObservation(true, true));
         assertEquals(List.of(new Call("delete", OW, PositionUtil.packPosition(7, -3))),
                 store.calls,
                 "a changed save must promptly delete the pre-edit row — and must NOT"
@@ -59,10 +59,10 @@ class SaveHookStoreBridgeTest {
     }
 
     @Test
-    void changedButUndepositableAlsoJustDeletes() {
+    void changedWithUnreadContentAlsoJustDeletes() {
         var store = new RecordingStore();
         LSSServerNetworking.applySaveObservationToStore(store, OW, 2, 2,
-                new DirtyContentFilter.SaveObservation(true, false, null));
+                new DirtyContentFilter.SaveObservation(true, false));
         assertEquals(List.of(new Call("delete", OW, PositionUtil.packPosition(2, 2))),
                 store.calls,
                 "an edit that could not be re-serialized must kill the stale row");
@@ -72,10 +72,10 @@ class SaveHookStoreBridgeTest {
     void unchangedSaveAndNullStoreAreNoOps() {
         var store = new RecordingStore();
         LSSServerNetworking.applySaveObservationToStore(store, OW, 3, 3,
-                new DirtyContentFilter.SaveObservation(false, false, null));
+                new DirtyContentFilter.SaveObservation(false, true));
         assertEquals(0, store.calls.size(), "a suppressed save must not touch the store");
         LSSServerNetworking.applySaveObservationToStore(null, OW, 3, 3,
-                new DirtyContentFilter.SaveObservation(true, true, new byte[]{1}));
+                new DirtyContentFilter.SaveObservation(true, true));
     }
 
     /**

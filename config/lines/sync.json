@@ -1,6 +1,6 @@
 {
   "schema_version": 2,
-  "reference_commit": "9f1f09e046963ae21792fc0204fed9204550f4f8",
+  "reference_commit": "2ea84b506d5bdcfa10e59441e312cdefd713eb42",
   "adapted": [
     ".github/line.env",
     ".github/workflows/build.yml",
@@ -97,6 +97,8 @@
     "fabric/src/test/java/dev/vox/lss/networking/client/LodRequestManagerSummaryTest.java",
     "fabric/src/test/java/dev/vox/lss/networking/client/LodRequestManagerTest.java",
     "fabric/src/test/java/dev/vox/lss/networking/client/LodRequestManagerTickTest.java",
+    "fabric/src/test/java/dev/vox/lss/networking/client/MapFillRequestTest.java",
+    "fabric/src/test/java/dev/vox/lss/networking/client/MapOwedRecordTest.java",
     "fabric/src/test/java/dev/vox/lss/networking/client/MaskedWireRoundTripTest.java",
     "fabric/src/test/java/dev/vox/lss/networking/client/SectionStateFuzzTest.java",
     "fabric/src/test/java/dev/vox/lss/networking/client/SkyLightEstimateTimingTool.java",
@@ -110,6 +112,7 @@
     "fabric/src/test/java/dev/vox/lss/networking/payloads/WireEdgeCaseTest.java",
     "fabric/src/test/java/dev/vox/lss/networking/payloads/WireParityTest.java",
     "fabric/src/test/java/dev/vox/lss/networking/server/ChunkDiskReaderTest.java",
+    "fabric/src/test/java/dev/vox/lss/networking/server/ColumnPacketPassthroughTest.java",
     "fabric/src/test/java/dev/vox/lss/networking/server/CompressedColumnsExperimentTool.java",
     "fabric/src/test/java/dev/vox/lss/networking/server/CorpusRegistryAccess.java",
     "fabric/src/test/java/dev/vox/lss/networking/server/FabricOffThreadProcessorDropTest.java",
@@ -119,6 +122,7 @@
     "fabric/src/test/java/dev/vox/lss/networking/server/MemoizedNbtCodecTest.java",
     "fabric/src/test/java/dev/vox/lss/networking/server/NbtSectionSerializerTest.java",
     "fabric/src/test/java/dev/vox/lss/networking/server/SectionLightDefaultsTest.java",
+    "fabric/src/test/java/dev/vox/lss/networking/server/SectionSinkTest.java",
     "fabric/src/test/java/dev/vox/lss/networking/server/SelectiveChunkNbtLoaderTest.java",
     "fabric/src/test/java/dev/vox/lss/networking/server/V20SettlingExperimentTool.java",
     "fabric/src/test/java/dev/vox/lss/networking/server/XrayMaskFilterTest.java",
