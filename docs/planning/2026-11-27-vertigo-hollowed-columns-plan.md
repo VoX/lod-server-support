@@ -442,7 +442,7 @@ The live repro changed the detector. The rest (sections 3.2 to 3.5) is built as 
   - `vertigo_refills=` on the client diag's Columns line (a new `ClientDiagnosticSnapshot`
     field).
 - **Tests.**
-  - `VertigoHollowDetectorTest` (9), `ColumnStateMapHollowedTest` (6),
+  - `VertigoHollowDetectorTest` (11), `ColumnStateMapHollowedTest` (6),
     `LodRequestManagerHollowedTest` (12).
   - The `SectionStateFuzzTest` differential has a new `onHollowed` op, mirrored in
     `ReferenceColumnStateMap`.
@@ -512,3 +512,19 @@ sentinel.
 
 **Gate fix:** Sponge compiles the server half of xplat. `Vertigo*.java` is client-only and joins
 the derived client excludes in `sponge/build.gradle`.
+
+**Gate fixes after the folds** (trial gates, `~/.local/state/lss-release-prep-v0.25.0/gates-trial/`,
+every attempt kept):
+- Attempt 1: Sponge did not exclude the client-only `Vertigo*.java`.
+- Attempt 2: the access-widener tripwire. A widener line must be mirrored into NeoForge's
+  transformer, and Sponge's widener must equal Fabric's.
+- Attempt 3: Sponge's widener pin. The server view distance is now read through a Fabric client
+  accessor mixin (`AccessorOptions`), so no widener line is needed.
+- Attempt 4: `release_check` lists `VertigoFabricHook` and `AccessorOptions` as Fabric-only
+  classes.
+
+Trial results:
+- 26.3: green except that last step, re-checked clean.
+- 1.21.1: green except `compat-ci`'s `not-on-main`, expected for a trial sync.
+- 26.2 and 1.21.11: compile, plus the new suites.
+- CI on the draft PR #451 is green.
