@@ -16,7 +16,8 @@ public final class VertigoFabricHook {
         VertigoCompat.enable();
         ClientChunkEvents.CHUNK_LOAD.register(VertigoCompat::chunkLoaded);
         ClientTickEvents.END_CLIENT_TICK.register(mc ->
-                VertigoCompat.clientTick(mc.level, mc.options.serverRenderDistance));
+                VertigoCompat.clientTick(mc.level,
+                        ((dev.vox.lss.mixin.AccessorOptions) mc.options).lss$getServerRenderDistance()));
         LSSLogger.info("Vertigo detected: terrain it hides from Voxy is fetched again after you pass");
     }
 }

@@ -5,6 +5,3 @@ accessWidener v2 official
 # record; Paper's Moonrise patch makes both public, so the Paper twin needs no widening.
 accessible class net/minecraft/world/level/chunk/PalettedContainer$Data
 accessible field net/minecraft/world/level/chunk/PalettedContainer data Lnet/minecraft/world/level/chunk/PalettedContainer$Data;
-# Vertigo repair (issue #437): the server's view distance from the login packet decides when the
-# server has let a chunk go, so a re-ask is a store serve and not a main-thread serialize.
-accessible field net/minecraft/client/Options serverRenderDistance I
