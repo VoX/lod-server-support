@@ -1692,20 +1692,74 @@ class MapFillRequestTest {
         }
     }
 
-    /** A session that downloads nothing from this server (the mod is off there, or Receive is
-     *  switched off) loads no cache, and nothing can be running in it: a stop says so. */
+    /** A session that downloads nothing from this server (its acquisition is retired) loads
+     *  no cache, and nothing can be running in it: a stop says so. */
     @Test
     void aStopInASessionThatDownloadsNothingSaysThatNothingIsRunning() {
         start(3, LSSConstants.PROTOCOL_VERSION, false);
-        manager.retireAcquisition(); // Receive switched off
+        manager.retireAcquisition();
         var said = new java.util.ArrayList<String>();
         ClientCommandActions.stopFillMap(line -> said.add(key(line)), manager);
         assertEquals(List.of("lss.mapfill.not_running"), said);
         assertFalse(manager.mapFillForTest().stopped(), "and nothing waits for a load that never comes");
+    }
 
-        start(3, LSSConstants.V16_COMPAT_PROTOCOL_VERSION, false); // an older server dialect: no fill there
-        ClientCommandActions.stopFillMap(line -> said.add(key(line)), manager);
-        assertEquals("lss.mapfill.not_running", said.get(1));
+    /** A session in an older dialect loads this server's cache like any other, so a request
+     *  standing in its record would go on once the server speaks the current dialect: the
+     *  stop is honoured there and reaches the record (a press is not: no fill runs there).
+     *  Through the real files. */
+    @Test
+    void aStopInAnOlderDialectSessionReachesTheRecord() {
+        final String address = "map-fill-stop-old-dialect";
+        start(3, LSSConstants.PROTOCOL_VERSION, true, address);
+        String bucket = manager.cacheBucketForTest();
+        try {
+            converge(); // no map: 48 owed
+            mapWriting = true;
+            assertEquals(MapFillRequest.Outcome.STARTED, manager.requestMapFill().outcome());
+            manager.saveCache();
+            assertTrue(ColumnCacheStore.loadStateAsync(bucket, dim).join().mapFillRequested, "premise: the record holds a request");
+
+            start(3, LSSConstants.V16_COMPAT_PROTOCOL_VERSION, false, address);
+            manager.setPendingStateLoadForTest(new CompletableFuture<>());
+            mapWriting = true;
+            assertEquals(MapFillRequest.Outcome.UNAVAILABLE, manager.requestMapFill().outcome(),
+                    "premise: no fill in an older dialect");
+            assertTrue(manager.stopMapFill(), "but a stop is taken");
+            manager.saveCache();
+
+            assertFalse(ColumnCacheStore.loadStateAsync(bucket, dim).join().mapFillRequested,
+                    "the stop reached the record");
+        } finally {
+            ColumnCacheStore.clearForServer(bucket);
+        }
+    }
+
+    /** A stop and then a press, both while the cache is still loading, and the player leaves
+     *  before the load: the press was the later word ("starts once the records have
+     *  loaded"), so the record holds the request, as it would had the load come in. */
+    @Test
+    void aPressAfterAStopWaitingForTheCacheIsTheOneSaved() {
+        final String address = "map-fill-stop-then-press-unloaded";
+        start(3, LSSConstants.PROTOCOL_VERSION, true, address);
+        String bucket = manager.cacheBucketForTest();
+        try {
+            converge(); // no map: 48 owed
+            manager.saveCache();
+
+            start(3, LSSConstants.PROTOCOL_VERSION, false, address);
+            manager.setPendingStateLoadForTest(new CompletableFuture<>());
+            mapWriting = true;
+            assertTrue(manager.stopMapFill());
+            assertEquals(MapFillRequest.Outcome.WAITING_FOR_CACHE, manager.requestMapFill().outcome());
+            assertFalse(manager.mapFillForTest().stopped(), "the press took the stop back");
+            manager.saveCache(); // the player leaves before the load
+
+            assertTrue(ColumnCacheStore.loadStateAsync(bucket, dim).join().mapFillRequested,
+                    "the press reached the record");
+        } finally {
+            ColumnCacheStore.clearForServer(bucket);
+        }
     }
 
     /** Chat lines name the Fill Map button only where the options screen has one. On

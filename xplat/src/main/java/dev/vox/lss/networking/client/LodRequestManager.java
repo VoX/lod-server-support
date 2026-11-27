@@ -912,11 +912,12 @@ public class LodRequestManager {
 
     /** {@code /lss fillmap stop}: the request no longer stands. False when none did. */
     boolean stopMapFill() {
-        if (!this.acquisitionActive || this.sessionConfig == null
-                || this.sessionConfig.protocolVersion() != LSSConstants.PROTOCOL_VERSION) {
-            // The press's own guard: this session downloads nothing, so no cache is loading
-            // and nothing here can be running. (Without it a stop "waited for the load" for
-            // ever and answered that it had stopped something.)
+        if (!this.acquisitionActive || this.sessionConfig == null) {
+            // This session downloads nothing, so no cache is loading and nothing here can be
+            // running. (Without it a stop "waited for the load" for ever and answered that it
+            // had stopped something.) Unlike the press, no dialect check: a session in an
+            // older dialect loads this server's cache too, and a request standing in it would
+            // go on once the server speaks the current one, so the stop is honoured there.
             return false;
         }
         return this.mapFill.stop();
