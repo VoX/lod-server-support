@@ -797,7 +797,7 @@ public class SerializerParityGameTests {
      * the disk-served bytes (pinned by the parity test), so a seeded filter would return
      * false here.
      */
-    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = 1200)
+    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = 2400)
     public void diskReadServesDoNotSeedTheDirtyContentFilter(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();
         var server = level.getServer();
@@ -845,8 +845,9 @@ public class SerializerParityGameTests {
                         // come from disk any more. Ask again from the start on a fresh
                         // service once the chunk has unloaded (its shutdown drops the
                         // generation ticket). 2026-11-27: the 0.24.0 gate's one red, with
-                        // "Disk read timed out (>10s)" for exactly this chunk.
-                        helper.assertTrue(askedAgain.incrementAndGet() <= 3,
+                        // "Disk read timed out (>10s)" for exactly this chunk. Three reads at
+                        // most; the budget (2400 ticks) leaves room for three timeouts.
+                        helper.assertTrue(askedAgain.incrementAndGet() <= 2,
                                 "the disk read failed or ran out of time three times: look at the host and the reader log");
                         service.shutdown();
                         var fresh = new RequestProcessingService(server);
