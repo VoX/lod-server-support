@@ -3,117 +3,143 @@ package dev.vox.lss.compat;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 import java.util.HashMap;
 import java.util.Map;
-import java.util.Set;
+import java.util.function.IntBinaryOperator;
+import net.minecraft.SharedConstants;
+import net.minecraft.server.Bootstrap;
+import net.minecraft.world.level.chunk.LevelChunk;
+import net.minecraft.world.level.chunk.LevelChunkSection;
+import net.minecraft.world.level.levelgen.Heightmap;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 /**
- * Issue #437: which unloading vanilla chunks Voxy saved with Vertigo's air in them, read from
- * the chunk itself (docs/planning/2026-11-27-vertigo-hollowed-columns-plan.md §3.1). An
- * overworld of sections -4..19 (Y -64..319).
+ * Issue #437: which vanilla chunks that left the client Voxy saved with Vertigo's air in them,
+ * read from the chunks themselves (docs/planning/2026-11-27-vertigo-hollowed-columns-plan.md §10).
  */
 class VertigoHollowDetectorTest {
-    static final int MIN = -4, MAX = 19;
+    @BeforeAll static void boot() { SharedConstants.tryDetectVersion(); Bootstrap.bootStrap(); }
 
-    /** A chunk with surface heights low..high whose sections in `empty` are all air. */
-    record View(int minTopY, int maxTopY, Set<Integer> empty) implements VertigoHollowDetector.ChunkView {
-        public boolean sectionEmpty(int sectionY) { return empty.contains(sectionY); }
+    // ---- the rule on a client chunk: Y -64..319, 24 sections ----
+
+    /** A chunk whose column (x, z) has its top block at heights(x, z), and whose sections listed
+     *  in `airSections` (by index) the client holds as all air. */
+    static LevelChunk chunk(IntBinaryOperator heights, int... airSections) {
+        var chunk = mock(LevelChunk.class);
+        when(chunk.hasPrimedHeightmap(Heightmap.Types.WORLD_SURFACE)).thenReturn(true);
+        when(chunk.getMinY()).thenReturn(-64);
+        var sections = new LevelChunkSection[24];
+        for (int i = 0; i < 24; i++) {
+            var section = mock(LevelChunkSection.class);
+            boolean air = false;
+            for (int a : airSections) air |= a == i;
+            when(section.hasOnlyAir()).thenReturn(air);
+            sections[i] = section;
+        }
+        when(chunk.getSections()).thenReturn(sections);
+        when(chunk.getSectionIndex(anyInt())).thenAnswer(call -> Math.floorDiv((int) call.getArgument(0) + 64, 16));
+        when(chunk.getHeight(eq(Heightmap.Types.WORLD_SURFACE), anyInt(), anyInt()))
+                .thenAnswer(call -> heights.applyAsInt(call.getArgument(1), call.getArgument(2)));
+        return chunk;
     }
 
-    /** Terrain from Y -64 to 90, sections 6..19 air (sky), plus what Vertigo hid. */
-    static View terrain(Integer... hidden) {
-        var empty = new java.util.HashSet<>(Set.of(6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19));
-        empty.addAll(Set.of(hidden));
-        return new View(70, 90, empty);
+    /** Index of the section holding Y. */
+    static int at(int y) { return Math.floorDiv(y + 64, 16); }
+
+    @Test void theSurfaceSectionsHeldAsAirAreHollow() {
+        // Flying high: Vertigo sent the surface sections (Y 64..95) as air.
+        var hills = (IntBinaryOperator) (x, z) -> 70 + x + z; // tops 70..100
+        assertTrue(VertigoCompat.topSectionEmpty(chunk(hills, at(70), at(80), at(96))));
+        assertTrue(VertigoCompat.topSectionEmpty(chunk(hills, at(100))), "one column's top section is enough");
+        assertFalse(VertigoCompat.topSectionEmpty(chunk(hills)), "everything sent");
     }
+
+    @Test void skyCavesAndDeepTerrainNeverCount() {
+        var flat = (IntBinaryOperator) (x, z) -> 70;
+        int[] skyAndDeep = {at(-64), at(-40), at(0), at(100), at(200), at(319)};
+        assertFalse(VertigoCompat.topSectionEmpty(chunk(flat, skyAndDeep)),
+                "air above the surface is sky; air below it is out of sight from above");
+    }
+
+    @Test void airUnderAFloatingBuildOrBesideAnEndIslandIsNotHollow() {
+        // A sky platform at Y 200 over ground at Y 70: the sections between are air on the server too.
+        var platform = (IntBinaryOperator) (x, z) -> x < 4 ? 200 : 70;
+        assertFalse(VertigoCompat.topSectionEmpty(chunk(platform, at(100), at(130), at(160), at(190))));
+        // An End island edge: void columns (no block, top below the world) next to the island at Y 60.
+        var island = (IntBinaryOperator) (x, z) -> x < 8 ? -65 : 60;
+        assertFalse(VertigoCompat.topSectionEmpty(chunk(island, at(-64), at(-30), at(0), at(30))));
+        assertTrue(VertigoCompat.topSectionEmpty(chunk(island, at(60))), "the island's own surface hidden");
+    }
+
+    @Test void aChunkWithoutItsHeightmapIsNeverHollow() {
+        var chunk = chunk((x, z) -> 70, at(70));
+        when(chunk.hasPrimedHeightmap(Heightmap.Types.WORLD_SURFACE)).thenReturn(false);
+        assertFalse(VertigoCompat.topSectionEmpty(chunk));
+    }
+
+    // ---- when: neighbours at the moment Voxy saves them ----
+
+    record View(boolean topSectionEmpty) implements VertigoHollowDetector.ChunkView {}
+    static final View HOLLOW = new View(true), FULL = new View(false);
 
     static final class World implements VertigoHollowDetector.Chunks {
         final Map<Long, View> chunks = new HashMap<>();
         World put(int x, int z, View v) { chunks.put(VertigoHollowDetector.pack(x, z), v); return this; }
         World disc(int r, View v) { for (int x = -r; x <= r; x++) for (int z = -r; z <= r; z++) put(x, z, v); return this; }
-        void drop(int x, int z) { chunks.remove(VertigoHollowDetector.pack(x, z)); }
+        View drop(int x, int z) { return chunks.remove(VertigoHollowDetector.pack(x, z)); }
         public VertigoHollowDetector.ChunkView chunk(int x, int z) { return chunks.get(VertigoHollowDetector.pack(x, z)); }
-    }
-
-    @Test void skyAboveTheSurfaceAndCavesBelowItAreNotHollow() {
-        assertFalse(VertigoHollowDetector.hollow(terrain(), MIN, MAX), "air above Y 90 is sky");
-        assertFalse(VertigoHollowDetector.hollow(terrain(-4, -3, 0), MIN, MAX),
-                "sections empty below the lowest surface block are out of sight from above");
-    }
-
-    @Test void anEmptySectionInTheSurfaceBandIsHollow() {
-        // Flying high: Vertigo hid sections 4 and 5, which hold the surface (Y 64..95).
-        assertTrue(VertigoHollowDetector.hollow(terrain(4, 5), MIN, MAX));
-        assertTrue(VertigoHollowDetector.hollow(terrain(5), MIN, MAX), "the highest top block's section");
-        assertTrue(VertigoHollowDetector.hollow(terrain(4), MIN, MAX), "the lowest top block's section");
-    }
-
-    @Test void theBandIsClampedAndAnEmptyChunkNeverCounts() {
-        assertFalse(VertigoHollowDetector.hollow(new View(-65, -65, Set.of(-4, -3)), MIN, MAX), "no block at all");
-        assertFalse(VertigoHollowDetector.hollow(new View(400, 400, Set.of()), MIN, MAX), "no section above the world");
-        assertFalse(VertigoHollowDetector.hollow(null, MIN, MAX));
     }
 
     @Test void aFullChunkFlownOverIsNotReported() {
         var detector = new VertigoHollowDetector();
-        var world = new World().disc(3, terrain());
-        assertFalse(detector.unloading(3, 0, MIN, MAX, world));
+        var world = new World().disc(3, FULL);
+        assertFalse(detector.left(3, 0, world.drop(3, 0), world));
         assertEquals(0, detector.suspectCount());
     }
 
-    @Test void aNeighbourHollowWhenItLeavesReadyIsReportedAtItsOwnUnloadEvenIfFullByThen() {
+    @Test void aNeighbourHollowWhenItLeavesReadyIsReportedWhenItLeavesEvenIfFullByThen() {
         var detector = new VertigoHollowDetector();
-        // Flying high: everything hollow. The edge chunk (3,0) unloads first; (2,0) loses
-        // "ready" with it, and Voxy saves (2,0) hollow at that moment.
-        var world = new World().disc(3, terrain(4, 5));
-        assertTrue(detector.unloading(3, 0, MIN, MAX, world), "the edge itself was hollow");
-        world.drop(3, 0);
+        // Flying high: everything hollow. The edge chunk (3,0) leaves first; (2,0) loses "ready"
+        // with it, and Voxy saves (2,0) hollow at that moment.
+        var world = new World().disc(3, HOLLOW);
+        assertTrue(detector.left(3, 0, world.drop(3, 0), world), "the edge itself was hollow");
         assertTrue(detector.suspectCount() > 0);
-        // The player dives: Vertigo sends (2,0)'s surface before it unloads. Voxy does not save
+        // The player dives: Vertigo sends (2,0)'s surface before it leaves. Voxy does not save
         // a section that turns visible, so (2,0) is still hollow in Voxy.
-        world.put(2, 0, terrain());
-        assertTrue(detector.unloading(2, 0, MIN, MAX, world), "suspect from the neighbour unload");
+        world.put(2, 0, FULL);
+        assertTrue(detector.left(2, 0, world.drop(2, 0), world), "suspect from the neighbour leaving");
     }
 
     @Test void aChunkFullWhenItLeftReadyIsNotReported() {
         var detector = new VertigoHollowDetector();
-        var world = new World().disc(3, terrain());
-        detector.unloading(3, 0, MIN, MAX, world);
-        world.drop(3, 0);
-        assertFalse(detector.unloading(2, 0, MIN, MAX, world));
+        var world = new World().disc(3, FULL);
+        detector.left(3, 0, world.drop(3, 0), world);
+        assertFalse(detector.left(2, 0, world.drop(2, 0), world));
     }
 
-    @Test void aChunkDroppedWithAllItsNeighboursIsJudgedAsItIsNow() {
-        // A teleport drops the whole disc: the slots are empty when Sodium's removals run, so
-        // what Voxy holds is what it saved at the add: hollow now, as when it arrived.
+    @Test void aChunkThatLeftWithAllItsNeighboursIsJudgedAsItIs() {
+        // A teleport drops the whole disc: Sodium never removed it, so Voxy holds what it saved
+        // at the add: hollow, as when it arrived.
         var detector = new VertigoHollowDetector();
-        var world = new World().put(0, 0, terrain(4, 5));
-        assertTrue(detector.unloading(0, 0, MIN, MAX, world));
+        assertTrue(detector.left(0, 0, HOLLOW, new World()));
+        assertFalse(detector.left(1, 0, FULL, new World()));
         assertEquals(0, detector.suspectCount(), "nothing else is loaded");
     }
 
-    @Test void suspectsLeaveAtTheirOwnUnloadAndClearResetsThem() {
+    @Test void suspectsLeaveWithTheirChunkAndClearResetsThem() {
         var detector = new VertigoHollowDetector();
-        var world = new World().disc(1, terrain(5));
-        detector.unloading(1, 1, MIN, MAX, world);
+        var world = new World().disc(1, HOLLOW);
+        detector.left(1, 1, world.drop(1, 1), world);
         assertEquals(3, detector.suspectCount(), "(0,0), (1,0) and (0,1) are the loaded neighbours of (1,1)");
-        world.drop(1, 1);
-        assertTrue(detector.unloading(1, 0, MIN, MAX, world));
-        assertEquals(4, detector.suspectCount(), "(1,0) left; (0,-1), (1,-1) joined from its unload");
+        assertTrue(detector.left(1, 0, world.drop(1, 0), world));
+        assertEquals(4, detector.suspectCount(), "(1,0) left; (0,-1) and (1,-1) joined");
         detector.clear();
         assertEquals(0, detector.suspectCount());
-    }
-
-    @Test void aSilentlyEvictedSuspectIsStillOwed() {
-        // A teleport evicts chunks without unload events: the sweep asks whether a neighbour's
-        // unload had marked the chunk, and judges it by its content otherwise.
-        var detector = new VertigoHollowDetector();
-        var world = new World().disc(1, terrain(5));
-        detector.unloading(1, 1, MIN, MAX, world);
-        assertTrue(detector.forget(VertigoHollowDetector.pack(0, 0)), "marked by the neighbour unload");
-        assertFalse(detector.forget(VertigoHollowDetector.pack(0, 0)), "and only once");
-        assertFalse(detector.forget(VertigoHollowDetector.pack(-1, -1)), "never marked");
     }
 }

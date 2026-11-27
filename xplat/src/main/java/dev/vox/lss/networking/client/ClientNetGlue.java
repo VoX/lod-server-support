@@ -198,9 +198,8 @@ public final class ClientNetGlue {
         return manager != null && manager.isAcquisitionActive();
     }
 
-    /** Vertigo hid real terrain of an unloading vanilla chunk while Voxy saved it (issue
-     *  #437). Called on the main client thread from the unload event, directly: a hop would
-     *  let a scan ask with the old stamp first. */
+    /** Vertigo hid real terrain of a vanilla chunk that left the client while Voxy saved it
+     *  (issue #437). Main client thread (the once-a-second sweep). */
     public static void reportHollowed(ResourceKey<Level> dimension, int chunkX, int chunkZ, int serverViewDistance) {
         var manager = sessionGate.getRequestManager();
         if (manager != null && manager.isAcquisitionActive()) {

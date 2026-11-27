@@ -265,6 +265,8 @@ public class LodRequestManager {
     /** Player tickets keep chunks FULL to the server view distance + 2, and the server's
      *  ticket centre lags the client by a round trip. */
     static final int HOLLOW_SERVER_MARGIN = 4;
+    /** Releases by age alone per tick (they may hit chunks the server still has loaded). */
+    static final int HOLLOW_HELD_RELEASES_PER_TICK = 2;
     /** Assumed server view distance when the client never learned it (login packet). */
     static final int HOLLOW_FALLBACK_SERVER_DISTANCE = 32;
     /** Position -> unload time (nanos), in insertion order. Main client thread only. */
@@ -1631,8 +1633,9 @@ public class LodRequestManager {
 
     /**
      * Vertigo hid real terrain of this vanilla chunk while Voxy saved it, and the chunk has now
-     * unloaded (issue #437). Queue a re-ask for when the server has let the chunk go. Main
-     * client thread only (the unload event runs there).
+     * left the client (issue #437). Queue a re-ask for when the server has let the chunk go.
+     * Main client thread only. Not capped while the cache loads: the load takes seconds and the
+     * queue grows only by the chunks that leave meanwhile.
      *
      * @param serverViewDistance the server's view distance from the login packet, or 0 if unknown
      */
@@ -1659,7 +1662,8 @@ public class LodRequestManager {
     /**
      * Release the head of the pending re-asks once the server has let their chunks go (§3.2):
      * more than the server view distance + {@link #HOLLOW_SERVER_MARGIN} from the player and
-     * at least {@link #HOLLOW_MIN_AGE_NANOS} old, or {@link #HOLLOW_MAX_AGE_NANOS} old. A close
+     * at least {@link #HOLLOW_MIN_AGE_NANOS} old, or {@link #HOLLOW_MAX_AGE_NANOS} old (at most
+     * {@link #HOLLOW_HELD_RELEASES_PER_TICK} of those per tick). A close
      * entry moves to the tail so it never blocks the rest. Waits while the cache loads: the
      * loaded stamps must be in place for the release to drop them.
      */
@@ -1669,6 +1673,7 @@ public class LodRequestManager {
         int server = this.hollowServerViewDistance > 0 ? this.hollowServerViewDistance
                 : HOLLOW_FALLBACK_SERVER_DISTANCE;
         int far = server + HOLLOW_SERVER_MARGIN;
+        int heldReleases = 0;
         for (int examined = 0, n = Math.min(HOLLOW_RELEASE_SCAN, this.hollowPending.size());
              examined < n && !this.hollowPending.isEmpty(); examined++) {
             long packed = this.hollowPending.firstLongKey();
@@ -1676,7 +1681,13 @@ public class LodRequestManager {
             if (age < HOLLOW_MIN_AGE_NANOS) break; // insertion order: the rest are younger or moved
             int distance = Math.max(Math.abs(PositionUtil.unpackX(packed) - playerCx),
                     Math.abs(PositionUtil.unpackZ(packed) - playerCz));
-            if (distance > far || age >= HOLLOW_MAX_AGE_NANOS) {
+            if (distance > far) {
+                this.hollowPending.removeFirstLong();
+                releaseHollowed(packed);
+            } else if (age >= HOLLOW_MAX_AGE_NANOS && heldReleases < HOLLOW_HELD_RELEASES_PER_TICK) {
+                // Close to the player: the server may still have the chunk loaded, and each of
+                // these costs a main-thread serialize there. Spread them out.
+                heldReleases++;
                 this.hollowPending.removeFirstLong();
                 releaseHollowed(packed);
             } else {

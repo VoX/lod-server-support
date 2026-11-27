@@ -1,7 +1,8 @@
 package dev.vox.lss.compat;
 
-import dev.vox.lss.common.LSSLogger;
 import dev.vox.lss.networking.client.ClientNetGlue;
+import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
+import it.unimi.dsi.fastutil.longs.LongArrayList;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.world.level.chunk.LevelChunk;
 import net.minecraft.world.level.chunk.status.ChunkStatus;
@@ -11,112 +12,89 @@ import java.lang.ref.WeakReference;
 /**
  * Vertigo (Fabric, MIT) sends the sections of a chunk far above or below the player as air,
  * and Voxy saves that air over its distant terrain: a trench behind every flight (issue #437,
- * docs/planning/2026-11-27-vertigo-hollowed-columns-plan.md). When a vanilla chunk unloads,
- * this decides from the chunk itself whether Voxy saved it hollow ({@link VertigoHollowDetector})
- * and, if so, has the session ask the server for that column once more. It uses nothing of
- * Vertigo but its presence. Runs only on the Fabric client, and only while Voxy is the consumer
- * (Voxy is what saves the air).
+ * docs/planning/2026-11-27-vertigo-hollowed-columns-plan.md §10). For every vanilla chunk that
+ * leaves the client, this decides from the chunks themselves whether Voxy saved it hollow
+ * ({@link VertigoHollowDetector}) and, if so, has the session ask the server for that column
+ * once more. It uses nothing of Vertigo but its presence. Fabric client only (the hook), and only
+ * while Voxy is the consumer (Voxy is what saves the air).
+ *
+ * <p>One path: the chunks seen loading are held, and once a second the ones the client chunk
+ * cache no longer holds at their position have left. That covers the normal unload and the
+ * silent eviction after a teleport, where the server's forget packets find the old chunks out of
+ * the cache's range, vanilla's drop does nothing, and no unload event fires. A second of latency
+ * costs nothing: a re-ask waits at least five seconds anyway.
  */
 public final class VertigoCompat {
+    static final int SWEEP_TICKS = 20;
+
     private static volatile boolean enabled;
     private static final VertigoHollowDetector detector = new VertigoHollowDetector();
-    private static WeakReference<ClientLevel> detectorLevel = new WeakReference<>(null);
-    /**
-     * The vanilla chunks seen loading and not yet unloading, for the silent-eviction sweep: after
-     * a teleport the server's forget packets find the old chunks out of the cache's range, so
-     * vanilla's drop does nothing and no unload event fires (and Voxy, which never saw them
-     * leave, keeps what it saved when they arrived). Main client thread only.
-     */
-    private static final it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap<WeakReference<LevelChunk>> tracked =
-            new it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap<>();
+    /** Position -> the chunk seen loading there, for the level in {@link #trackedLevel}. Main
+     *  client thread only. Strong references: a chunk that left is held until the next sweep. */
+    private static final Long2ObjectOpenHashMap<LevelChunk> tracked = new Long2ObjectOpenHashMap<>();
     private static WeakReference<ClientLevel> trackedLevel = new WeakReference<>(null);
-    static final int SWEEP_TICKS = 20;
     private static int sweepCountdown = SWEEP_TICKS;
 
     private VertigoCompat() {}
 
-    /** Called once at client start when Vertigo and the Voxy bridge are both there. */
-    public static void init() {
-        enabled = true;
-        LSSLogger.info("Vertigo detected: terrain it hides from Voxy is fetched again after you pass");
-    }
+    /** Called once at client start, by the Fabric hook, when Vertigo and the Voxy bridge are there. */
+    public static void enable() { enabled = true; }
 
-    public static boolean available() { return enabled; }
-
-    /**
-     * A vanilla chunk is unloading (main client thread, while its sections are still there).
-     *
-     * @param serverViewDistance the server's view distance from the login packet, or 0
-     */
-    public static void chunkUnloading(ClientLevel level, LevelChunk chunk, int serverViewDistance) {
-        if (!enabled || level == null || chunk == null) return;
-        if (trackedLevel.get() == level) tracked.remove(VertigoHollowDetector.pack(chunk.getPos().x(), chunk.getPos().z()));
-        try {
-            if (!ClientNetGlue.wantsHollowReports() || !VoxyCompat.isInitialized()
-                    || !VoxyCompat.vanillaIngestEnabled(level)) {
-                detector.clear();
-                return;
-            }
-            if (detectorLevel.get() != level) {
-                detector.clear();
-                detectorLevel = new WeakReference<>(level);
-            }
-            int cx = chunk.getPos().x(), cz = chunk.getPos().z();
-            VertigoHollowDetector.Chunks chunks = (x, z) -> {
-                LevelChunk loaded = x == cx && z == cz ? chunk
-                        : level.getChunkSource().getChunk(x, z, ChunkStatus.FULL, false);
-                return loaded == null ? null : view(loaded);
-            };
-            if (detector.unloading(cx, cz, level.getMinSectionY(), level.getMaxSectionY(), chunks)) {
-                ClientNetGlue.reportHollowed(level.dimension(), cx, cz, serverViewDistance);
-            }
-        } catch (RuntimeException | LinkageError failure) {
-            enabled = false;
-            detector.clear();
-            LSSLogger.warn("Vertigo terrain repair turned off for this session", failure);
-        }
-    }
-
-    /** A vanilla chunk loaded: drop a pending re-ask for it (the next unload decides again). */
+    /** A vanilla chunk loaded (main client thread). */
     public static void chunkLoaded(ClientLevel level, LevelChunk chunk) {
         if (!enabled || level == null || chunk == null) return;
-        if (trackedLevel.get() != level) {
-            tracked.clear();
-            trackedLevel = new WeakReference<>(level);
-        }
-        tracked.put(VertigoHollowDetector.pack(chunk.getPos().x(), chunk.getPos().z()), new WeakReference<>(chunk));
+        switchLevel(level);
+        tracked.put(VertigoHollowDetector.pack(chunk.getPos().x(), chunk.getPos().z()), chunk);
         ClientNetGlue.vanillaChunkLoaded(level.dimension(), chunk.getPos().x(), chunk.getPos().z());
     }
 
+    private static void switchLevel(ClientLevel level) {
+        if (trackedLevel.get() == level) return;
+        tracked.clear();
+        detector.clear();
+        trackedLevel = new WeakReference<>(level);
+    }
+
     /**
-     * Once a second (main client thread): a tracked chunk that is no longer what the client
-     * chunk cache holds at its position left without an unload event. It is judged as a chunk
-     * dropped with its neighbours: by what it holds now, which is what Voxy saved at its add,
-     * or as a suspect if a neighbour's unload had marked it.
+     * Once a second (main client thread): every held chunk that the client chunk cache no longer
+     * holds at its position has left. Throws nothing: a failure turns this off until the game
+     * restarts.
+     *
+     * @param serverViewDistance the server's view distance from the login packet, or 0
      */
     public static void clientTick(ClientLevel level, int serverViewDistance) {
-        if (!enabled || tracked.isEmpty() || --sweepCountdown > 0) return;
+        if (!enabled || --sweepCountdown > 0) return;
         sweepCountdown = SWEEP_TICKS;
-        if (level == null || trackedLevel.get() != level) {
+        if (level == null) {
             tracked.clear();
+            detector.clear();
             return;
         }
-        boolean report;
+        switchLevel(level);
+        if (tracked.isEmpty()) return;
         try {
-            report = ClientNetGlue.wantsHollowReports() && VoxyCompat.isInitialized()
+            boolean report = ClientNetGlue.wantsHollowReports() && VoxyCompat.isInitialized()
                     && VoxyCompat.vanillaIngestEnabled(level);
-            var iterator = tracked.long2ObjectEntrySet().fastIterator();
             var source = level.getChunkSource();
-            while (iterator.hasNext()) {
-                var entry = iterator.next();
-                LevelChunk held = entry.getValue().get();
+            var gone = new LongArrayList();
+            for (var entry : tracked.long2ObjectEntrySet()) {
                 long key = entry.getLongKey();
+                if (source.getChunk((int) key, (int) (key >> 32), ChunkStatus.FULL, false) != entry.getValue()) {
+                    gone.add(key);
+                }
+            }
+            if (gone.isEmpty()) return;
+            if (!report) detector.clear();
+            VertigoHollowDetector.Chunks chunks = (x, z) -> {
+                LevelChunk loaded = source.getChunk(x, z, ChunkStatus.FULL, false);
+                return loaded == null ? null : view(loaded);
+            };
+            for (int i = 0; i < gone.size(); i++) {
+                long key = gone.getLong(i);
+                LevelChunk chunk = tracked.remove(key);
+                if (!report || chunk == null) continue;
                 int x = (int) key, z = (int) (key >> 32);
-                if (held != null && source.getChunk(x, z, ChunkStatus.FULL, false) == held) continue;
-                iterator.remove();
-                if (held == null || !report) continue;
-                if (detector.forget(key)
-                        || VertigoHollowDetector.hollow(view(held), level.getMinSectionY(), level.getMaxSectionY())) {
+                if (detector.left(x, z, view(chunk), chunks)) {
                     ClientNetGlue.reportHollowed(level.dimension(), x, z, serverViewDistance);
                 }
             }
@@ -124,36 +102,39 @@ public final class VertigoCompat {
             enabled = false;
             tracked.clear();
             detector.clear();
-            LSSLogger.warn("Vertigo terrain repair turned off for this session", failure);
+            dev.vox.lss.common.LSSLogger.warn("Vertigo terrain repair turned off until the game restarts", failure);
         }
     }
 
     /**
-     * The rule's view of a client chunk: its {@code WORLD_SURFACE} heights (the server's own,
-     * since Vertigo filters only sections and block entities) and which sections it holds as
-     * all air. A chunk without that heightmap has nothing to judge by and is never hollow.
+     * The rule's view of a client chunk: whether a section that holds some column's top block
+     * (its {@code WORLD_SURFACE} height, the server's own, since Vertigo filters only sections
+     * and block entities) is all air here. Columns with no block at all are skipped. A chunk
+     * without that heightmap has nothing to judge by.
      */
     static VertigoHollowDetector.ChunkView view(LevelChunk chunk) {
-        if (!chunk.hasPrimedHeightmap(Heightmap.Types.WORLD_SURFACE)) return null;
-        int low = Integer.MAX_VALUE, high = Integer.MIN_VALUE;
+        return () -> topSectionEmpty(chunk);
+    }
+
+    static boolean topSectionEmpty(LevelChunk chunk) {
+        if (!chunk.hasPrimedHeightmap(Heightmap.Types.WORLD_SURFACE)) return false;
+        var sections = chunk.getSections();
+        int minY = chunk.getMinY();
+        long checked = 0L; // sections already looked at (index < 64); taller worlds re-check
         for (int x = 0; x < 16; x++) {
             for (int z = 0; z < 16; z++) {
                 int top = chunk.getHeight(Heightmap.Types.WORLD_SURFACE, x, z);
-                low = Math.min(low, top);
-                high = Math.max(high, top);
+                if (top < minY) continue; // no block in this column
+                int index = chunk.getSectionIndex(top);
+                if (index < 0 || index >= sections.length) continue;
+                if (index < 64) {
+                    if ((checked & (1L << index)) != 0) continue;
+                    checked |= 1L << index;
+                }
+                var section = sections[index];
+                if (section == null || section.hasOnlyAir()) return true;
             }
         }
-        int minTop = low, maxTop = high;
-        return new VertigoHollowDetector.ChunkView() {
-            public int minTopY() { return minTop; }
-            public int maxTopY() { return maxTop; }
-            public boolean sectionEmpty(int sectionY) {
-                int index = chunk.getSectionIndexFromSectionY(sectionY);
-                var sections = chunk.getSections();
-                if (index < 0 || index >= sections.length) return false;
-                var section = sections[index];
-                return section == null || section.hasOnlyAir();
-            }
-        };
+        return false;
     }
 }

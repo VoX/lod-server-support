@@ -118,4 +118,71 @@ class LodRequestManagerHollowedTest {
         manager.onHollowed(OVERWORLD, P, 8);
         assertEquals(0, manager.hollowPendingCount());
     }
+
+    @Test void releasesByAgeAloneAreSpreadOverTicks() {
+        long[] close = new long[5];
+        for (int i = 0; i < close.length; i++) {
+            close[i] = PositionUtil.packPosition(i, 1);
+            manager.onColumnReceived(close[i], 5_000L, OVERWORLD);
+            manager.onHollowed(OVERWORLD, close[i], 8);
+        }
+        now[0] += 31 * S;
+        manager.tickHollowedPhase(0, 0);
+        assertEquals(3, manager.hollowPendingCount(), "two per tick: the server may still have them loaded");
+        manager.tickHollowedPhase(0, 0);
+        manager.tickHollowedPhase(0, 0);
+        assertEquals(0, manager.hollowPendingCount());
+    }
+
+    @Test void theOldestEntryIsReleasedAtTheCap() {
+        long first = PositionUtil.packPosition(1, 1);
+        manager.onColumnReceived(first, 5_000L, OVERWORLD);
+        manager.onHollowed(OVERWORLD, first, 8);
+        for (int i = 1; i < LodRequestManager.HOLLOW_PENDING_CAP; i++) {
+            manager.onHollowed(OVERWORLD, PositionUtil.packPosition(100 + i % 128, 100 + i / 128), 8);
+        }
+        assertEquals(5_000L, manager.columnsForTest().timestampFor(first), "premise: at the cap, nothing released");
+        manager.onHollowed(OVERWORLD, PositionUtil.packPosition(-500, -500), 8);
+        assertEquals(LodRequestManager.HOLLOW_PENDING_CAP, manager.hollowPendingCount());
+        assertEquals(-1L, manager.columnsForTest().timestampFor(first), "the oldest was released at once");
+    }
+
+    @Test void saveCachePersistsThePendingReasksAsRemovals() {
+        var mgr = new LodRequestManager();
+        String server = "test-hollow-save-" + System.nanoTime();
+        mgr.onSessionConfig(new SessionConfigS2CPayload(LSSConstants.PROTOCOL_VERSION, true, 64, true), server);
+        try {
+            var prior = new it.unimi.dsi.fastutil.longs.Long2LongOpenHashMap();
+            prior.put(P, 4_000L);
+            ColumnCacheStore.save(server, OVERWORLD, prior);
+            mgr.setLastDimensionForTest(OVERWORLD);
+            mgr.onColumnReceived(P, 5_000L, OVERWORLD);
+            mgr.onHollowed(OVERWORLD, P, 8);
+            mgr.saveCache(); // the production path: a disconnect or a dimension change
+            ColumnCacheStore.flushPendingIo();
+            assertFalse(ColumnCacheStore.load(server, OVERWORLD).containsKey(P),
+                    "the next session asks again instead of drawing a false up_to_date");
+        } finally {
+            ColumnCacheStore.clearForServer(server);
+        }
+    }
+
+    @Test void anAbandonedCacheLoadStillRemovesThePendingReasksFromTheFile() {
+        var mgr = new LodRequestManager();
+        String server = "test-hollow-loadwindow-" + System.nanoTime();
+        mgr.onSessionConfig(new SessionConfigS2CPayload(LSSConstants.PROTOCOL_VERSION, true, 64, true), server);
+        try {
+            var prior = new it.unimi.dsi.fastutil.longs.Long2LongOpenHashMap();
+            prior.put(P, 5_000L);
+            ColumnCacheStore.save(server, OVERWORLD, prior);
+            mgr.setLastDimensionForTest(OVERWORLD);
+            mgr.setPendingCacheLoadForTest(new java.util.concurrent.CompletableFuture<>()); // never lands
+            mgr.onHollowed(OVERWORLD, P, 8);
+            mgr.saveCache();
+            ColumnCacheStore.flushPendingIo();
+            assertFalse(ColumnCacheStore.load(server, OVERWORLD).containsKey(P));
+        } finally {
+            ColumnCacheStore.clearForServer(server);
+        }
+    }
 }
