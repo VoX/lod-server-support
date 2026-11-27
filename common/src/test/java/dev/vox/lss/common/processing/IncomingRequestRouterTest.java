@@ -73,6 +73,14 @@ class IncomingRequestRouterTest {
             super(players, diskReader, generationAvailable, dataDir, 1, missMemoTtlSeconds);
         }
 
+        /** Cycles that have reached their routing phase (the hook runs just before it). */
+        final java.util.concurrent.atomic.AtomicInteger routeCycles = new java.util.concurrent.atomic.AtomicInteger();
+
+        @Override
+        protected void beforeRouteHook() {
+            this.routeCycles.incrementAndGet();
+        }
+
         @Override
         protected boolean submitDiskRead(UUID playerUuid, RequestRegistration registration, String dimension, int cx, int cz, long order, long clientTimestamp) {
             this.submits.add(new CapturedSubmit(playerUuid, dimension, cx, cz));
@@ -195,6 +203,27 @@ class IncomingRequestRouterTest {
             Thread.sleep(10);
         }
         return delivered;
+    }
+
+    /**
+     * Posts {@code snapshot} until two more cycles have reached their routing. The first of
+     * them may be a cycle that was already running when this was called, with an older
+     * snapshot; the second started after that one ended. So when this returns, the cycle that
+     * was running has finished, and every cycle that runs now or later holds {@code snapshot}
+     * (or one posted after it).
+     *
+     * <p>For a test that waited on something a cycle does BEFORE it routes (a disk result's
+     * counter, for one) and then offers a request that needs a particular snapshot: without
+     * this, the cycle still running can route the new request with its own, older snapshot.
+     */
+    private static void settleOn(TestProcessor proc, TickSnapshot snapshot) throws InterruptedException {
+        int seen = proc.routeCycles.get();
+        long deadline = System.nanoTime() + POLL_DEADLINE_NANOS;
+        while (proc.routeCycles.get() < seen + 2) {
+            if (System.nanoTime() > deadline) fail("timed out waiting for two routing cycles");
+            proc.postSnapshot(snapshot, List.of());
+            Thread.sleep(2);
+        }
     }
 
     private static void waitFor(java.util.function.BooleanSupplier condition, String what)
@@ -1329,8 +1358,14 @@ class IncomingRequestRouterTest {
             // The chunk is now LOADED (walk-in): the probe must serve it, memo notwithstanding.
             var probes = new Long2ObjectOpenHashMap<LoadedColumnData>();
             probes.put(packed(9, 0), proc.captureLoadedProbe(DIM, packed(9, 0), p1.registration()).bind(new LoadedColumnData(9, 0, new byte[]{4, 2}, 32)));
+            var loaded = snapshot(Map.of(p1.getPlayerUUID(), probes), 0, p1);
+            // The miss counter moves while its cycle is still running, before that cycle
+            // routes. A request offered now could be routed by that same cycle, whose
+            // snapshot has no probe: the memo would answer it, and no probe serve would ever
+            // come (CI, 2026-11-27: "timed out waiting for: probe serve" after the full 30 s).
+            settleOn(proc, loaded);
             p1.enqueue(new IncomingRequest(9, 0, -1));
-            proc.postSnapshot(snapshot(Map.of(p1.getPlayerUUID(), probes), 0, p1), List.of());
+            proc.postSnapshot(loaded, List.of());
             waitFor(() -> proc.payloads.size() == 1, "probe serve");
             assertArrayEquals(new byte[]{4, 2}, proc.payloads.peek().sectionBytes());
             assertEquals(0, proc.getDiagnostics().getTotalMemoHits(),
