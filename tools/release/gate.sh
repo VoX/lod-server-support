@@ -76,6 +76,11 @@ if [ -n "${LSS_HARNESS_LOCK_FD:-}" ]; then
   eval "exec ${LSS_HARNESS_LOCK_FD}>&-" || true
   unset LSS_HARNESS_LOCK_FD
 fi
+# CI's settings job: the schema inventory and the generated reference must match the code. After
+# the lock is given back, like the suites below: the tools ask Gradle for their classpath through
+# run-gradle.sh, in a subprocess that cannot inherit our descriptor either.
+step settings-inventory python3 tools/settings/inventory.py --check
+step settings-reference python3 tools/settings/reference.py --check
 for suite in tools/compat tools/lines tools/release tools/verify tools/tests tools/rig tools/packaging test-fixtures/client-preset-tools; do
   [ -d "$suite" ] || continue
   name="unittest-${suite//\//_}"

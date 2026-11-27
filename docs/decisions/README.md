@@ -15,5 +15,6 @@ plans under `docs/planning/` and in the commits.
 | [0007](0007-retry-rule.md) | A red test is explained, not retried | accepted 2026-11-13 |
 | [0008](0008-main-is-the-reference.md) | Main is the reference; support lines record one sync point | accepted 2026-11-13 |
 | [0009](0009-settings-stay-strict.md) | A settings file with a mistake does not load, and says so loudly | accepted 2026-11-13 |
+| [0010](0010-no-transport-api.md) | There is no public transport API | accepted 2026-11-18 |
 
 Status values: `proposed`, `accepted`, `superseded by NNNN`, `withdrawn`.

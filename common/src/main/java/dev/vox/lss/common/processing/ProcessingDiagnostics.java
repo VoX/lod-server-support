@@ -31,6 +31,7 @@ public class ProcessingDiagnostics {
     private volatile long totalRangeFiltered;
     private volatile long totalMissDropped;
     private volatile long totalGenOrderGated;
+    private volatile long totalGenRefusedOutsideBorder;
     private volatile long totalMemoHits;
     private volatile long totalGenCompletionInversions;
     // Compressed-column shipping (protocol 19): per-payload codec outcome at build.
@@ -129,6 +130,10 @@ public class ProcessingDiagnostics {
      *  whose scheduler completes non-FIFO (C2ME). */
     public void addGenOrderGated(long n) { if (n > 0) totalGenOrderGated += n; }
 
+    /** Misses answered not-generated because the chunk lies wholly outside the world
+     *  border (0.24.0 plan §2). Each is also a not_generated answer in law A5. */
+    public void addGenRefusedOutsideBorder(long n) { if (n > 0) totalGenRefusedOutsideBorder += n; }
+
     /** Successful generation completions that arrived while a NEARER ticket was still
      *  outstanding — direct evidence the platform scheduler completes far-before-near.
      *  Diagnostics only; the order-spread gate bounds how bad this can look on screen. */
@@ -160,6 +165,7 @@ public class ProcessingDiagnostics {
     public long getTotalMissDropped() { return totalMissDropped; }
     public long getTotalMemoHits() { return totalMemoHits; }
     public long getTotalGenOrderGated() { return totalGenOrderGated; }
+    public long getTotalGenRefusedOutsideBorder() { return totalGenRefusedOutsideBorder; }
     public long getTotalGenCompletionInversions() { return totalGenCompletionInversions; }
     public long getTotalColumnsCompressed() { return totalColumnsCompressed; }
     public long getTotalColumnsRaw() { return totalColumnsRaw; }

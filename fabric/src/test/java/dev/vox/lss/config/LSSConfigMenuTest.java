@@ -193,7 +193,11 @@ class LSSConfigMenuTest {
     @Test
     void thePageButtonsFollowTheOptionGroupsAndOpenThroughTheDispatcher() {
         var builder = new RecordingConfigBuilder();
+        dev.vox.lss.networking.client.ClientCommandActions.setMenuButtonsForTest(false);
         register(builder);
+        assertTrue(dev.vox.lss.networking.client.ClientCommandActions.menuHasButtons(),
+                "chat lines may name the buttons once this page has them");
+        dev.vox.lss.networking.client.ClientCommandActions.setMenuButtonsForTest(false);
         List<PageSpec> catalog = ClientOptionCatalog.pages();
         int buttonsBuilt = 0;
         for (int p = 0; p < catalog.size(); p++) {
@@ -223,10 +227,10 @@ class LSSConfigMenuTest {
                 buttonsBuilt++;
             }
         }
-        assertEquals(1, buttonsBuilt, "the one shipped button: Re-download Terrain on General");
+        assertEquals(2, buttonsBuilt, "the shipped buttons: Re-download Terrain and Fill Map, on General");
         RecordedPage general = builder.mods.get(0).pages.get(0);
-        assertEquals(ClientOptionCatalog.ID_REDOWNLOAD_TERRAIN,
-                buttons(general.groups.get(general.groups.size() - 1)).get(0).id.toString());
+        assertEquals(List.of(ClientOptionCatalog.ID_REDOWNLOAD_TERRAIN, ClientOptionCatalog.ID_FILL_MAP),
+                buttons(general.groups.get(general.groups.size() - 1)).stream().map(b -> b.id.toString()).toList());
     }
 
     /** Sodium validates the builders after {@code registerConfigLate} returns and stops the game on

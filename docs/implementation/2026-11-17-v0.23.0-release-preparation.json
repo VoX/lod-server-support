@@ -1,0 +1,455 @@
+{
+  "earlier_attempts": {
+    "26.2, 1.21.11 attempt 1": "Paper WireParityTest used 26.3 data version (fixed)",
+    "pre-merge gates": "compat-ci red only (sync point not on origin/main)"
+  },
+  "jar_identity": {
+    "1.21.1 50d9cac24 vs final, identical": [
+      "lod-server-support-fabric-0.23.0+1.21.1.jar",
+      "lod-server-support-neoforge-0.23.0+1.21.1.jar",
+      "lod-server-support-paper-0.23.0+1.21.1.jar",
+      "paper-0.23.0.jar"
+    ],
+    "1.21.1 differing": [
+      "lod-server-support-sponge-0.23.0+1.21.1.jar",
+      "voxy-server-side-fabric-0.23.0+1.21.1.jar",
+      "voxy-server-side-neoforge-0.23.0+1.21.1.jar",
+      "voxy-server-side-paper-0.23.0+1.21.1.jar",
+      "voxy-server-side-sponge-0.23.0+1.21.1.jar"
+    ],
+    "26.3 711572554 vs final, identical": [
+      "lod-server-support-fabric-0.23.0+26.3.jar",
+      "lod-server-support-neoforge-0.23.0+26.3.jar",
+      "lod-server-support-paper-0.23.0+26.3.jar",
+      "paper-0.23.0.jar"
+    ],
+    "26.3 differing": [
+      "lod-server-support-sponge-0.23.0+26.3.jar",
+      "voxy-server-side-fabric-0.23.0+26.3.jar",
+      "voxy-server-side-neoforge-0.23.0+26.3.jar",
+      "voxy-server-side-paper-0.23.0+26.3.jar",
+      "voxy-server-side-sponge-0.23.0+26.3.jar"
+    ]
+  },
+  "lines": {
+    "1.21.1": {
+      "base": "support/mc1.21.1",
+      "gametests_passed": [
+        8,
+        96
+      ],
+      "gated_head": "ec803317d3fadb0a2e443aac2dd2ea41aae1dc1d",
+      "jars_sha256": {
+        "lod-server-support-fabric-0.23.0+1.21.1.jar": "3803a9ab6da623527b6532d70d065d5ee127d09ca6e30080ce6b3fcd0cc5551d",
+        "lod-server-support-neoforge-0.23.0+1.21.1.jar": "c3f0109113dc8fff6f24ffbd417a6aa99597348bf3679846c6a5297afadb1b57",
+        "lod-server-support-paper-0.23.0+1.21.1.jar": "e982d293c5b0b352195f442cb3c9b34049a51f5c722bcfab63ea5806f998f5e5",
+        "lod-server-support-sponge-0.23.0+1.21.1.jar": "106bbb48fd335cdf6b9f04e4184112420f2a397bf3d67530a983dafa988a7a0b",
+        "paper-0.23.0.jar": "22bb037584ac77d802deebd35f0dadce1bb8a3606a81d8fe77e366c74ac2e750",
+        "voxy-server-side-fabric-0.23.0+1.21.1.jar": "593364e743c4bbe8cf5335a3beb6f80fddce5ff08a3b672155f1494ed4be949b",
+        "voxy-server-side-neoforge-0.23.0+1.21.1.jar": "9546bf1dac099e73ef649e8cdb7d5f5cf9118bb210fa2e0ae1916ce3ebd21d5f",
+        "voxy-server-side-paper-0.23.0+1.21.1.jar": "0b7b6dacfe88dc82d27930c122b781bd97def701ff11297c4d483d172be9b364",
+        "voxy-server-side-sponge-0.23.0+1.21.1.jar": "f964110039bf419d79e3a53204731922046400e7aaa389205ae24ddbc75a1829"
+      },
+      "junit": {
+        "common": {
+          "errors": 0,
+          "failures": 0,
+          "skipped": 0,
+          "tests": 1378
+        },
+        "fabric": {
+          "errors": 0,
+          "failures": 0,
+          "skipped": 5,
+          "tests": 2301
+        },
+        "neoforge": {
+          "errors": 0,
+          "failures": 0,
+          "skipped": 0,
+          "tests": 25
+        },
+        "paper": {
+          "errors": 0,
+          "failures": 0,
+          "skipped": 0,
+          "tests": 619
+        },
+        "sponge": {
+          "errors": 0,
+          "failures": 0,
+          "skipped": 0,
+          "tests": 29
+        }
+      },
+      "red_steps": {},
+      "retried_lock_busy": []
+    },
+    "1.21.11": {
+      "base": "support/mc1.21.11-v0.14",
+      "gametests_passed": [
+        8,
+        98
+      ],
+      "gated_head": "627254b2791e64bdedbdd0f3d043d1ba7d231ce9",
+      "jars_sha256": {
+        "lod-server-support-fabric-0.23.0+1.21.11.jar": "2abfc1c90cf7c2a7c5d4fa7dcc726539ee31ac2d1e172b2e5897aa1315ebab05",
+        "lod-server-support-neoforge-0.23.0+1.21.11.jar": "e69b020a150749ae455c2434c459c59256fa99097bb1401e3ebab8589b5027f4",
+        "lod-server-support-paper-0.23.0+1.21.11.jar": "ce8ff971609a05fd35bdb0fe045cf418c0194ba406ba647bb6460141847db16a",
+        "lod-server-support-sponge-0.23.0+1.21.11.jar": "9653490b1e40cffca6a3a4ecaf25f8f1d18ed3567bf612218e57efca96abf2d1",
+        "paper-0.23.0.jar": "602fd84f8e40417da6c5d0ec19c0d87a2c19db83792fa2fdd2951b90c062d210",
+        "voxy-server-side-fabric-0.23.0+1.21.11.jar": "2fc9a77da15dbb7c37f3a36028ea9203ee5bbcec228e0145acd921337a313817",
+        "voxy-server-side-neoforge-0.23.0+1.21.11.jar": "50bed335a856210bd05418867b359ecfddf80d4fc23690975ed55a551a0c6312",
+        "voxy-server-side-paper-0.23.0+1.21.11.jar": "40635596c800610f3b857b0a11c69aca87b9725d2f518acaa1704d01d3172f75",
+        "voxy-server-side-sponge-0.23.0+1.21.11.jar": "9e663a05501e38122867ab3b9add4e8f70d6d8e2f6eff0ea52d86ad5c7d07af2"
+      },
+      "junit": {
+        "common": {
+          "errors": 0,
+          "failures": 0,
+          "skipped": 0,
+          "tests": 1377
+        },
+        "fabric": {
+          "errors": 0,
+          "failures": 0,
+          "skipped": 5,
+          "tests": 2294
+        },
+        "neoforge": {
+          "errors": 0,
+          "failures": 0,
+          "skipped": 0,
+          "tests": 25
+        },
+        "paper": {
+          "errors": 0,
+          "failures": 0,
+          "skipped": 0,
+          "tests": 619
+        },
+        "sponge": {
+          "errors": 0,
+          "failures": 0,
+          "skipped": 0,
+          "tests": 29
+        }
+      },
+      "red_steps": {},
+      "retried_lock_busy": []
+    },
+    "26.2": {
+      "base": "support/mc26.2",
+      "gametests_passed": [
+        8,
+        97
+      ],
+      "gated_head": "b2ef315dfdca00ee1cda53a818c9c859fbb1b368",
+      "jars_sha256": {
+        "lod-server-support-fabric-0.23.0+26.2.jar": "3a3a1d0ea325a1b9bc23de3cc03340f8ce275d15672bd89a4c900b59934f8a43",
+        "lod-server-support-neoforge-0.23.0+26.2.jar": "fed3942495cd537d8e79935647a4c41d74236aa7a93c44cd5150893038d00464",
+        "lod-server-support-paper-0.23.0+26.2.jar": "a8225a6fe4399c4799c5fcf1c6492fb08a1e54b6abe2f4420956e18a85de33a0",
+        "lod-server-support-sponge-0.23.0+26.2.jar": "e7f88f5eb2f9cd2959083d1a1453953e92e1fee9e225930bf8c9dc5a34bc66bb",
+        "paper-0.23.0.jar": "84a60a0d5c80092a993e16ffac8561a67e646acd086e1ff469efe328f8c1413b",
+        "voxy-server-side-fabric-0.23.0+26.2.jar": "1e588476ccedf6ef612eb4e15f7620f1e7513da19388606248b3a4d6191d4127",
+        "voxy-server-side-neoforge-0.23.0+26.2.jar": "298b1f81e38d282f2c04b2a51ece6b29581a034e73ab8c3501af463b137251f6",
+        "voxy-server-side-paper-0.23.0+26.2.jar": "33e601235dab130bf596f1801283e7c15f35c46d87368111d606f21eea2132e5",
+        "voxy-server-side-sponge-0.23.0+26.2.jar": "6a7a761800f3927ea4a4e1c249d28d55f79fc8c3f682ba07f5e2634f204711a1"
+      },
+      "junit": {
+        "common": {
+          "errors": 0,
+          "failures": 0,
+          "skipped": 0,
+          "tests": 1378
+        },
+        "fabric": {
+          "errors": 0,
+          "failures": 0,
+          "skipped": 5,
+          "tests": 2299
+        },
+        "neoforge": {
+          "errors": 0,
+          "failures": 0,
+          "skipped": 0,
+          "tests": 25
+        },
+        "paper": {
+          "errors": 0,
+          "failures": 0,
+          "skipped": 0,
+          "tests": 622
+        },
+        "sponge": {
+          "errors": 0,
+          "failures": 0,
+          "skipped": 0,
+          "tests": 29
+        }
+      },
+      "red_steps": {},
+      "retried_lock_busy": []
+    },
+    "26.3": {
+      "base": "main",
+      "gametests_passed": [
+        8,
+        97
+      ],
+      "gated_head": "018f06c1818e6b8d0636c6e1b6333419e3469202",
+      "jars_sha256": {
+        "lod-server-support-fabric-0.23.0+26.3.jar": "f850239af7c8e583020d4f6c01537498557e68e288c37c155ed8c0ff26c85335",
+        "lod-server-support-neoforge-0.23.0+26.3.jar": "013c86bf3f76a796932a4cae882bfe8f4a4c5a3efaf449dc0bfe7de386cd3377",
+        "lod-server-support-paper-0.23.0+26.3.jar": "8e338aea65615fe3b761eee7d72ce061c8ba2679db620817029cf96dcd22fa06",
+        "lod-server-support-sponge-0.23.0+26.3.jar": "967cf69826992205f0fc20102d2c3f5e88ae329c1c5c9e64a3f980d8242e76a1",
+        "paper-0.23.0.jar": "684616cebfb8b7fdb9a199d557d2ab895dd59590395940dc36e9ef213a3b3d1a",
+        "voxy-server-side-fabric-0.23.0+26.3.jar": "29a76a6d705d74724ff8e9223f51b8439bfe30fcbfccff494f46576d196492d6",
+        "voxy-server-side-neoforge-0.23.0+26.3.jar": "a7fab226108c174c277baa6a57d55a1d424a625ee112d08b82359febb0bbbb75",
+        "voxy-server-side-paper-0.23.0+26.3.jar": "3c50c7c59e6d3df290b53786015e8600370905c451a6c852938f4affa8cb3ac4",
+        "voxy-server-side-sponge-0.23.0+26.3.jar": "f2128464eca3649f4536c66327ba613e566c99714a4ec0187a01d6f56d503358"
+      },
+      "junit": {
+        "common": {
+          "errors": 0,
+          "failures": 0,
+          "skipped": 0,
+          "tests": 1378
+        },
+        "fabric": {
+          "errors": 0,
+          "failures": 0,
+          "skipped": 5,
+          "tests": 2300
+        },
+        "neoforge": {
+          "errors": 0,
+          "failures": 0,
+          "skipped": 0,
+          "tests": 25
+        },
+        "paper": {
+          "errors": 0,
+          "failures": 0,
+          "skipped": 0,
+          "tests": 623
+        },
+        "sponge": {
+          "errors": 0,
+          "failures": 0,
+          "skipped": 0,
+          "tests": 29
+        }
+      },
+      "red_steps": {},
+      "retried_lock_busy": []
+    }
+  },
+  "merged": {
+    "main": "9f1f09e04 (#424)",
+    "support/mc1.21.1": "d05639f1e (#425)",
+    "support/mc1.21.11-v0.14": "3f8f87ddc (#427)",
+    "support/mc26.2": "f4e87ab10 (#426)",
+    "tree_equals_gated": true
+  },
+  "owed_from_plan_12": {
+    "cleanup ran once on the client thread": "covered: client gametest proves the hook fires; 116 real-stack runs on 0.23.0 jars ending in a kick, 0 off-thread or failed-cleanup lines",
+    "connect-and-kick loop while maps ingest": "visual pass row L4",
+    "proxy move then drop": "not run: no proxy rig; the move itself runs no cleanup (unchanged), the drop takes the same client-thread path as any kick",
+    "quit from inside a world with the cache saved": "visual pass row L3"
+  },
+  "prepared": "2026-11-17",
+  "published": false,
+  "realstack": [
+    {
+      "brand": "LSS",
+      "jars": "26.3 gate 711572554",
+      "passed": true,
+      "row": "fabric-26.3-sodium-voxy-xaero",
+      "run": "20261117T213605Z"
+    },
+    {
+      "brand": "VSS",
+      "jars": "26.3 gate 711572554",
+      "passed": true,
+      "row": "fabric-26.3-sodium-voxy-xaero",
+      "run": "20261117T213913Z"
+    },
+    {
+      "brand": "LSS",
+      "jars": "26.3 gate 711572554",
+      "passed": true,
+      "row": "fabric-26.3-sodium-voxy-xaero",
+      "run": "20261117T214045Z",
+      "scenario": "server-without-lss"
+    },
+    {
+      "brand": "VSS",
+      "jars": "26.3 gate 711572554",
+      "passed": true,
+      "row": "fabric-26.3-sodium-voxy-xaero",
+      "run": "20261117T214212Z",
+      "scenario": "server-without-lss"
+    },
+    {
+      "brand": "LSS",
+      "jars": "26.3 gate 711572554",
+      "passed": true,
+      "row": "fabric-26.3-sodium-voxy-xaero",
+      "run": "20261117T214339Z",
+      "scenario": "off-in-world"
+    },
+    {
+      "brand": "VSS",
+      "jars": "26.3 gate 711572554",
+      "passed": true,
+      "row": "fabric-26.3-sodium-voxy-xaero",
+      "run": "20261117T214512Z",
+      "scenario": "off-in-world"
+    },
+    {
+      "brand": "LSS",
+      "jars": "26.3 gate 711572554",
+      "passed": true,
+      "row": "fabric-26.3-sodium-voxy-xaero",
+      "run": "20261117T214645Z",
+      "scenario": "client-receives-nothing"
+    },
+    {
+      "brand": "VSS",
+      "jars": "26.3 gate 711572554",
+      "passed": true,
+      "row": "fabric-26.3-sodium-voxy-xaero",
+      "run": "20261117T214818Z",
+      "scenario": "client-receives-nothing"
+    },
+    {
+      "brand": "LSS",
+      "jars": "26.3 gate 711572554",
+      "passed": true,
+      "row": "paper-26.3-fabric-client",
+      "run": "20261117T214950Z"
+    },
+    {
+      "brand": "VSS",
+      "jars": "26.3 gate 711572554",
+      "passed": true,
+      "row": "paper-26.3-fabric-client",
+      "run": "20261117T215124Z"
+    },
+    {
+      "brand": "LSS",
+      "jars": "26.3 gate 711572554",
+      "passed": true,
+      "row": "paper-26.3-fabric-client",
+      "run": "20261117T215258Z",
+      "scenario": "off-in-world"
+    },
+    {
+      "brand": "VSS",
+      "jars": "26.3 gate 711572554",
+      "passed": true,
+      "row": "paper-26.3-fabric-client",
+      "run": "20261117T215432Z",
+      "scenario": "off-in-world"
+    },
+    {
+      "brand": "LSS",
+      "jars": "26.3 gate 711572554",
+      "passed": true,
+      "row": "paper-26.3-fabric-client",
+      "run": "20261117T215606Z",
+      "scenario": "client-receives-nothing"
+    },
+    {
+      "brand": "LSS",
+      "jars": "1.21.1 gate 50d9cac24",
+      "passed": true,
+      "row": "neoforge-1.21.1-c2me-scalablelux",
+      "run": "20261117T221327Z"
+    },
+    {
+      "brand": "VSS",
+      "jars": "1.21.1 gate 50d9cac24",
+      "passed": true,
+      "row": "neoforge-1.21.1-c2me-scalablelux",
+      "run": "20261117T221502Z"
+    },
+    {
+      "brand": "LSS",
+      "jars": "1.21.1 gate 50d9cac24",
+      "passed": true,
+      "row": "neoforge-1.21.1-c2me-scalablelux",
+      "run": "20261117T221636Z",
+      "scenario": "off-in-world"
+    },
+    {
+      "brand": "LSS",
+      "jars": "1.21.1 gate 50d9cac24",
+      "passed": true,
+      "row": "neoforge-1.21.1-c2me-scalablelux",
+      "run": "20261117T221812Z",
+      "scenario": "client-receives-nothing"
+    },
+    {
+      "brand": "LSS",
+      "jars": "1.21.1 gate 50d9cac24",
+      "passed": true,
+      "row": "neoforge-client-fabric-server-1.21.1",
+      "run": "20261117T221946Z"
+    },
+    {
+      "brand": "LSS",
+      "jars": "1.21.1 gate 50d9cac24",
+      "passed": true,
+      "row": "fabric-1.21.1-sodium-xaero",
+      "run": "20261117T222119Z"
+    },
+    {
+      "brand": "LSS",
+      "jars": "final 26.3 gate",
+      "passed": true,
+      "row": "sponge-26.3-fabric-client",
+      "run": "20261117T225226Z"
+    },
+    {
+      "brand": "VSS",
+      "jars": "final 26.3 gate",
+      "passed": true,
+      "row": "sponge-26.3-fabric-client",
+      "run": "20261117T225402Z"
+    },
+    {
+      "brand": "LSS",
+      "jars": "final 26.3 gate",
+      "passed": true,
+      "row": "fabric-26.3-sodium-voxy-xaero",
+      "run": "20261117T225537Z"
+    },
+    {
+      "brand": "LSS",
+      "jars": "final 26.3 gate",
+      "passed": true,
+      "row": "paper-26.3-fabric-client",
+      "run": "20261117T225707Z"
+    }
+  ],
+  "schema_version": 1,
+  "scope": "stable: 26.3, 1.21.1, 26.2, 1.21.11 (26.1 and 1.21.10 frozen)",
+  "since_beta": [
+    "26.2 and 1.21.11 ports",
+    "version and notes",
+    "Sponge: sessions end on ServerSideConnectionEvent.Leave",
+    "real-stack Sponge row + session_ended check"
+  ],
+  "sponge_live_runs": [
+    "20261117T213605Z (Disconnect baseline, kick)",
+    "20261117T220510Z (Leave, kick)",
+    "20261117T222301Z (Leave, quit)"
+  ],
+  "version": "0.23.0",
+  "waits_for": [
+    "end of the 0.23.0-beta.1 soak: 2026-11-20T20:08Z",
+    "the visual pass (astra go)"
+  ]
+}

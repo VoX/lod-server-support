@@ -15,6 +15,7 @@ public final class ClientMenuActions {
     public static void open(ActionSpec.Action action, Screen parent) {
         switch (action) {
             case REDOWNLOAD_TERRAIN -> RedownloadTerrainConfirmScreen.open(parent);
+            case FILL_MAP -> RedownloadTerrainConfirmScreen.fillMap();
         }
     }
 }

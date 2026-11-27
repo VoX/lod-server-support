@@ -191,6 +191,20 @@ public final class ClientNetGlue {
         });
     }
 
+    /** A map backend dropped a column and names no delivery (see
+     *  {@link LodRequestManager#onMapDrop}). Safe from any thread. */
+    public static void reportMapDrop(ResourceKey<Level> dimension, int chunkX, int chunkZ) {
+        var owner = sessionGate.getRequestManager();
+        var mc = Minecraft.getInstance();
+        if (mc == null) return;
+        mc.execute(() -> {
+            var manager = sessionGate.getRequestManager();
+            if (manager != null && manager == owner && manager.isAcquisitionActive()) {
+                manager.onMapDrop(dimension, PositionUtil.packPosition(chunkX, chunkZ));
+            }
+        });
+    }
+
     static void executeDeliveryEvent(Runnable event) {
         var mc = Minecraft.getInstance();
         if (mc != null) mc.execute(event);
@@ -470,7 +484,18 @@ public final class ClientNetGlue {
         boolean clear = payload.codec() == LSSConstants.COLUMN_CODEC_RAW
                 && ClientColumnProcessor.isClearColumn(payload.shippedSections());
         long preClearStamp = manager != null ? manager.contentStampBeforeDelivery(packed) : -1L;
-        if (manager != null && !manager.onColumnReceived(packed, payload.columnTimestamp(),
+        // A map fill's answer (issue #380): asked for the map, for a column the scanners are
+        // done with, and not newer than the one held, so every other consumer has it. It
+        // then goes to the map backends only and nothing about the held column changes. A
+        // newer one is terrain for everyone (see MapFill.isFillAnswer). Decided BEFORE the
+        // receive below restamps the position and settles the map's debt.
+        byte mapStateBefore = manager == null ? ColumnStateMap.MAP_SETTLED : manager.mapStateBeforeDelivery(packed);
+        boolean fillAsked = manager != null && manager.isMapFillAsked(packed, payload.dimension());
+        boolean mapOnly = fillAsked && !clear
+                && manager.isMapFillAnswer(packed, payload.dimension(), payload.columnTimestamp());
+        if (mapOnly) {
+            if (!manager.onMapOnlyColumn(packed, payload.dimension())) return;
+        } else if (manager != null && !manager.onColumnReceived(packed, payload.columnTimestamp(),
                 payload.dimension(), clear, payload.source())) {
             // Out-of-range unsolicited drop: the state map refused the stamp, and the
             // consumers must not ingest it either — a hostile/buggy server could otherwise
@@ -479,8 +504,16 @@ public final class ClientNetGlue {
         }
         // A clear air-fills even when the held check missed (see above) — the consumer must
         // overwrite whatever it renders there with air.
-        processor.offer(payload, resync || clear,
-                manager == null ? null : manager.trackDelivery(payload.dimension(), packed, preClearStamp));
+        var delivery = manager == null ? null
+                : manager.trackDelivery(payload.dimension(), packed, preClearStamp, mapOnly, fillAsked,
+                        mapStateBefore);
+        if (mapOnly) {
+            // No air-fill: that exists to clear ghost terrain in a consumer that holds older
+            // data, and a map takes the surface it is given.
+            processor.offer(payload, false, delivery, true);
+        } else {
+            processor.offer(payload, resync || clear, delivery);
+        }
     }
 
     /**
