@@ -231,10 +231,18 @@ final class MapFill {
         return this.requested;
     }
 
-    /** What the next save records. */
+    /**
+     * What the next save records. A stop or a press that is still waiting for the cache to
+     * load counts: the player may leave this dimension or the server before the load has
+     * finished, and what they asked for must reach the record all the same (the save merges
+     * with the file, so it needs no loaded state for that).
+     */
     ColumnStateMap.MapDebt forSave() {
-        return new ColumnStateMap.MapDebt(this.requestKnown ? this.requested : null, this.fileUnknownBecomeOwed,
-                this.hintKnown ? this.hinted : null, this.stopped);
+        Boolean request = this.stopBeforeLoad ? Boolean.FALSE
+                : this.pressPending ? Boolean.TRUE
+                : this.requestKnown ? this.requested : null;
+        return new ColumnStateMap.MapDebt(request, this.fileUnknownBecomeOwed || this.pressPending,
+                this.hintKnown ? this.hinted : null, stopped());
     }
 
     /**
@@ -268,9 +276,10 @@ final class MapFill {
         return true;
     }
 
-    /** A request was taken back in this session (see {@link #stop}). */
+    /** A request was taken back in this stay (see {@link #stop}), also by a stop that still
+     *  waits for the cache to load. */
     boolean stopped() {
-        return this.stopped;
+        return this.stopped || this.stopBeforeLoad;
     }
 
     /** Whether the player was already told about the debt this cache holds. */
@@ -287,6 +296,9 @@ final class MapFill {
      *  then starts as soon as it has loaded. */
     boolean press() {
         if (!this.loaded) {
+            // The later word counts, as it does once the load is in: a press after a stop
+            // that is still waiting for the load takes that stop back.
+            this.stopBeforeLoad = false;
             this.pressPending = true;
             return false;
         }
@@ -351,7 +363,7 @@ final class MapFill {
     /** The player asked for a fill during this stay: the record must hear of it, also when
      *  the session holds no column when it ends. */
     boolean pressed() {
-        return this.fileUnknownBecomeOwed;
+        return this.fileUnknownBecomeOwed || this.pressPending;
     }
 
     /** A fill is asked for and has, or may soon have, something to ask from here. */

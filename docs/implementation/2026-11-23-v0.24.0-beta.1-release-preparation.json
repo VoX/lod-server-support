@@ -3,10 +3,27 @@
   "version": "0.24.0-beta.1",
   "scope": "beta: 26.3 and 1.21.1",
   "prepared": "2026-11-23",
-  "status": "prepared",
-  "merged": false,
-  "tagged": false,
-  "published": false,
+  "status": "published",
+  "merged": {
+    "main": "2ea84b506 (#433)",
+    "support/mc1.21.1": "07594519d (#434)"
+  },
+  "tagged": {
+    "v0.24.0-beta.1": "2ea84b506",
+    "v0.24.0-beta.1+mc1.21.1": "07594519d"
+  },
+  "published": {
+    "date": "2026-11-24",
+    "github_prereleases": 2,
+    "github_jars": 7,
+    "modrinth_beta_versions": 7,
+    "vss": 0,
+    "curseforge": 0,
+    "verify_lss_problems": {
+      "26.3": 0,
+      "1.21.1": 0
+    }
+  },
   "lines": {
     "26.3": {
       "gated_head": "d9ee43e91fd8ab47d7bc767dc94f1e950f85ff0f",
@@ -115,6 +132,14 @@
         "voxy-server-side-neoforge-0.24.0-beta.1+1.21.1.jar": "6d8db6161dc02a877a8a2f46bad55b2f085e005b50c4847009dd14185f0a9350",
         "lod-server-support-sponge-0.24.0-beta.1+1.21.1.jar": "a8a8f2549536da794345f0c85d2d42b5fe490647d191ef488cd6a0f32b064ec0",
         "voxy-server-side-sponge-0.24.0-beta.1+1.21.1.jar": "267d46e11c99fa24a459d6bce3a00ade51ba9c3e065e32141caa941983fc227a"
+      },
+      "real_port": {
+        "gated_head": "9bf6ff6de",
+        "gate_steps": 18,
+        "red_steps": [
+          "unittest-tools_rig"
+        ],
+        "jars_identical_to_trial": true
       }
     }
   },
@@ -221,6 +246,7 @@
     "one reader of the release-wide review's fold"
   ],
   "owed_before_stable": [
+    "fix the two known issues of /lss fillmap stop",
     "the visual pass on real GPU clients (brief: ASTRA-SMOKE-TESTS.md of the release folder)",
     "72 hours on the test server; its diag must show no column 'compressed the normal way' (it runs ViaVersion)",
     "ports to 26.2 and 1.21.11",
@@ -228,5 +254,9 @@
     "the #429 reporter's confirmation on NeoForge 1.21.1 with C2ME and ScalableLux",
     "the rig-tools suite and the fresh-backfill soak once the host has disk space again",
     "a Paper measurement of the compression passthrough"
+  ],
+  "known_issues_in_this_beta": [
+    "a stop typed while the cache is still loading, followed by leaving the dimension or the server before the load has finished, is answered \"stopped\" and not saved",
+    "on a server that sends this client no terrain, a stop answers \"Map fill stopped in this dimension\" instead of \"No map fill is running\""
   ]
 }
