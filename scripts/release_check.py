@@ -1013,6 +1013,10 @@ FABRIC_ONLY_CLASS_PREFIXES = (
     # the reflective fabric-permissions-api bridge is fabric-only BY DESIGN — NeoForge
     # enforces through its native PermissionNode registration (LSSNeoPermissions).
     "dev/vox/lss/compat/FabricPermissionsBridge",
+    # The Vertigo repair's hooks (issue #437): Vertigo is a Fabric-only mod. The rule itself
+    # (VertigoCompat, VertigoHollowDetector) is shared xplat code and stays checked.
+    "dev/vox/lss/compat/VertigoFabricHook",
+    "dev/vox/lss/mixin/AccessorOptions",
     # Same-FQN TWIN classes: each loader implements its own body behind the shared
     # outer name xplat compiles against, so their NESTED members legitimately differ
     # (the fabric renderer's Proxy/MountInstance vs the neoforge cut; the fabric
