@@ -399,34 +399,36 @@ The live repro changed the detector. The rest (sections 3.2 to 3.5) is built as 
     the chunk), so the vanilla chunks do get their real sections when the player moves
     vertically.
   - A detector gated on Vertigo's API would have fired for no one.
-- **The detector reads the chunk** (`VertigoHollowDetector.hollow`). A chunk is hollow when a
-  section between its lowest and highest `WORLD_SURFACE` block is all air (or absent) on the
-  client.
-  - The heightmap is the server's: Vertigo filters only sections and block entities. The
-    unload log of the repro shows real heights (for example `top=71..84`) over empty sections.
-  - Each column's top block sits in its section, so a section in that band that is all air is
-    one Vertigo hid. A section of air below every column's top would be a cave the width of
-    the whole chunk, and costs at most a needless re-serve.
-  - Sky and deep terrain never count. The first tells nothing, and the second is out of sight
-    in LOD terrain.
-  - Not caught: a chunk whose surface Vertigo sent but whose cliff face below it is hidden.
-    Rare, and recorded as a limitation.
-  - Nothing of Vertigo is bound: no reflection, and no binding-surface test or golden jar.
-    The only gate is `isModLoaded("vertigo")` with the Voxy bridge live. The event-phase
-    ordering is gone too, since the chunk's own sections are still there in any
-    `CHUNK_UNLOAD` listener.
-- **Silent evictions.** After a teleport, the server's forget packets find the old chunks out of
-  the client cache's range, so vanilla's `drop` does nothing and Fabric fires no unload event.
-  Voxy never saw those chunks leave and keeps what it saved when they arrived.
-  - The repro left a two-row strip there (`runs/fix2-dbg/`: unload events for rows 18 to 25,
-    none for 16 and 17).
-  - `VertigoCompat` therefore tracks the chunks it saw load. Once a second it treats a tracked
-    chunk that is no longer what the cache holds at its position as dropped: reported if a
-    neighbour's unload had marked it, or if it is hollow now.
+- **The detector reads the chunk** (`VertigoCompat.topSectionEmpty`, after the implementation
+  review in section 11). A chunk is hollow when the section holding some column's top block (its
+  `WORLD_SURFACE` height) is all air, or absent, on the client.
+  - The heightmap is the server's: Vertigo filters only sections and block entities.
+  - A column's top block is a real block, so that section is never all air on the server. Only
+    section filtering produces the contradiction.
+  - Air under a floating build, void columns in the End and caves never count, because none of
+    them holds a column's top.
+  - Not caught (recorded limitations):
+    - a hidden section that holds no column's top: a cliff face, or the seabed under water,
+      since the heightmap counts water;
+    - the Nether, whose heightmap is the roof;
+    - a chunk whose heightmap the client recomputed after a local block update.
+  - Nothing of Vertigo is bound: no reflection, and no binding-surface test or golden jar. The
+    gate is `isModLoaded("vertigo")` with the Voxy bridge running, checked once at client start.
+- **One path.** The chunks seen loading are held, and once a second the ones the client chunk
+  cache no longer holds at their position have left. That covers the normal unload and the
+  silent eviction after a teleport.
+  - On a teleport, the server's forget packets find the old chunks out of the cache's range, so
+    vanilla's `drop` does nothing and Fabric fires no unload event. Voxy never saw them leave
+    and keeps what it saved when they arrived.
+  - The first build left a two-row strip there (`runs/fix2-dbg/`).
+  - For each chunk that left, each still-loaded neighbour that is hollow now becomes a suspect.
+    The chunk is reported if it was a suspect or is hollow itself.
+  - The one second of latency is free, since a re-ask waits at least 5 s.
+  - There is no `CHUNK_UNLOAD` listener and no event-phase ordering.
 - **Files.**
-  - `xplat/.../compat/VertigoHollowDetector.java` (pure rule) and `VertigoCompat.java`
-    (adapter, tracking and sweep).
-  - `fabric/.../compat/VertigoFabricHook.java` (unload, load and tick events; it reads
+  - `xplat/.../compat/VertigoHollowDetector.java` (the neighbour rule) and `VertigoCompat.java`
+    (the chunk rule, tracking and sweep).
+  - `fabric/.../compat/VertigoFabricHook.java` (the gate, the load and tick events; it reads
     `Options.serverRenderDistance` through `lss.accesswidener`).
   - `LodRequestManager` (`onHollowed`, `tickHollowedPhase`, `flushHollowedPending` at the top
     of `saveCache`).
@@ -435,16 +437,60 @@ The live repro changed the detector. The rest (sections 3.2 to 3.5) is built as 
   - `vertigo_refills=` on the client diag's Columns line (a new `ClientDiagnosticSnapshot`
     field).
 - **Tests.**
-  - `VertigoHollowDetectorTest` (10), `ColumnStateMapHollowedTest` (6),
-    `LodRequestManagerHollowedTest` (8).
+  - `VertigoHollowDetectorTest` (9), `ColumnStateMapHollowedTest` (6),
+    `LodRequestManagerHollowedTest` (12).
   - The `SectionStateFuzzTest` differential has a new `onHollowed` op, mirrored in
     `ReferenceColumnStateMap`.
-  - Mutation-checked: dropping the removal on a missing stamp, dropping the in-flight removal
-    on release, and dropping the neighbour suspect each turn a test red.
+  - Mutation-checked: dropping the removal on a missing stamp, the in-flight removal on release,
+    the neighbour suspect, the flush in `saveCache` and the per-tick cap each turn a test red.
 - **Live result** (`~/.local/state/lss-repro/issue-437/runs/`), with 0.24.0 runs as the
   before:
   - `base-flight2`: the trench, still there 60 s after returning.
   - `base-novertigo`: the control, no trench.
-  - `fix-b`: the build. The trench far from the player had refilled 15 s after returning, the
-    stretch within the server's load distance had refilled by 60 s, and the client logged no
+  - `fix-b`: the first build. The trench far from the player had refilled 15 s after returning,
+    the stretch within the server's load distance had refilled by 60 s, and the client logged no
     LSS errors.
+  - `fix-c`: the folded build (exact rule, one path). The same result.
+- **Server load** (`~/.local/state/lss-repro/issue-437/measure/`). Server LOD radius 48, so the
+  fill ended first. Then the same flight (40 steps of 8 blocks at view distance 4, server view
+  distance 10) and the return. Server counters from the end of the fill to 60 s after the
+  return:
+
+  | Arm | Columns sent | `in_mem` (loaded-chunk serves) | `disk` (store) | `gen` | Avg MSPT |
+  | --- | --- | --- | --- | --- | --- |
+  | 0.24.0, Vertigo | +2,465 | +114 | +23 | 0 | 2.1 to 2.4 |
+  | fix, Vertigo | +2,779 | +198 | +146 | 0 | 2.1 to 2.5 |
+  | fix, no Vertigo | +2,461 | +118 | +15 | 0 | 2.0 to 2.3 |
+
+  - The repair cost about 310 re-serves for about 270 hollowed chunks. About 120 were warm
+    store serves.
+  - About 85 hit chunks the server still had loaded (main thread, about 0.2 ms each, so about
+    17 ms over the minute). These are the 30 s releases near the player, since the client's view
+    distance (4) is below the server's (10).
+  - No generation, and no tick-time change beyond noise.
+  - Without Vertigo it costs nothing: the counts match 0.24.0.
+  - After this run, releases by age alone are capped at 2 per tick, so a teleported disc
+    cannot land its loaded-chunk serves in a single tick.
+
+## 11. Implementation review fold (2026-11-27)
+
+Two readers: correctness and failure cases (Opus), and a decisions critic (Fable). I verified
+every finding inline before folding.
+
+| # | Finding | Disposition |
+| --- | --- | --- |
+| I1 / K1 | The band rule (any all-air section between the lowest and highest top) over-fires on air under floating builds and on End void columns, so those chunks are re-asked on every pass | **Fixed:** the exact rule (a section holding a column's top block is all air), with tests for a sky platform and an End island edge |
+| K5 | Two paths (unload listener plus sweep) with duplicated gates, and a `WeakReference` sweep | **Fixed:** one sweep path with strong references; no unload listener |
+| I3 | A chunk reported twice after a teleport (sweep, then `replaceWithPacketData`'s unload) | Moot with one path |
+| I4 | Suspects from the previous level survive a level switch; reaching the cap wipes every suspect | **Fixed:** a level switch clears both; at the cap new suspects are skipped |
+| K2 | A short teleport can age a whole disc together, so many loaded-chunk serves land in one tick | **Fixed:** at most 2 releases by age alone per tick (test and mutation check) |
+| I7 | Removing the flush from `saveCache` passed every test; the cache-load and cap branches were untested | **Fixed:** `saveCache` tests through the real cache store, an abandoned-load test and a cap test (mutation-checked) |
+| I5 | Seabed, Nether and heightmap-drift gaps were undocumented | **Recorded** in section 10 |
+| I8 / K3 | The WARN said "for this session" (the flag is static); the INFO was logged from xplat | **Fixed:** "until the game restarts"; the INFO moved to the Fabric hook, which owns the gate |
+| I2 | A client-only Vertigo against a server without it pays false re-serves | Moot with the exact rule: nothing is hidden, so nothing fires. Measured: 0 extra |
+| K2b | The measurement plan was missing the converged-fill comparison and the client-only arm | **Done** (section 10 table). Peak probes per tick was not measured separately; the per-tick cap bounds it |
+| K3b | The map-repair claim is untested | **Not claimed** in the notes. The re-served column reaches the maps like any other (the stamp drop clears its map debt) |
+| K3c | Players will see the trench shorten, then go, rather than vanish | Release-notes wording: "fills back in shortly after you fly past" |
+| I6 | The pending cap is not enforced during a cache load | **Kept**, with a comment saying why |
+| K4 | Scope; ask the reporter to try it | **Kept.** The soak server has no Vertigo, so the rig check and the Astra row carry it, and the release reply asks the reporter |
+| K4b | An optional `-Dlss.vertigo.repair=false` switch | **Not added**: it is inert without Vertigo, and a false re-serve costs only a store serve |
