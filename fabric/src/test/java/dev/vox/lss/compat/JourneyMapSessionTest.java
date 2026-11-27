@@ -207,10 +207,20 @@ class JourneyMapSessionTest {
         int leases;
         int released;
         int reports;
+        int written;
+        /** A "written" after the lease was released would arrive after the delivery ended,
+         *  which is when the map's debt is decided. */
+        boolean writtenTooLate;
 
         @Override
         public void report() {
             this.reports++;
+        }
+
+        @Override
+        public void written() {
+            this.written++;
+            if (this.leases > 0 && this.released == this.leases) this.writtenTooLate = true;
         }
 
         @Override
@@ -357,6 +367,74 @@ class JourneyMapSessionTest {
         assertEquals(1, counter("skipped_live"));
         assertEquals(0, counter("rendered"));
         assertEquals(live, DataCache.INSTANCE.cache.get(key), "removal touches only our own wrapper");
+    }
+
+    // ---- the map's debt (issue #380): which deliveries learn that the map has the column ----
+
+    /** A rendered column and one JourneyMap draws itself from the live chunk are on the map;
+     *  each says so once, before its lease is released. */
+    @Test
+    void aRenderedColumnAndALiveChunkTellTheirDeliveries() {
+        DataCache.INSTANCE.live.put(JourneyMapSession.mcChunkKey(1, 1), new ChunkMD(1, 1, true));
+        var rendered = new Handle();
+        var live = new Handle();
+        offerWith(rendered, 2, 2);
+        offerWith(live, 1, 1);
+        assertEquals(0, rendered.written, "nothing is said for a column that is only queued");
+        settle();
+        cycle();
+        assertEquals(1, counter("rendered"), "premise");
+        assertEquals(1, counter("skipped_live"), "premise");
+        assertEquals(1, rendered.written);
+        assertEquals(1, live.written);
+        assertFalse(rendered.writtenTooLate || live.writtenTooLate);
+        assertEquals(1, rendered.released);
+        assertEquals(1, live.released);
+    }
+
+    /** A column the bridge lets go says nothing: its delivery ends without "written", which
+     *  is what leaves the map owed it. */
+    @Test
+    void aColumnTheBridgeLetsGoNeverSaysItIsOnTheMap() {
+        // A deny that lands while the column is queued clears the queue.
+        var denied = new Handle();
+        offerWith(denied, 0, 0);
+        this.serverAllows = false;
+        this.session.pump();
+        assertClosedUnreported(denied, 1, "the cleared queue");
+        assertEquals(0, denied.written);
+        // An offer while denied is dropped before it is queued.
+        var refused = new Handle();
+        gatedOfferWith(refused, 3, 3);
+        assertEquals(0, refused.written);
+        assertEquals(refused.leases, refused.released);
+    }
+
+    /** A column that cannot be decoded is closed without a re-serve (it would fail the same
+     *  way again), and it is not on the map. */
+    @Test
+    void anUndecodableColumnIsNotOnTheMap() {
+        this.failDecode = true;
+        settle();
+        var undecodable = new Handle();
+        offerWith(undecodable, 5, 5);
+        assertEquals(1, cycle());
+        assertEquals(1, counter("decode_failures"), "premise");
+        assertClosedUnreported(undecodable, 1, "the decode failure");
+        assertEquals(0, undecodable.written);
+    }
+
+    /** A column whose day map was refused is sent again, as before; it is not on the map. */
+    @Test
+    void aReportedColumnIsNotOnTheMap() {
+        this.jm.renderController.result = (type, md) -> !type.name.equals("day");
+        var handle = new Handle();
+        offerWith(handle, 0, 0);
+        settle();
+        cycle();
+        assertEquals(1, handle.reports, "premise: reported");
+        assertEquals(0, handle.written);
+        assertEquals(1, handle.released);
     }
 
     // ---- failures are reported, never silently lost ----

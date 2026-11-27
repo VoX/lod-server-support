@@ -247,7 +247,8 @@ public class PaperCommands implements CommandExecutor, TabCompleter {
                 service.getTickDiag().getTotalWireBytesSent(),
                 service.getOffThreadProcessor().getDiagnostics(), service.getDiskReader(),
                 service.getBandwidthLimiter(),
-                config.enableChunkGeneration() && genService != null ? genService.getDiagnostics() : null,
+                config.enableChunkGeneration() && genService != null
+                        ? genService.getDiagnostics() + service.getOffThreadProcessor().generationBoundsDiag() : null,
                 // LIVE store mode, not the config's ask (review MINOR-3): a codec-probe
                 // degrade renders store=unavailable, never a lying store=memory h=0.
                 // enabled=false is an OFF store, not a degraded one — without that term

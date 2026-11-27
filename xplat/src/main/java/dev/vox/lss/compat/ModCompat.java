@@ -59,6 +59,7 @@ public final class ModCompat {
     }
 
     public static void onDisconnect() {
+        VoxyLightStats.reset();
         VoxyCompat.retireVanillaBorder();
         XaeroMapCompat.onDisconnect();
         if (journeyMapLoaded) JourneyMapCompat.onDisconnect();
@@ -87,6 +88,25 @@ public final class ModCompat {
         var journeyMap = journeyMapLoaded ? JourneyMapCompat.mapConsumer() : null;
         if (journeyMap != null) out.add(journeyMap);
         return out;
+    }
+
+    /** Whether {@code consumer} is one of the map backends' (the whole audience of a map
+     *  fill). Any thread. */
+    public static boolean isMapConsumer(dev.vox.lss.api.VoxelColumnConsumer consumer) {
+        return consumer != null && (consumer == XaeroMapCompat.mapConsumer()
+                || (journeyMapLoaded && consumer == JourneyMapCompat.mapConsumer()));
+    }
+
+    /**
+     * Whether a column arriving now is written to a map: a map backend is registered, enabled,
+     * in a session, allowed by the server, and not idle by its own switches (Xaero's two
+     * map-writing settings off; JourneyMap disabled, forbidden here, or a ceiling dimension).
+     * The one predicate behind the map's debt (issue #380): a column that arrives while this
+     * is false is owed to the map. With two map mods installed, one writing is enough.
+     * Client thread.
+     */
+    public static boolean isMapWriting() {
+        return XaeroMapCompat.isWriting() || (journeyMapLoaded && JourneyMapCompat.isWriting());
     }
 
     /** Whether a column consumer other than the map backends is registered — Voxy or another

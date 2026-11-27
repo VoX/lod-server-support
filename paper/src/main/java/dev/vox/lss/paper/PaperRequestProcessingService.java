@@ -487,6 +487,7 @@ public class PaperRequestProcessingService {
         this.config = config;
         this.advertisedGeneration = config.enableChunkGeneration();
         this.refreshedGeneration = this.advertisedGeneration;
+        this.settingsGenerationAdopted = this.advertisedGeneration;
         this.advertisedLod = config.snapshot().lod();
         this.adoptedServicePolicy = config.snapshot().service();
         this.adoptedMapPolicy = config.snapshot().privacy().requestNoMapIngestion();
@@ -1856,6 +1857,74 @@ public class PaperRequestProcessingService {
         return java.util.List.copyOf(status);
     }
     private volatile boolean generationRefreshPending;
+
+    // ---- Generation limits (0.24.0 plan §2) ----
+
+    /** {@code generation.enabled} as the last settings reconcile adopted it. */
+    private boolean settingsGenerationAdopted;
+    /** The processor's low-disk hold as this thread last saw it. */
+    private boolean diskHoldMirrored;
+    private int generationBoundsCountdown;
+    private dev.vox.lss.common.processing.GenerationBounds publishedGenerationBounds =
+            dev.vox.lss.common.processing.GenerationBounds.NONE;
+
+    /** What sessions are told about generation: on only if the settings say so and the
+     *  disk is not nearly full. */
+    private boolean sessionGeneration(boolean configured) {
+        return configured && !this.diskHoldMirrored;
+    }
+
+    /**
+     * Server thread, every tick. Publishes the world borders to the processing thread
+     * (once a second; a border rarely changes), and mirrors its low-disk hold into what
+     * sessions are told: the processor has already switched generation off or back on
+     * when its flag changes, so the re-push here follows it, the same order a settings
+     * reload keeps.
+     */
+    private void tickGenerationLimits() {
+        if (--this.generationBoundsCountdown <= 0) {
+            this.generationBoundsCountdown = LSSConstants.TICKS_PER_SECOND;
+            var bounds = dev.vox.lss.common.processing.GenerationBounds.NONE;
+            if (!this.config.generateOutsideWorldBorder()) {
+                var rectangles = new java.util.HashMap<String, int[]>();
+                for (ServerLevel level : this.server.getAllLevels()) {
+                    var border = level.getWorldBorder();
+                    // While a border moves, the larger of where it is and where it is
+                    // going: a growing border is one change, a shrinking one follows the
+                    // border in, and neither refuses a chunk the border will cover.
+                    rectangles.put(this.dimensionStringCache.computeIfAbsent(level.dimension(),
+                            k -> k.identifier().toString()),
+                            dev.vox.lss.common.processing.GenerationBounds.chunkRectangle(
+                                    border.getCenterX(), border.getCenterZ(),
+                                    Math.max(border.getSize(), border.getLerpTarget())));
+                }
+                bounds = dev.vox.lss.common.processing.GenerationBounds.of(rectangles);
+            }
+            if (!bounds.equals(this.publishedGenerationBounds)) {
+                this.publishedGenerationBounds = bounds;
+                this.offThreadProcessor.publishGenerationBounds(bounds);
+            }
+        }
+        this.diskHoldMirrored = this.offThreadProcessor.generationHeldForDisk();
+        boolean session = sessionGeneration(this.settingsGenerationAdopted);
+        // A reload that changes generation is mid-flight while generationRefreshPending:
+        // its last step advertises with the mirrored hold and re-pushes itself.
+        if (session != this.advertisedGeneration && !this.generationRefreshPending) {
+            this.advertisedGeneration = session;
+            this.refreshedGeneration = session;
+            int[] told = repushSessionConfig();
+            if (told[1] > 0) {
+                // Older client dialects take no second session config. During a hold they
+                // get the permanent "not generated" every generation-off server gives
+                // (asking again every second would be a disk read each, on a server that
+                // is short of disk); they are not told when it ends.
+                LSSLogger.info(told[1] + " player(s) on older client versions cannot be told that"
+                        + " terrain generation " + (session ? "is back" : "is on hold")
+                        + ": terrain that does not exist yet stays missing for them until they rejoin.");
+            }
+        }
+    }
+
     private final java.util.Set<java.util.concurrent.CompletableFuture<?>> settingsReceipts =
             java.util.concurrent.ConcurrentHashMap.newKeySet();
 
@@ -1897,7 +1966,7 @@ public class PaperRequestProcessingService {
         settingsMapPolicyRevoked = -1;
         settingsRevision = revision;
         var view = new dev.vox.lss.common.config.ServerConfigBase(next, true);
-        boolean generationChanged = refreshedGeneration != next.generation().enabled();
+        boolean generationChanged = refreshedGeneration != sessionGeneration(next.generation().enabled());
         if (generationChanged) generationRefreshPending = true;
         var generation = next.generation();
         if (generationService != null) generationService.updatePolicy(generation.enabled(),
@@ -1925,7 +1994,8 @@ public class PaperRequestProcessingService {
         // long store sweep or backfill read. Overall reporting still awaits every owner.
         var session = processor.thenCompose(ignored -> submitSettingsControl(() -> {
             if (revision != settingsRevision) throw new java.util.concurrent.CancellationException("Superseded settings revision");
-            advertisedGeneration = next.generation().enabled();
+            settingsGenerationAdopted = next.generation().enabled();
+            advertisedGeneration = sessionGeneration(settingsGenerationAdopted);
             boolean mapPolicy = next.privacy().requestNoMapIngestion();
             boolean mapPolicyChanged = adoptedMapPolicy != mapPolicy;
             // Map-policy plan A3.4: REVOKE FIRST — a session about to lose service must
@@ -1940,7 +2010,7 @@ public class PaperRequestProcessingService {
                 settingsLegacyReconnects = repushSessionConfig()[1];
             else if (mapPolicyChanged)
                 repushSessionConfig(true); // the flags change alone; legacy sessions are not told
-            refreshedGeneration = next.generation().enabled();
+            refreshedGeneration = advertisedGeneration;
             advertisedLod = next.lod();
             generationRefreshPending = false;
             if (mapPolicyChanged) {
@@ -2035,6 +2105,7 @@ public class PaperRequestProcessingService {
         this.diag.reset(this.offThreadProcessor.getDiagnostics());
 
         applyRuntimeConfig();
+        tickGenerationLimits();
         // Service gate (plan §2.3): tick-cadenced permission rechecks, ordered AFTER
         // drainLifecycleMailbox above — a registered-but-flip-pending player must have
         // its dialect applied before the CURRENT-only revocation enumerates (the same

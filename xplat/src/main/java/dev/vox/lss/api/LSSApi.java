@@ -31,6 +31,20 @@ public final class LSSApi {
          * release exactly when that work commits, is rejected, or is intentionally dropped.
          * Retirement cancels unresolved acceptance without charging an ingest failure. */
         Runnable deferAcceptance();
+
+        /**
+         * For a consumer that keeps a lasting picture for the player (a map): the column is
+         * on the map now, or the map's own writer covers it. Call it before the last
+         * {@link #deferAcceptance()} release (or, without deferred work, during the callback).
+         * Any thread.
+         *
+         * <p>This is the only thing that settles what the map is owed (issue #380). A
+         * delivery that ends without it, because no map took the column or a map let it go
+         * (switched off, not allowed here, out of memory, a busy region it gave up on), is
+         * not a failure: nothing is unstamped and nothing is sent again by itself. The mod
+         * records that the map is owed the column, and the player can ask for a fill.
+         */
+        default void written() {}
     }
 
     private record DeliveryContext(ResourceKey<Level> dimension, int x, int z,
@@ -166,6 +180,18 @@ public final class LSSApi {
         else LSSClientNetworking.reportIngestFailure(dimension, chunkX, chunkZ);
     }
 
+    /**
+     * Internal: reports through the delivery being dispatched on this thread, if it is this
+     * column's. False when there is none (the caller then reports its own way).
+     * @hidden
+     */
+    public static boolean reportThroughCurrentHandle(ResourceKey<Level> dimension, int chunkX, int chunkZ) {
+        var handle = currentHandle(dimension, chunkX, chunkZ);
+        if (handle == null) return false;
+        handle.report();
+        return true;
+    }
+
     private static void reportDispatchFailure(ResourceKey<Level> dimension, int chunkX, int chunkZ) {
         var handle = currentHandle(dimension, chunkX, chunkZ);
         if (handle != null) handle.report();
@@ -218,16 +244,22 @@ public final class LSSApi {
      */
     public static void dispatchColumn(ClientLevel level, ResourceKey<Level> dimension,
                                        int chunkX, int chunkZ, VoxelColumnData columnData) {
-        if (columnConsumers.isEmpty()) {
-            // Every consumer deregistered between scheduleProcessing's hasVoxelConsumers()
-            // gate and this dispatch: the column was stamped received at arrival, so a silent
-            // drop here is a permanent hole. Report it so the manager forgets the stamp and
-            // re-requests (bounded by the per-position ingest-failure cap if no consumer
-            // returns).
-            reportDispatchFailure(dimension, chunkX, chunkZ);
-            return;
-        }
+        dispatchColumn(level, dimension, chunkX, chunkZ, columnData, consumer -> true);
+    }
+
+    /**
+     * Internal dispatch to the consumers {@code audience} accepts — not part of the public
+     * API. A column sent for one kind of consumer alone (a map fill, whose other consumers
+     * already hold exactly this column) comes through here.
+     * @hidden
+     */
+    public static void dispatchColumn(ClientLevel level, ResourceKey<Level> dimension,
+                                       int chunkX, int chunkZ, VoxelColumnData columnData,
+                                       java.util.function.Predicate<VoxelColumnConsumer> audience) {
+        boolean delivered = false;
         for (var consumer : columnConsumers) {
+            if (!audience.test(consumer)) continue;
+            delivered = true;
             try {
                 consumer.onVoxelColumnReceived(level, dimension, chunkX, chunkZ, columnData);
             } catch (Throwable e) {
@@ -246,6 +278,14 @@ public final class LSSApi {
                 // the position parks.
                 reportDispatchFailure(dimension, chunkX, chunkZ);
             }
+        }
+        if (!delivered) {
+            // Every consumer (of this audience) deregistered between scheduleProcessing's
+            // hasVoxelConsumers() gate and this dispatch: the column was stamped received at
+            // arrival, so a silent drop here is a permanent hole. Report it so the manager
+            // forgets the stamp and re-requests (bounded by the per-position ingest-failure
+            // cap if no consumer returns).
+            reportDispatchFailure(dimension, chunkX, chunkZ);
         }
     }
 }

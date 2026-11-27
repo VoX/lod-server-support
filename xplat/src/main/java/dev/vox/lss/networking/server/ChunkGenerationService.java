@@ -207,12 +207,13 @@ public class ChunkGenerationService {
                             gen.level, chunk, gen.pos.x, gen.pos.z);
                     String dimension = gen.level.dimension().identifier().toString();
 
-                    // Seed the dirty filter with the served bytes: the chunk's imminent
+                    // Seed the dirty filter with the content just served: the chunk's imminent
                     // unload-save would otherwise count as "first observed save" and
-                    // trigger a pointless second send of the identical column.
+                    // trigger a pointless second send of the identical column. Same
+                    // server-thread task as the serve above, so the chunk cannot have
+                    // changed in between.
                     if (this.dirtyContentFilter != null) {
-                        this.dirtyContentFilter.seed(dimension, gen.pos.x, gen.pos.z,
-                                columnData.serializedSections());
+                        this.dirtyContentFilter.seedServed(gen.level, chunk, dimension);
                     }
 
                     // One GenerationReadyData per callback — processing thread will voxelize

@@ -136,6 +136,8 @@ public class LSSConfigMenu implements ConfigEntryPoint {
                 group.addOption(button);
             }
             page.addOptionGroup(group);
+            // Chat lines may now name these buttons (they name the command alone otherwise).
+            dev.vox.lss.networking.client.ClientCommandActions.noteMenuButtons();
         } catch (Throwable failure) {
             dev.vox.lss.common.LSSLogger.warn(dev.vox.lss.common.Brand.shortName() + " options page: the buttons of the "
                     + pageSpec.id() + " page were left out (" + failure + ")");

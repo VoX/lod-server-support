@@ -140,6 +140,67 @@ class VoxyCompatTest {
         assertNull(call.blockLight(), "block light is not substituted — Voxy renders null block light dark");
     }
 
+    // ---- 0.24.0: counting what reaches Voxy without sky light ----
+
+    private static net.minecraft.client.multiplayer.ClientLevel levelWithSky(boolean hasSkyLight) {
+        var level = org.mockito.Mockito.mock(net.minecraft.client.multiplayer.ClientLevel.class);
+        var type = org.mockito.Mockito.mock(net.minecraft.world.level.dimension.DimensionType.class);
+        org.mockito.Mockito.when(type.hasSkyLight()).thenReturn(hasSkyLight);
+        org.mockito.Mockito.when(level.dimensionType()).thenReturn(type);
+        return level;
+    }
+
+    private static VoxelColumnData.SectionData terrain(int sectionY, boolean onlyAir, boolean withSky) {
+        var section = org.mockito.Mockito.mock(net.minecraft.world.level.chunk.LevelChunkSection.class);
+        org.mockito.Mockito.when(section.hasOnlyAir()).thenReturn(onlyAir);
+        return new VoxelColumnData.SectionData(sectionY, section, null, withSky ? new DataLayer(new byte[2048]) : null);
+    }
+
+    /** A null sky layer is drawn dark. At or above the column's highest block that is a
+     *  defect worth counting; below it (solid ground, caves) it is ordinary. */
+    @Test
+    void sectionsWithoutSkyAtOrAboveTheHighestBlockAreCounted() {
+        var level = levelWithSky(true);
+        // ground at sections 0..3, the surface in 3, lit air above in 4
+        assertEquals(0, VoxyCompat.sectionsWithoutSky(level, column(
+                terrain(0, false, false), terrain(1, false, false), terrain(2, false, true),
+                terrain(3, false, true), terrain(4, true, true))), "the surface and the air above it have sky light");
+        assertEquals(1, VoxyCompat.sectionsWithoutSky(level, column(
+                terrain(0, false, false), terrain(3, false, false), terrain(4, true, true))),
+                "the surface section itself arrived without sky light");
+        assertEquals(2, VoxyCompat.sectionsWithoutSky(level, column(
+                terrain(3, false, false), terrain(4, true, false))),
+                "and so did the air section above it");
+        assertEquals(0, VoxyCompat.sectionsWithoutSky(level, column(terrain(4, true, false))),
+                "a column of air only has no surface to judge by");
+    }
+
+    @Test
+    void nothingIsCountedInADimensionWithoutSkyLightOrWithoutALevel() {
+        var dark = column(terrain(3, false, false), terrain(4, true, false));
+        assertEquals(0, VoxyCompat.sectionsWithoutSky(levelWithSky(false), dark), "the Nether has no sky light to miss");
+        assertEquals(0, VoxyCompat.sectionsWithoutSky(null, dark));
+        assertEquals(0, VoxyCompat.sectionsWithoutSky(levelWithSky(true), null));
+        // sections without a section object (as other tests of this bridge hand over) are skipped
+        assertEquals(0, VoxyCompat.sectionsWithoutSky(levelWithSky(true), column(sectionData(1))));
+    }
+
+    /** The count is taken where the column is handed over, and changes nothing about it. */
+    @Test
+    void theBridgeCountsOnHandOver() {
+        VoxyLightStats.reset();
+        var consumer = initBridge();
+        consumer.onVoxelColumnReceived(levelWithSky(true), DIM, 5, 6,
+                column(terrain(3, false, false), terrain(4, true, false)));
+        assertEquals(2, VoxyLightStats.darkSections());
+        assertEquals(2, VoxelIngestService.calls.size(), "both sections are still handed to Voxy");
+        consumer.onVoxelColumnReceived(levelWithSky(true), DIM, 5, 7,
+                column(terrain(3, false, true), terrain(4, true, true)));
+        assertEquals(2, VoxyLightStats.darkSections(), "a lit column adds nothing");
+        VoxyLightStats.reset();
+        assertEquals(0, VoxyLightStats.darkSections());
+    }
+
     @Test
     void nonNullSkyLightPassesThroughUnchanged() {
         // The substitution must be surgical: a real (non-null) sky layer — e.g. an overworld

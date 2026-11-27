@@ -66,8 +66,15 @@ class DiagnosticPrivacyTest {
                 7L,
                 7L,
                 7L,
+                7L,
+                7,
+                7L,
+                7,
+                7L,
+                7L,
                 7,
                 7,
+                "alice@example.test /home/alice/token abcdef12-3456-7890-abcd-abcdef123456",
                 "alice@example.test /home/alice/token abcdef12-3456-7890-abcd-abcdef123456",
                 "alice@example.test /home/alice/token abcdef12-3456-7890-abcd-abcdef123456",
                 "alice@example.test /home/alice/token abcdef12-3456-7890-abcd-abcdef123456",
@@ -82,6 +89,12 @@ class DiagnosticPrivacyTest {
         String json = DiagnosticExport.clientJson(snapshot);
         assertTrue(json.contains("1.2.3+mc1.21.1"));
         assertTrue(json.contains("getAuditHeals"));
+        // 0.24.0: what reached Voxy without sky light is in the export, as numbers.
+        assertTrue(json.contains("getVoxySectionsWithoutSky") && json.contains("getBorderFillSkyHolds")
+                && json.contains("getBorderFillSkyWaiting") && json.contains("getBorderFillSkyOldestWaitMs"));
+        // and what the map is owed (issue #380), as numbers; its display line never is
+        assertTrue(json.contains("getMapOwedColumns") && json.contains("getMapFillDelivered"));
+        assertFalse(json.contains("mapFillDiagLine"));
         assertFalse(json.contains("alice"));
         assertFalse(json.contains("abcdef12"));
         assertFalse(json.contains("describeCacheKey"));

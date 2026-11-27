@@ -51,7 +51,23 @@ public record ChunkReadResult(UUID playerUuid, int chunkX, int chunkZ,
                               long srcStampSeconds,
                               byte[] frameBytes, int frameRawSize,
                               boolean headerFresh,
-                              boolean unservable) {
+                              boolean unservable,
+                              boolean timedOut) {
+
+    /** Pre-timedOut full signature ({@code timedOut = false}): every result but a read
+     *  that ran out of time. */
+    public ChunkReadResult(UUID playerUuid, int chunkX, int chunkZ,
+                           byte[] sectionBytes, String dimension, int estimatedBytes,
+                           long columnTimestamp, boolean notFound, boolean saturated,
+                           boolean authoritativeMiss, boolean fromStore,
+                           long submissionOrder, long srcStampSeconds,
+                           byte[] frameBytes, int frameRawSize, boolean headerFresh,
+                           boolean unservable) {
+        this(playerUuid, chunkX, chunkZ, sectionBytes, dimension, estimatedBytes,
+                columnTimestamp, notFound, saturated, authoritativeMiss, fromStore,
+                submissionOrder, srcStampSeconds, frameBytes, frameRawSize, headerFresh,
+                unservable, false);
+    }
 
     /** Pre-unservable full signature ({@code unservable = false}): every result that
      *  is not the undecodable-chunk flavor, and every rig written before it existed. */
@@ -147,6 +163,18 @@ public record ChunkReadResult(UUID playerUuid, int chunkX, int chunkZ,
                                                     String dimension, long submissionOrder) {
         return new ChunkReadResult(playerUuid, chunkX, chunkZ, null, dimension, 0, 0L,
                 true, false, false, submissionOrder);
+    }
+
+    /**
+     * A read that ran out of time, triaged as not-found like an error. {@code timedOut}
+     * keeps the one difference that matters afterwards: a timeout is a fact about the disk
+     * at that moment and says nothing about the chunk, so it never counts towards "this
+     * chunk cannot be read" (the end for unreadable chunks outside the world border).
+     */
+    public static ChunkReadResult notFoundFromTimeout(UUID playerUuid, int chunkX, int chunkZ,
+                                                      String dimension, long submissionOrder) {
+        return new ChunkReadResult(playerUuid, chunkX, chunkZ, null, dimension, 0, 0L,
+                true, false, false, false, submissionOrder, 0L, null, 0, false, false, true);
     }
 
     /**

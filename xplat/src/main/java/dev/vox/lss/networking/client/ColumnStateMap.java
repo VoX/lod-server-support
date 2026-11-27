@@ -67,6 +67,22 @@ class ColumnStateMap {
         long summaryValidated;
         long sessionSatisfied;
         long staleInFlight;
+        /**
+         * Columns this client holds that no map has been given (issue #380): they arrived
+         * while no map was being written. A subset of {@code positiveTs}, kept so by
+         * {@code tsPut}. NOT a classify input and not part of {@code needs}: the scanners
+         * never see it, and a column the map is owed is still satisfied as far as the
+         * terrain itself goes. The request manager asks for these again only when the
+         * player starts a map fill.
+         */
+        long mapOwed;
+        /**
+         * Held columns of which it is not known whether a map was given them: the record
+         * on disk does not cover them (a cache from before the record, or columns another
+         * version added to the file). Disjoint from {@code mapOwed}. Nothing is asked or
+         * said for them until the player asks for a fill, which counts them as owed.
+         */
+        long mapUnknown;
         /** Derived: bit set ⇔ classify(position) would return non-SATISFIED. */
         long needs;
 
@@ -143,19 +159,37 @@ class ColumnStateMap {
     private int dirtyCount;
     private int retryCount;
     private int sessionSatisfiedCount;
+    private int mapOwedCount;
+    private int mapUnknownCount;
+    /**
+     * Columns whose debt was settled this session (a map took them, or they owe nothing),
+     * as one mask per leaf. Kept apart from the leaves because it must outlive the movement
+     * prune: a debt that was paid without the stamp changing (a map fill) would otherwise
+     * come back from the record on disk for every column the player has walked away from,
+     * and be sent again next session. The stamps' {@code persistentRemovals}, for the debt.
+     */
+    private it.unimi.dsi.fastutil.longs.Long2LongOpenHashMap mapSettled =
+            new it.unimi.dsi.fastutil.longs.Long2LongOpenHashMap();
+    /** The innermost ring of leaves (around {@link #owedScanLeafX}/Z) that may still hold a
+     *  map debt: a fill empties the debt from the inside out, and without this every
+     *  pick would walk the emptied middle again. Reset whenever debt is added or the
+     *  centre moves. */
+    private int owedScanRing;
+    private int owedScanLeafX = Integer.MIN_VALUE;
+    private int owedScanLeafZ = Integer.MIN_VALUE;
 
     // --- leaf addressing ---
 
-    private static long leafKeyFor(long packed) {
+    static long leafKeyFor(long packed) {
         return PositionUtil.packPosition(PositionUtil.unpackX(packed) >> 3,
                 PositionUtil.unpackZ(packed) >> 3);
     }
 
-    private static int bitIndexFor(long packed) {
+    static int bitIndexFor(long packed) {
         return ((PositionUtil.unpackZ(packed) & 7) << 3) | (PositionUtil.unpackX(packed) & 7);
     }
 
-    private static long positionFor(long leafKey, int bit) {
+    static long positionFor(long leafKey, int bit) {
         int cx = (PositionUtil.unpackX(leafKey) << 3) | (bit & 7);
         int cz = (PositionUtil.unpackZ(leafKey) << 3) | (bit >> 3);
         return PositionUtil.packPosition(cx, cz);
@@ -204,6 +238,14 @@ class ColumnStateMap {
         leaf.ts[bit] = value;
         leaf.positiveTs &= ~m;
         leaf.zeroTs &= ~m;
+        if (value <= 0 && ((leaf.mapOwed | leaf.mapUnknown) & m) != 0) {
+            // A column that is no longer held owes the map nothing: when it is downloaded
+            // again the map gets it with everyone else (or the debt is set afresh).
+            if ((leaf.mapOwed & m) != 0) this.mapOwedCount--;
+            if ((leaf.mapUnknown & m) != 0) this.mapUnknownCount--;
+            leaf.mapOwed &= ~m;
+            leaf.mapUnknown &= ~m;
+        }
         if (value > 0) {
             leaf.positiveTs |= m;
             this.receivedCount++;
@@ -875,6 +917,7 @@ class ColumnStateMap {
             if (minCheb > pruneDistance) {
                 // Wholly out of range: identical outcome to the old per-position prune.
                 removedEntries += Long.bitCount(leaf.positiveTs | leaf.zeroTs);
+                notePrunedMapDebt(leaf.mapOwed, leaf.mapUnknown);
                 dropLeafCounts(leaf);
                 iter.remove();
                 continue;
@@ -894,6 +937,7 @@ class ColumnStateMap {
                 if (!PositionUtil.isOutOfRange(pos, playerCx, playerCz, pruneDistance)) continue;
                 long m = 1L << bit;
                 if (leaf.ts[bit] != -1L) removedEntries++;
+                notePrunedMapDebt(leaf.mapOwed & m, leaf.mapUnknown & m);
                 tsPut(leaf, bit, -1L);
                 clearDirty(leaf, m);
                 clearRetry(leaf, m);
@@ -941,6 +985,8 @@ class ColumnStateMap {
         this.dirtyCount -= Long.bitCount(leaf.dirty);
         this.retryCount -= Long.bitCount(leaf.retry);
         this.sessionSatisfiedCount -= Long.bitCount(leaf.sessionSatisfied);
+        this.mapOwedCount -= Long.bitCount(leaf.mapOwed);
+        this.mapUnknownCount -= Long.bitCount(leaf.mapUnknown);
     }
 
     void clear() {
@@ -954,7 +1000,255 @@ class ColumnStateMap {
         this.dirtyCount = 0;
         this.retryCount = 0;
         this.sessionSatisfiedCount = 0;
+        this.mapOwedCount = 0;
+        this.mapUnknownCount = 0;
+        this.mapSettled.clear();
+        this.prunedMapOwed = false;
+        this.prunedMapUnknown = false;
+        this.owedScanRing = 0;
         invalidateMemo();
+    }
+
+    // --- the map's debt (issue #380) ---
+
+    /** Columns held that no map has been given. */
+    int mapOwedCount() {
+        return this.mapOwedCount;
+    }
+
+    /** Columns held of which it is not known whether a map has them. */
+    int mapUnknownCount() {
+        return this.mapUnknownCount;
+    }
+
+    boolean isMapOwed(long packed) {
+        Leaf leaf = leafFor(packed);
+        return leaf != null && (leaf.mapOwed & (1L << bitIndexFor(packed))) != 0;
+    }
+
+    boolean isMapUnknown(long packed) {
+        Leaf leaf = leafFor(packed);
+        return leaf != null && (leaf.mapUnknown & (1L << bitIndexFor(packed))) != 0;
+    }
+
+    /**
+     * A column is on its way to a map that is being written: not owed for now, so that a
+     * running fill does not ask for it too, and nothing more. Whether the map has it is
+     * decided when the delivery ends ({@link #setMapOwed}). If that end never reaches this
+     * map (the player moved on and the column was pruned), nothing was claimed: the record
+     * on disk stands as it was.
+     */
+    void setMapPending(long packed) {
+        Leaf leaf = leafFor(packed);
+        if (leaf == null) return;
+        long m = 1L << bitIndexFor(packed);
+        if ((leaf.positiveTs & m) == 0) return;
+        if ((leaf.mapUnknown & m) != 0) {
+            leaf.mapUnknown &= ~m;
+            this.mapUnknownCount--;
+        }
+        if ((leaf.mapOwed & m) != 0) {
+            leaf.mapOwed &= ~m;
+            this.mapOwedCount--;
+        }
+    }
+
+    /**
+     * Columns that were owed to the map, or of unknown history, left memory when the player
+     * moved on: the cache file still holds them, and what this map counts is no longer all
+     * this cache owes. A fill that was asked for stands for them (see {@code MapFill}).
+     */
+    private boolean prunedMapOwed;
+    private boolean prunedMapUnknown;
+
+    private void notePrunedMapDebt(long owed, long unknown) {
+        if (owed != 0) this.prunedMapOwed = true;
+        if (unknown != 0) this.prunedMapUnknown = true;
+    }
+
+    boolean prunedMapOwed() {
+        return this.prunedMapOwed;
+    }
+
+    /** A map let go of a column that had already left memory while it was in the map's
+     *  queue: the cache file may owe it, and this map can no longer say. */
+    void notePrunedMapOwed() {
+        this.prunedMapOwed = true;
+    }
+
+    boolean prunedMapUnknown() {
+        return this.prunedMapUnknown;
+    }
+
+    /** Debts were settled this session that the next save must take to the record. */
+    boolean hasMapSettled() {
+        return !this.mapSettled.isEmpty();
+    }
+
+    /** A map wrote a column this map no longer holds in memory (the player moved on while
+     *  it was in the map's queue): the record's debt for it is settled at the next save. */
+    void noteMapSettled(long packed) {
+        long key = leafKeyFor(packed);
+        long m = 1L << bitIndexFor(packed);
+        long settled = this.mapSettled.get(key);
+        if ((settled & m) == 0) this.mapSettled.put(key, settled | m);
+    }
+
+    /**
+     * Records how a column stands with the map once that is known: owed (no map was given
+     * it, or one let it go), or settled (a map wrote it, or there is nothing to send).
+     * Settled is what the next save takes to the record, so it is only ever said for a
+     * fact. Only a column that is held (a positive stamp) has a debt; anything else is
+     * left alone. Either way the column's history is known from here on.
+     */
+    void setMapOwed(long packed, boolean owed) {
+        Leaf leaf = leafFor(packed);
+        if (leaf == null) return;
+        int bit = bitIndexFor(packed);
+        long m = 1L << bit;
+        if ((leaf.positiveTs & m) == 0) return;
+        if ((leaf.mapUnknown & m) != 0) {
+            leaf.mapUnknown &= ~m;
+            this.mapUnknownCount--;
+        }
+        long key = leafKeyFor(packed);
+        long settled = this.mapSettled.get(key);
+        if (owed) {
+            if ((leaf.mapOwed & m) == 0) {
+                leaf.mapOwed |= m;
+                this.mapOwedCount++;
+                this.owedScanRing = 0;
+            }
+            if ((settled & m) != 0) this.mapSettled.put(key, settled & ~m);
+        } else {
+            if ((leaf.mapOwed & m) != 0) {
+                leaf.mapOwed &= ~m;
+                this.mapOwedCount--;
+            }
+            if ((settled & m) == 0) this.mapSettled.put(key, settled | m);
+        }
+    }
+
+    /** {@link #mapState}: a map has the column, or it owes nothing. */
+    static final byte MAP_SETTLED = 0;
+    static final byte MAP_OWED = 1;
+    static final byte MAP_UNKNOWN = 2;
+
+    /** What is known about this column and the map, for a delivery to put back if it is
+     *  cancelled before any consumer had the column. */
+    byte mapState(long packed) {
+        Leaf leaf = leafFor(packed);
+        if (leaf == null) return MAP_SETTLED;
+        long m = 1L << bitIndexFor(packed);
+        return (leaf.mapOwed & m) != 0 ? MAP_OWED : (leaf.mapUnknown & m) != 0 ? MAP_UNKNOWN : MAP_SETTLED;
+    }
+
+    /** Puts back what {@link #mapState} returned before a delivery that never happened. */
+    void restoreMapState(long packed, byte state) {
+        if (state != MAP_UNKNOWN) {
+            setMapOwed(packed, state == MAP_OWED);
+            return;
+        }
+        Leaf leaf = leafFor(packed);
+        if (leaf == null) return;
+        long m = 1L << bitIndexFor(packed);
+        if ((leaf.positiveTs & m) == 0) return;
+        if ((leaf.mapOwed & m) != 0) {
+            leaf.mapOwed &= ~m;
+            this.mapOwedCount--;
+        }
+        if ((leaf.mapUnknown & m) == 0) {
+            leaf.mapUnknown |= m;
+            this.mapUnknownCount++;
+        }
+        long key = leafKeyFor(packed);
+        long settled = this.mapSettled.get(key);
+        if ((settled & m) != 0) this.mapSettled.put(key, settled & ~m);
+    }
+
+    /** Every held column of unknown history becomes owed (the player asked for a fill).
+     *  Returns how many changed. */
+    int markUnknownMapOwed() {
+        int changed = 0;
+        for (Leaf leaf : this.leaves.values()) {
+            if (leaf.mapUnknown == 0) continue;
+            changed += Long.bitCount(leaf.mapUnknown);
+            leaf.mapOwed |= leaf.mapUnknown;
+            leaf.mapUnknown = 0;
+        }
+        this.mapOwedCount += changed;
+        this.mapUnknownCount -= changed;
+        if (changed > 0) this.owedScanRing = 0;
+        return changed;
+    }
+
+    /**
+     * Picks up to {@code max} owed columns within {@code maxDistance} chunks (Chebyshev) of
+     * the player, nearest rings of leaves first, into {@code out} from {@code offset}. Only
+     * columns the scanners are done with are picked (a column that still needs a request of
+     * its own is asked by the scan, and its answer says what the server holds now).
+     * {@code busy} excludes positions. Returns how many were written.
+     */
+    int collectMapOwed(int playerCx, int playerCz, int maxDistance, long[] out, int offset, int max,
+                       java.util.function.LongPredicate busy) {
+        if (this.mapOwedCount <= 0 || max <= 0) return 0;
+        int leafX = playerCx >> 3, leafZ = playerCz >> 3;
+        if (leafX != this.owedScanLeafX || leafZ != this.owedScanLeafZ) {
+            this.owedScanLeafX = leafX;
+            this.owedScanLeafZ = leafZ;
+            this.owedScanRing = 0;
+        }
+        int lastRing = (maxDistance >> 3) + 1;
+        int written = 0;
+        boolean innerRingsEmpty = true;
+        for (int ring = this.owedScanRing; ring <= lastRing && written < max; ring++) {
+            boolean ringHasDebt = false;
+            // The ring's leaves: the two full rows, then the two columns between them.
+            for (int side = 0; side < 4 && written < max; side++) {
+                int from = side < 2 ? -ring : -ring + 1;
+                int to = side < 2 ? ring : ring - 1;
+                if (ring == 0 && side > 0) break;
+                for (int i = from; i <= to && written < max; i++) {
+                    int lx = side == 0 || side == 1 ? leafX + i : (side == 2 ? leafX - ring : leafX + ring);
+                    int lz = side == 0 ? leafZ - ring : (side == 1 ? leafZ + ring : leafZ + i);
+                    long key = PositionUtil.packPosition(lx, lz);
+                    Leaf leaf = this.leaves.get(key);
+                    if (leaf == null || leaf.mapOwed == 0) continue;
+                    ringHasDebt = true;
+                    for (long bits = leaf.mapOwed & ~leaf.needs; bits != 0 && written < max; bits &= bits - 1) {
+                        long position = positionFor(key, Long.numberOfTrailingZeros(bits));
+                        if (PositionUtil.isOutOfRange(position, playerCx, playerCz, maxDistance)) continue;
+                        if (busy != null && busy.test(position)) continue;
+                        out[offset + written++] = position;
+                    }
+                }
+            }
+            // Advance the start only past rings that were looked at in full and hold nothing.
+            if (innerRingsEmpty && !ringHasDebt && written < max) {
+                this.owedScanRing = ring + 1;
+            } else {
+                innerRingsEmpty = false;
+            }
+        }
+        return written;
+    }
+
+    /** How many owed columns lie within {@code maxDistance} chunks of the player and are
+     *  not {@code skipped}. Walks every leaf: for a one-off count, not per tick. */
+    int countMapOwedInRange(int playerCx, int playerCz, int maxDistance, java.util.function.LongPredicate skipped) {
+        if (this.mapOwedCount <= 0) return 0;
+        int count = 0;
+        var iter = this.leaves.long2ObjectEntrySet().fastIterator();
+        while (iter.hasNext()) {
+            var entry = iter.next();
+            for (long bits = entry.getValue().mapOwed; bits != 0; bits &= bits - 1) {
+                long position = positionFor(entry.getLongKey(), Long.numberOfTrailingZeros(bits));
+                if (PositionUtil.isOutOfRange(position, playerCx, playerCz, maxDistance)) continue;
+                if (skipped != null && skipped.test(position)) continue;
+                count++;
+            }
+        }
+        return count;
     }
 
     // --- bulk load / save (the cache lifecycle; docs/planning/quadtree-client-state-plan.md §3.4) ---
@@ -974,6 +1268,11 @@ class ColumnStateMap {
          *  put(-1) deleted the live claim. A dropped entry would silently keep it (the
          *  fuzz caught the corrupt flavor; review round 2 caught the exact--1 flavor). */
         final it.unimi.dsi.fastutil.longs.LongArrayList clampedToAbsent;
+        /** The player asked for a map fill that had not finished when this was saved (set by
+         *  the cache store, with the leaves' owed and unknown masks). */
+        boolean mapFillRequested;
+        /** The player was told about the debt this cache holds. */
+        boolean mapHinted;
 
         private LoadedState(Long2ObjectOpenHashMap<Leaf> leaves,
                             it.unimi.dsi.fastutil.longs.LongArrayList clampedToAbsent) {
@@ -1022,6 +1321,24 @@ class ColumnStateMap {
     }
 
     /**
+     * Applies the record of the map's debt to a freshly built load, on the IO thread. The
+     * masks use this map's leaf addressing. A held column the record covers is owed or
+     * not as the record says; one it does not cover (every column, when {@code known} is
+     * null: no record) has an unknown history.
+     */
+    static void applyMapRecord(LoadedState loaded, it.unimi.dsi.fastutil.longs.Long2LongMap known,
+                               it.unimi.dsi.fastutil.longs.Long2LongMap owed) {
+        var iter = loaded.leaves.long2ObjectEntrySet().fastIterator();
+        while (iter.hasNext()) {
+            var entry = iter.next();
+            Leaf leaf = entry.getValue();
+            long covered = known == null ? 0L : known.get(entry.getLongKey());
+            leaf.mapOwed = owed == null ? 0L : owed.get(entry.getLongKey()) & covered & leaf.positiveTs;
+            leaf.mapUnknown = leaf.positiveTs & ~covered;
+        }
+    }
+
+    /**
      * Adopt an off-thread-built cache load. A leaf with no live twin transfers wholesale
      * (O(1)); a live twin (rare — the cache gate defers scanning until this ran, so live
      * state is at most a few dirty marks from early broadcasts) merges per position with
@@ -1039,14 +1356,27 @@ class ColumnStateMap {
                 this.receivedCount += Long.bitCount(incoming.positiveTs);
                 this.emptyCount += Long.bitCount(incoming.zeroTs);
                 this.entryCount += Long.bitCount(incoming.positiveTs | incoming.zeroTs);
+                this.mapOwedCount += Long.bitCount(incoming.mapOwed);
+                this.mapUnknownCount += Long.bitCount(incoming.mapUnknown);
                 continue;
             }
             for (long bits = incoming.positiveTs | incoming.zeroTs; bits != 0; bits &= bits - 1) {
                 int bit = Long.numberOfTrailingZeros(bits);
                 tsPut(live, bit, incoming.ts[bit]);
             }
+            // The debt follows the stamp: where the file's stamp was just applied, the
+            // file's word on the map applies with it.
+            long fromFile = incoming.positiveTs | incoming.zeroTs;
+            long owed = ((live.mapOwed & ~fromFile) | (incoming.mapOwed & fromFile)) & live.positiveTs;
+            long unknown = ((live.mapUnknown & ~fromFile) | (incoming.mapUnknown & fromFile))
+                    & live.positiveTs & ~owed;
+            this.mapOwedCount += Long.bitCount(owed) - Long.bitCount(live.mapOwed);
+            this.mapUnknownCount += Long.bitCount(unknown) - Long.bitCount(live.mapUnknown);
+            live.mapOwed = owed;
+            live.mapUnknown = unknown;
             live.recomputeNeeds();
         }
+        this.owedScanRing = 0;
         // Corrupt-clamped file entries still overwrite (delete) any live stamp — the
         // file-wins contract (see LoadedState.clampedToAbsent). Absent leaves need
         // nothing: there is no live claim to delete.
@@ -1068,6 +1398,28 @@ class ColumnStateMap {
     }
 
     /**
+     * What a save records about the map's debt for one cache bucket.
+     *
+     * @param fillRequested    the player asked for a fill that has not finished; null when
+     *                         this session never learned what the record says (the record's
+     *                         own word then stands)
+     * @param fileUnknownBecomeOwed a fill was requested: every held column of unknown history
+     *                         that the FILE has and this state does not becomes owed too
+     * @param hinted           the player was told about the debt (null like fillRequested)
+     * @param stopped          the player took a request back in this session: the record must
+     *                         hear of it also when the session holds nothing else to save
+     */
+    record MapDebt(Boolean fillRequested, boolean fileUnknownBecomeOwed, Boolean hinted, boolean stopped) {
+        MapDebt(Boolean fillRequested, boolean fileUnknownBecomeOwed, Boolean hinted) {
+            this(fillRequested, fileUnknownBecomeOwed, hinted, false);
+        }
+
+        MapDebt(Boolean fillRequested, boolean fileUnknownBecomeOwed) {
+            this(fillRequested, fileUnknownBecomeOwed, null, false);
+        }
+    }
+
+    /**
      * The state a merge-save consumes, detached from the live map: the leaves (timestamp
      * source) and the session's deliberate stamp deletions. Owned by the IO thread after
      * {@link #detachForSave}.
@@ -1083,11 +1435,44 @@ class ColumnStateMap {
             this.entries = entries;
         }
 
-        boolean isEmpty() { return this.entries == 0 && this.removals.isEmpty(); }
+        /** Nothing for a save to do: no stamps, no removals, no settled debt to take to the
+         *  record of columns the cache file holds, and no press of Fill Map to record. */
+        boolean isEmpty() {
+            return this.entries == 0 && this.removals.isEmpty() && this.mapSettled.isEmpty()
+                    && (this.mapDebt == null
+                            || (!this.mapDebt.fileUnknownBecomeOwed() && !this.mapDebt.stopped()));
+        }
 
         /** Primitive visitor — a 2M-entry save must not box its way through the overlay. */
         interface TsVisitor {
             void accept(long packed, long ts);
+        }
+
+        /** What the save should record about the map's debt (issue #380); null = leave
+         *  the record on disk alone. Set by the owner right after the detach. */
+        MapDebt mapDebt;
+        /** Debts settled this session, also of columns this state no longer holds. */
+        it.unimi.dsi.fastutil.longs.Long2LongOpenHashMap mapSettled =
+                new it.unimi.dsi.fastutil.longs.Long2LongOpenHashMap();
+
+        /** Leaf-level visitor: which columns of a leaf this state holds at all, which of
+         *  the held ones the map is owed, and which have an unknown history. */
+        interface LeafMaskVisitor {
+            void accept(long leafKey, long present, long owed, long unknown);
+        }
+
+        /** Visit every leaf that holds a stamp. IO-thread use. */
+        void forEachLeafMasks(LeafMaskVisitor visitor) {
+            var iter = this.leaves.long2ObjectEntrySet().fastIterator();
+            while (iter.hasNext()) {
+                var entry = iter.next();
+                Leaf leaf = entry.getValue();
+                long present = leaf.positiveTs | leaf.zeroTs;
+                if (present != 0) {
+                    visitor.accept(entry.getLongKey(), present, leaf.mapOwed & leaf.positiveTs,
+                            leaf.mapUnknown & leaf.positiveTs);
+                }
+            }
         }
 
         /** Visit every stored (non-absent) timestamp. IO-thread use. */
@@ -1125,8 +1510,16 @@ class ColumnStateMap {
         this.dirtyCount = 0;
         this.retryCount = 0;
         this.sessionSatisfiedCount = 0;
+        this.mapOwedCount = 0;
+        this.mapUnknownCount = 0;
+        this.owedScanRing = 0;
         invalidateMemo();
-        return new DetachedState(detachedLeaves, detachedRemovals, entries);
+        var detached = new DetachedState(detachedLeaves, detachedRemovals, entries);
+        detached.mapSettled = this.mapSettled;
+        this.mapSettled = new it.unimi.dsi.fastutil.longs.Long2LongOpenHashMap();
+        this.prunedMapOwed = false;
+        this.prunedMapUnknown = false;
+        return detached;
     }
 
     /** The stored timestamps as a fresh map — test-facing (production saves detach; see
@@ -1170,6 +1563,22 @@ class ColumnStateMap {
     }
 
     boolean isEmptyMap() { return this.entryCount == 0; }
+
+    /** Positions with a stored timestamp. */
+    int size() { return this.entryCount; }
+
+    /** Test seam: visit every stored timestamp of the live map. */
+    void forEachPresentForTest(DetachedState.TsVisitor visitor) {
+        var iter = this.leaves.long2ObjectEntrySet().fastIterator();
+        while (iter.hasNext()) {
+            var entry = iter.next();
+            Leaf leaf = entry.getValue();
+            for (long bits = leaf.positiveTs | leaf.zeroTs; bits != 0; bits &= bits - 1) {
+                int bit = Long.numberOfTrailingZeros(bits);
+                visitor.accept(positionFor(entry.getLongKey(), bit), leaf.ts[bit]);
+            }
+        }
+    }
     boolean hasRetries() { return this.retryCount > 0; }
 
     /**
