@@ -596,8 +596,10 @@ final class MapFill {
      * scan's own wants.
      *
      * <p>The fill gets what the scan leaves of the batch, and never less than a quarter of
-     * it: when the scan leaves less, the fill's columns take the place of the scan's farthest
-     * entries, which the scan declares again at its next walk. A fill is the player's own
+     * it: when the scan leaves less, the fill's columns take the place of the scan's last
+     * entries (the farthest of a ring walk, the last in region order). Those are not sent:
+     * the scan walks them again every time, and they go out when the fill needs fewer
+     * places. A fill is the player's own
      * request, and it must not wait for a scan that may never be done: on a world that is
      * still being generated out to the LOD distance the scan asks for columns nobody holds
      * for hours, and every batch is full of them. (Until 0.24.0's visual pass the fill added
@@ -605,13 +607,15 @@ final class MapFill {
      * then delivered none in two and three minutes, and one of 3,641 finished in nine seconds
      * once the scan had nothing to ask.)
      *
-     * <p>The scan keeps three quarters of the batch, so terrain the server already has keeps
-     * arriving at three quarters of its speed. Terrain that still has to be generated waits
-     * for the fill, and that is the server's doing: it answers what it has for a player
-     * before it generates anything farther out (its nearest-first rule), and a fill's columns
-     * are near and exist. Measured on a fresh world with a budget of 800: the fill ran at 200
-     * columns a second (4,681 in 24 s), 440 chunks were generated in that time against some
-     * 40 a second before and after, and generation went on when the fill was done.
+     * <p>The scan keeps three quarters of the batch. Terrain that still has to be generated
+     * waits for the fill all the same, and that is the server's doing: it answers what it has
+     * for a player before it generates anything farther out (its nearest-first rule), and a
+     * fill's columns are near and exist. Measured on a fresh world with a budget of 800: the
+     * first delivery 7 s after the press and all 4,681 columns 31 s after it (200 a scan, one
+     * scan a second); 440 chunks were generated in the 35 s around the fill, against about
+     * 38 a second in the same run without this rule; generation went on when the fill was
+     * done. The client's {@code queued} diagnostic counts what the scan walked, also the
+     * entries that made way.
      *
      * @param possible a fill can ask now (a map is being written, the session downloads);
      *                 when not, the scan's declarations are still noted for the grace

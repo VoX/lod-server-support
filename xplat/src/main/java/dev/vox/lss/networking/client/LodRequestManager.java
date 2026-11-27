@@ -849,7 +849,7 @@ public class LodRequestManager {
             // A map fill rides behind the scan's own wants (see MapFill.append): the
             // declaration is the walk's entries plus the owed columns that still fit, and
             // at least a quarter of the batch is the fill's while one runs (its columns then
-            // stand where the walk's farthest entries stood; the count does not grow).
+            // stand where the walk's last entries stood; the count does not grow).
             int declared = scanned + appendMapFill(scanned, playerCx, playerCz, viewDistance);
             this.tracker.replaceWith(this.sendPositionBuffer, declared);
             // Arm/disarm the adaptive fast cadence beside the tracker replace, so

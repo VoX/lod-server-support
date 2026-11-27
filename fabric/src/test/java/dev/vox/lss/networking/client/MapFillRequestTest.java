@@ -524,6 +524,46 @@ class MapFillRequestTest {
         }
         assertEquals(5, fills, "the five owed columns ride");
         assertEquals(new LongOpenHashSet(batch.positions()).size(), batch.positions().length, "nothing is declared twice");
+        for (int i = 0; i < batch.positions().length; i++) {
+            assertEquals(i >= budget - 5, owedLeft.contains(batch.positions()[i]),
+                    "the fill stands in the batch's last places, the scan's order before it is untouched: " + i);
+        }
+    }
+
+    /** The scan leaves some room, but less than a quarter: the fill takes that room and only
+     *  the difference from the scan's last entries, and the batch is exactly full. */
+    @Test
+    void aScanThatLeavesLessThanAQuarterGivesUpOnlyTheDifference() {
+        pressAfterADownloadWithoutAMap(24);
+        var unheld = new LongOpenHashSet();
+        for (int ring = 24; ring >= 14 && unheld.size() < 700; ring--) {
+            for (int x = -ring; x <= ring && unheld.size() < 700; x++) {
+                for (int z = -ring; z <= ring && unheld.size() < 700; z++) {
+                    if (Math.max(Math.abs(x), Math.abs(z)) == ring) unheld.add(p(x, z));
+                }
+            }
+        }
+        for (long position : unheld) manager.onIngestFailure(dim, position);
+
+        Batch batch = fire();
+        int budget = manager.scannerForTest().getLastBudget();
+        int share = budget / MapFill.SHARE_DIVISOR;
+        assertEquals(700, manager.scannerForTest().getLastQueued(), "premise: the scan walked every column nobody holds");
+        assertTrue(budget - share < 700 && 700 < budget, "premise: it leaves room, but less than a quarter: " + budget);
+        assertEquals(budget, batch.positions().length, "the batch is exactly full");
+        int scans = 0, fills = 0;
+        for (int i = 0; i < batch.positions().length; i++) {
+            if (unheld.contains(batch.positions()[i])) {
+                scans++;
+                assertEquals(0, fills, "the scan's entries come first");
+            } else {
+                fills++;
+                assertEquals(-1L, batch.timestamps()[i]);
+                assertTrue(manager.isMapOwed(batch.positions()[i]));
+            }
+        }
+        assertEquals(share, fills, "the fill has its quarter");
+        assertEquals(budget - share, scans, "and the scan gave up " + (700 - (budget - share)) + " places, no more");
     }
 
     @Test
