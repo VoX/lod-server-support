@@ -435,6 +435,7 @@ class AbstractChunkDiskReaderTest {
         assertTrue(r.notFound(), "errored read must answer like a miss so the requester is not stranded");
         assertFalse(r.authoritativeMiss(),
                 "an exception says nothing about existence — it must never seed the miss memo");
+        assertFalse(r.timedOut(), "an error is not a timeout: it counts towards 'this chunk cannot be read'");
         assertFalse(r.saturated());
         assertEquals(1, reader.getDiag().getErrorCount());
         assertEquals(0, reader.getDiag().getNotFoundCount(),
@@ -810,6 +811,8 @@ class AbstractChunkDiskReaderTest {
             while (timedOut == null && System.nanoTime() < deadline) { timedOut = q.poll(); }
             assertNotNull(timedOut);
             assertTrue(timedOut.notFound(), "timeout triages down the not-found ladder");
+            assertTrue(timedOut.timedOut(), "and says that it was a timeout, not an error");
+            assertFalse(timedOut.authoritativeMiss());
 
             gated.submit(player, 6, 6, 2L, () -> new byte[]{1, 2});
             ChunkReadResult next = null;

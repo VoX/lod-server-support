@@ -1,0 +1,262 @@
+{
+  "schema_version": 1,
+  "version": "0.24.0-beta.1",
+  "scope": "beta: 26.3 and 1.21.1",
+  "prepared": "2026-11-23",
+  "status": "published",
+  "merged": {
+    "main": "2ea84b506 (#433)",
+    "support/mc1.21.1": "07594519d (#434)"
+  },
+  "tagged": {
+    "v0.24.0-beta.1": "2ea84b506",
+    "v0.24.0-beta.1+mc1.21.1": "07594519d"
+  },
+  "published": {
+    "date": "2026-11-24",
+    "github_prereleases": 2,
+    "github_jars": 7,
+    "modrinth_beta_versions": 7,
+    "vss": 0,
+    "curseforge": 0,
+    "verify_lss_problems": {
+      "26.3": 0,
+      "1.21.1": 0
+    }
+  },
+  "lines": {
+    "26.3": {
+      "gated_head": "d9ee43e91fd8ab47d7bc767dc94f1e950f85ff0f",
+      "gate_steps": 18,
+      "red_steps": [
+        "unittest-tools_rig"
+      ],
+      "junit": {
+        "common": {
+          "tests": 1437,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        },
+        "fabric": {
+          "tests": 2436,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 5
+        },
+        "paper": {
+          "tests": 623,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        },
+        "neoforge": {
+          "tests": 25,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        },
+        "sponge": {
+          "tests": 29,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        }
+      },
+      "gametests_passed": [
+        8,
+        101
+      ],
+      "jars": {
+        "lod-server-support-fabric-0.24.0-beta.1+26.3.jar": "ec80cde4b1aea7804eb77d87291480c883594cff93578dd01f64da1c2f8994d5",
+        "voxy-server-side-fabric-0.24.0-beta.1+26.3.jar": "efcc7880530d54bb259785765b819abeaef7615836a66ec7b4231ad66578f27c",
+        "lod-server-support-paper-0.24.0-beta.1+26.3.jar": "78600c70596322501a20766031b26ed3f6bd2d305f580764c3d3368f98bae72b",
+        "paper-0.24.0-beta.1.jar": "dafd77668d6e245dbeb1857fb2f8a62f2d4b3fc7ddc020d399c682d4877536ca",
+        "voxy-server-side-paper-0.24.0-beta.1+26.3.jar": "10e76b5291e202f31ad994678b781fada9fad44de9ac29b554dcb5edda61808c",
+        "lod-server-support-neoforge-0.24.0-beta.1+26.3.jar": "395ad8ca0fd7761f497b345e9f2f59a46df2d3207f5c04ff0d7789ee320c88f4",
+        "voxy-server-side-neoforge-0.24.0-beta.1+26.3.jar": "a04d627f91c244ab36e510355cdfd0c4439a37d31b215b17b68ab6780972b4b6",
+        "lod-server-support-sponge-0.24.0-beta.1+26.3.jar": "1a4bcd0483cebb74bbf2828f0c064b33e2de6edcc0581b08544f24fd93dc2faa",
+        "voxy-server-side-sponge-0.24.0-beta.1+26.3.jar": "90bb694965b0b85288ee91953116715875cab61c0716e2d9d8dd0ffaf4e01a6c"
+      }
+    },
+    "1.21.1": {
+      "gated_head": "4803ca4567d1f80dc9cbb55728a5fa99e4b28547",
+      "gate_steps": 18,
+      "red_steps": [
+        "compat-ci",
+        "unittest-tools_rig"
+      ],
+      "junit": {
+        "common": {
+          "tests": 1437,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        },
+        "fabric": {
+          "tests": 2437,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 5
+        },
+        "paper": {
+          "tests": 619,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        },
+        "neoforge": {
+          "tests": 25,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        },
+        "sponge": {
+          "tests": 29,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        }
+      },
+      "gametests_passed": [
+        8,
+        100
+      ],
+      "jars": {
+        "lod-server-support-fabric-0.24.0-beta.1+1.21.1.jar": "0246f817fe076fc69b9fe67fa57a2f927900c1a57f1122d915ac2ceb209a7b8b",
+        "voxy-server-side-fabric-0.24.0-beta.1+1.21.1.jar": "957298727f6e7c0a28ec8f51de5357f8291dc0243f6e86ea70cf594bbce8322c",
+        "lod-server-support-paper-0.24.0-beta.1+1.21.1.jar": "b57188f70215c6587148c8ad323a5f8701415320ded720e75465da07d2d1e6d8",
+        "paper-0.24.0-beta.1.jar": "26839c205d33f57617630ca934ca2df92e207b0be9cc0d1eb9279a6128755c7a",
+        "voxy-server-side-paper-0.24.0-beta.1+1.21.1.jar": "960085dcd782d3fb21ef5ae3c91899476989e310ef88cc8662ed747a76c210cd",
+        "lod-server-support-neoforge-0.24.0-beta.1+1.21.1.jar": "d3934c4ac5588066256c29eb2bd3835f0ac000d9f2a8c18fff8f2506b0c532b7",
+        "voxy-server-side-neoforge-0.24.0-beta.1+1.21.1.jar": "6d8db6161dc02a877a8a2f46bad55b2f085e005b50c4847009dd14185f0a9350",
+        "lod-server-support-sponge-0.24.0-beta.1+1.21.1.jar": "a8a8f2549536da794345f0c85d2d42b5fe490647d191ef488cd6a0f32b064ec0",
+        "voxy-server-side-sponge-0.24.0-beta.1+1.21.1.jar": "267d46e11c99fa24a459d6bce3a00ade51ba9c3e065e32141caa941983fc227a"
+      },
+      "real_port": {
+        "gated_head": "9bf6ff6de",
+        "gate_steps": 18,
+        "red_steps": [
+          "unittest-tools_rig"
+        ],
+        "jars_identical_to_trial": true
+      }
+    }
+  },
+  "red_steps_explained": {
+    "unittest-tools_rig": "host disk: the rig tools' storage preflight needs 58 GiB free on C: and the host had 47; 8 tests, one signature; tools/rig is unchanged since 0.23.0",
+    "compat-ci (1.21.1)": "the trial port's sync point is not on main until the release pull request merges; the real port re-syncs to the merge commit and is gated again"
+  },
+  "realstack": [
+    {
+      "args": "fabric-26.3-sodium-voxy-xaero --lss dir:/home/vox/.local/state/lss-release-prep-v0.24.0-beta.1/gates/26.3/jars",
+      "columns": 3345,
+      "passed": true,
+      "run": "20261123T231901Z"
+    },
+    {
+      "args": "fabric-26.3-sodium-voxy-xaero --lss dir:/home/vox/.local/state/lss-release-prep-v0.24.0-beta.1/gates/26.3/jars --brand vss",
+      "columns": null,
+      "passed": false,
+      "run": null
+    },
+    {
+      "args": "fabric-26.3-sodium-voxy-xaero --lss dir:/home/vox/.local/state/lss-release-prep-v0.24.0-beta.1/gates/26.3/jars --scenario server-without-lss",
+      "columns": null,
+      "passed": true,
+      "run": "20261123T232037Z"
+    },
+    {
+      "args": "paper-26.3-fabric-client --lss dir:/home/vox/.local/state/lss-release-prep-v0.24.0-beta.1/gates/26.3/jars",
+      "columns": 2758,
+      "passed": true,
+      "run": "20261123T232209Z"
+    },
+    {
+      "args": "sponge-26.3-fabric-client --lss dir:/home/vox/.local/state/lss-release-prep-v0.24.0-beta.1/gates/26.3/jars",
+      "columns": 3342,
+      "passed": true,
+      "run": "20261123T232347Z"
+    },
+    {
+      "args": "neoforge-1.21.1-c2me-scalablelux --lss dir:/home/vox/.local/state/lss-release-prep-v0.24.0-beta.1/gates/1.21.1/jars",
+      "columns": 3330,
+      "passed": true,
+      "run": "20261123T232529Z"
+    },
+    {
+      "args": "neoforge-1.21.1-c2me-scalablelux --lss dir:/home/vox/.local/state/lss-release-prep-v0.24.0-beta.1/gates/1.21.1/jars --brand vss",
+      "columns": 3453,
+      "passed": true,
+      "run": "20261123T232705Z"
+    },
+    {
+      "args": "neoforge-client-fabric-server-1.21.1 --lss dir:/home/vox/.local/state/lss-release-prep-v0.24.0-beta.1/gates/1.21.1/jars",
+      "columns": 3406,
+      "passed": true,
+      "run": "20261123T232842Z"
+    },
+    {
+      "args": "fabric-1.21.1-sodium-xaero --lss dir:/home/vox/.local/state/lss-release-prep-v0.24.0-beta.1/gates/1.21.1/jars",
+      "columns": 3325,
+      "passed": true,
+      "run": "20261123T233021Z"
+    },
+    {
+      "args": "fabric vss (new gate)",
+      "columns": 3420,
+      "passed": true,
+      "run": "20261123T234139Z"
+    }
+  ],
+  "live_fill_map": [
+    {
+      "map": "xaero",
+      "passed": true,
+      "lines": [
+        "A: server sent 6304; client owed 6304, other consumer 6304, xaero wrote 0",
+        "B: server sent 0 before the fill, 6304 at the end; delivered 6304, owed 0, failed 0, unwritten 0, without_data 0; other consumer 368; xaero wrote 6304; fill took 35.4 s",
+        "C: server sent 0; delivered 0, owed 0"
+      ]
+    },
+    {
+      "map": "journeymap",
+      "passed": true,
+      "lines": [
+        "A: server sent 6304; client owed 6304, other consumer 6304, journeymap wrote 0",
+        "B: server sent 0 before the fill, 6304 at the end; delivered 6304, owed 0, failed 0, unwritten 0, without_data 0; other consumer 368; journeymap wrote 6304; fill took 35.4 s",
+        "C: server sent 0; delivered 0, owed 0"
+      ]
+    }
+  ],
+  "mutation_checks": {
+    "server_side_items": 14,
+    "map_fill": 117,
+    "fourth_read_fold": 16,
+    "release_review_fold": 18,
+    "port_1.21.1": 20,
+    "release_review_fold_on_1.21.1": 18
+  },
+  "reviews": [
+    "two plan reviews",
+    "implementation review of the server side",
+    "three implementation reviews of the map fill",
+    "a fourth read of the map fill before its merge",
+    "release-wide review (three reviewers)",
+    "one reader of the release-wide review's fold"
+  ],
+  "owed_before_stable": [
+    "fix the two known issues of /lss fillmap stop",
+    "the visual pass on real GPU clients (brief: ASTRA-SMOKE-TESTS.md of the release folder)",
+    "72 hours on the test server; its diag must show no column 'compressed the normal way' (it runs ViaVersion)",
+    "ports to 26.2 and 1.21.11",
+    "what refusals at the world border cost per join (reader and processing threads)",
+    "the #429 reporter's confirmation on NeoForge 1.21.1 with C2ME and ScalableLux",
+    "the rig-tools suite and the fresh-backfill soak once the host has disk space again",
+    "a Paper measurement of the compression passthrough"
+  ],
+  "known_issues_in_this_beta": [
+    "a stop typed while the cache is still loading, followed by leaving the dimension or the server before the load has finished, is answered \"stopped\" and not saved",
+    "on a server that sends this client no terrain, a stop answers \"Map fill stopped in this dimension\" instead of \"No map fill is running\""
+  ]
+}

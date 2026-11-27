@@ -10,6 +10,7 @@ final class XaeroMapCompat {
     static void onDisconnect() { XaeroSession.onDisconnect(); }
     static void retireClientAcquisition() { XaeroSession.retireClientAcquisition(); }
     static boolean isArmed() { return XaeroSession.isArmed(); }
+    static boolean isWriting() { return XaeroSession.isWriting(); }
     static dev.vox.lss.api.VoxelColumnConsumer mapConsumer() { return XaeroSession.mapConsumer(); }
     static String diagLine() { return XaeroSession.diagLine(); }
     static java.util.Map<String, Object> metrics() { return XaeroSession.metrics(); }

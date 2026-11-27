@@ -68,6 +68,7 @@ public class SerializerParityGameTests {
     private static final int DISK_SEED_CHUNK_OFFSET = 112;
     private static final int ALL_AIR_TRANSITION_CHUNK_OFFSET = 128;
     private static final int BACKGROUND_READ_CHUNK_OFFSET = 144;
+    private static final int NATIVE_BODY_CHUNK_OFFSET = 304;
 
     /** Deprecated upstream without a replacement; it is the only factory that places a real
      *  ServerPlayer (player list entry + embedded-channel connection) inside a gametest. */
@@ -398,6 +399,13 @@ public class SerializerParityGameTests {
                     }
                     var fg = fgResult.get();
                     helper.assertTrue(fg != null, "waiting for the foreground read result");
+                    if (fg.timedOut()) {
+                        // See the background read below: a read that ran out of time is read again.
+                        fgResult.set(null);
+                        foreground.submitReadDirect(fgId, registration(fgId), LSSConstants.DIM_STR_OVERWORLD, level, cx, cz, 0, 0L);
+                        helper.assertTrue(false, "the foreground read ran out of time; reading again; reader="
+                                + foreground.getDiagnostics());
+                    }
                     helper.assertTrue(!fg.notFound() && !fg.saturated() && fg.sectionBytes() != null,
                             "foreground read of the saved superflat chunk must return content: " + fg
                                     + "; reader=" + foreground.getDiagnostics());
@@ -412,7 +420,21 @@ public class SerializerParityGameTests {
                         bgResult.set(background.getPlayerQueue(bgId).poll());
                     }
                     var bg = bgResult.get();
-                    helper.assertTrue(bg != null, "waiting for the background read result");
+                    if (bg == null) waitWallClock(helper);
+                    helper.assertTrue(bg != null, "waiting for the background read result; reader="
+                            + background.getDiagnostics());
+                    if (bg.timedOut()) {
+                        // The reader gave this read up after its own 10 s. On a loaded machine a
+                        // background-priority read waits behind every other test's saves, and
+                        // that says the disk was slow, nothing about what the read returns
+                        // (2026-11-23: the gate's one red, with "Disk read timed out (>10s)" for
+                        // exactly this chunk nine seconds earlier). Read again; the test's tick
+                        // budget bounds it, and a result that is not a timeout is judged below.
+                        bgResult.set(null);
+                        background.submitReadDirect(bgId, registration(bgId), LSSConstants.DIM_STR_OVERWORLD, level, cx, cz, 0, 0L);
+                        helper.assertTrue(false, "the background read ran out of time; reading again; reader="
+                                + background.getDiagnostics());
+                    }
                     helper.assertTrue(!bg.notFound() && !bg.saturated() && bg.sectionBytes() != null,
                             "background-priority read must return content, not not-found/saturated");
                     // B3 liveness receipt (review F2): byte parity alone cannot distinguish
@@ -532,6 +554,9 @@ public class SerializerParityGameTests {
             chunk = endLevel.getChunk(cx, cz);
         }
         var live = SectionSerializer.serializeColumn(endLevel, chunk, cx, cz);
+        helper.assertTrue(SectionSerializer.nativeColumn(endLevel, chunk, cx, cz) == null
+                        && SectionSerializer.nativeColumnHash(endLevel, chunk, cx, cz, 77L) == 77L,
+                "an all-air column has no native body and hashes to the empty value");
         helper.assertTrue(live.serializedSections() == null,
                 "premise: no all-air End void column found near chunk (" + cx + ", " + baseCz + ")");
 
@@ -541,10 +566,11 @@ public class SerializerParityGameTests {
         helper.assertTrue(!filter.contentChanged(endLevel, chunk, dim),
                 "air-to-air save must stay quiet (ALL_AIR sentinel is stable)");
 
-        // A serve of this all-air column seeds null bytes; the next save of the same all-air
-        // chunk must hash to the same sentinel, or every void column re-marks after every save.
+        // A serve of this all-air column seeds its (empty) content; the next save of the same
+        // all-air chunk must hash to the same sentinel, or every void column re-marks after
+        // every save.
         var seededFilter = new DirtyContentFilter();
-        seededFilter.seed(dim, cx, cz, live.serializedSections());
+        seededFilter.seedServed(endLevel, chunk, dim);
         helper.assertTrue(!seededFilter.contentChanged(endLevel, chunk, dim),
                 "all-air save after an all-air serve seed must stay quiet");
 
@@ -675,6 +701,74 @@ public class SerializerParityGameTests {
     }
 
     /**
+     * What the change detector hashes ({@code SectionSerializer.nativeColumn}) is the body
+     * the served bytes are translated from, on a real chunk: translating it gives exactly
+     * the served bytes, before and after an edit, and the edit changes both. So a hash of
+     * the native body decides "changed" exactly as a hash of the served bytes would, without
+     * the translation. Also pins the serve seed on a live chunk: a save of the content
+     * that was just served stays quiet, and an edit after the serve still marks.
+     */
+    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = 200)
+    public void changeDetectorHashesTheBodyTheServedBytesAreTranslatedFrom(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        var origin = new ChunkPos(helper.absolutePos(BlockPos.ZERO));
+        int cx = origin.x + NATIVE_BODY_CHUNK_OFFSET;
+        int cz = origin.z + 5;
+        var chunkPos = new ChunkPos(cx, cz);
+        var chunkSource = level.getChunkSource();
+        var dim = LSSConstants.DIM_STR_OVERWORLD;
+        var editPos = new BlockPos(cx * 16 + 7, -61, cz * 16 + 9);
+        var before = new AtomicReference<byte[]>();
+        var seeded = new DirtyContentFilter();
+
+        chunkSource.addTicketWithRadius(TicketType.PLAYER_LOADING, chunkPos, 0);
+        level.getChunk(cx, cz);
+
+        helper.runAfterDelay(2, () -> {
+            var chunk = level.getChunk(cx, cz);
+            byte[] nativeBody = SectionSerializer.nativeColumn(level, chunk, cx, cz);
+            byte[] served = SectionSerializer.serializeColumn(level, chunk, cx, cz).serializedSections();
+            helper.assertTrue(nativeBody != null && served != null, "premise: a superflat column has content");
+            helper.assertTrue(Arrays.equals(SectionSerializer.translate(nativeBody, level), served),
+                    "the served bytes must be the translation of the native body");
+            helper.assertTrue(Arrays.equals(nativeBody, SectionSerializer.nativeColumn(level, chunk, cx, cz)),
+                    "the native body must be the same bytes on a second read");
+            // The detector's own path writes into a reused buffer and hashes in place: it
+            // must be the hash of exactly these bytes, call after call.
+            long expected = dev.vox.lss.common.ContentHash64.hash(nativeBody);
+            for (int i = 0; i < 3; i++) {
+                helper.assertTrue(SectionSerializer.nativeColumnHash(level, chunk, cx, cz, 0L) == expected,
+                        "the in-place hash must be the hash of the native body (call " + i + ")");
+            }
+            before.set(nativeBody);
+            // The generation serve's seed, then the save of the same content.
+            seeded.seedServed(level, chunk, dim);
+            helper.assertTrue(!seeded.observeSave(level, chunk, dim).changed(),
+                    "a save of the content that was just served must not mark");
+            level.setBlock(editPos, Blocks.STONE.defaultBlockState(), 3);
+        });
+
+        helper.runAfterDelay(4, () -> {
+            var chunk = level.getChunk(cx, cz);
+            byte[] nativeBody = SectionSerializer.nativeColumn(level, chunk, cx, cz);
+            byte[] served = SectionSerializer.serializeColumn(level, chunk, cx, cz).serializedSections();
+            helper.assertTrue(!Arrays.equals(before.get(), nativeBody), "an edit must change the native body");
+            helper.assertTrue(SectionSerializer.nativeColumnHash(level, chunk, cx, cz, 0L)
+                            == dev.vox.lss.common.ContentHash64.hash(nativeBody),
+                    "after the edit the in-place hash is still the hash of the native body");
+            helper.assertTrue(Arrays.equals(SectionSerializer.translate(nativeBody, level), served),
+                    "after the edit the served bytes are still the translation of the native body");
+            helper.assertTrue(seeded.observeSave(level, chunk, dim).changed(),
+                    "an edit after the serve must still mark");
+            helper.assertTrue(!seeded.observeSave(level, chunk, dim).changed(),
+                    "and the next save of the edited content is quiet");
+            level.setBlock(editPos, Blocks.GRASS_BLOCK.defaultBlockState(), 3);
+            chunkSource.removeTicketWithRadius(TicketType.PLAYER_LOADING, chunkPos, 0);
+            helper.succeed();
+        });
+    }
+
+    /**
      * FP-042: disk-read serves do NOT seed the {@code DirtyContentFilter} — a conscious pin
      * of current behavior. The consequence is the warm-rejoin re-send wave: the first save
      * after a disk serve counts as "first observed save" and re-marks the column even
@@ -683,7 +777,7 @@ public class SerializerParityGameTests {
      * the disk-served bytes (pinned by the parity test), so a seeded filter would return
      * false here.
      */
-    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = 1200)
+    @GameTest(structure = "fabric-gametest-api-v1:empty", maxTicks = 2400)
     public void diskReadServesDoNotSeedTheDirtyContentFilter(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();
         var server = level.getServer();
@@ -702,13 +796,17 @@ public class SerializerParityGameTests {
         helper.runAfterDelay(4, () -> chunkSource.removeTicketWithRadius(TicketType.PLAYER_LOADING, chunkPos, 0));
 
         var mock = placeMockServerPlayer(helper);
-        var service = new RequestProcessingService(server);
-        var state = service.registerPlayer(mock, LSSConstants.CAPABILITY_VOXEL_COLUMNS);
+        var serviceRef = new java.util.concurrent.atomic.AtomicReference<>(new RequestProcessingService(server));
+        var stateRef = new java.util.concurrent.atomic.AtomicReference<>(
+                serviceRef.get().registerPlayer(mock, LSSConstants.CAPABILITY_VOXEL_COLUMNS));
         var step = new AtomicInteger();
         var settle = new AtomicInteger();
+        var askedAgain = new AtomicInteger();
 
         helper.succeedWhen(() -> {
             helper.assertTrue(helper.getTick() >= 6, "waiting for the ticket release");
+            var service = serviceRef.get();
+            var state = stateRef.get();
             switch (step.get()) {
                 case 0 -> {
                     helper.assertTrue(chunkSource.getChunkNow(cx, cz) == null,
@@ -720,6 +818,25 @@ public class SerializerParityGameTests {
                 }
                 case 1 -> {
                     service.tick();
+                    if (service.getDiskReader().getDiag().getErrorCount() > 0) {
+                        // The one disk read ran out of time (the reader gives up after its
+                        // own 10 s on a loaded machine and reports not-found), so the service
+                        // took the generation road, which loads the chunk: nothing here can
+                        // come from disk any more. Ask again from the start on a fresh
+                        // service once the chunk has unloaded (its shutdown drops the
+                        // generation ticket). 2026-11-27: the 0.24.0 gate's one red, with
+                        // "Disk read timed out (>10s)" for exactly this chunk. Three reads at
+                        // most; the budget (2400 ticks) leaves room for three timeouts.
+                        helper.assertTrue(askedAgain.incrementAndGet() <= 2,
+                                "the disk read failed or ran out of time three times: look at the host and the reader log");
+                        service.shutdown();
+                        var fresh = new RequestProcessingService(server);
+                        serviceRef.set(fresh);
+                        stateRef.set(fresh.registerPlayer(mock, LSSConstants.CAPABILITY_VOXEL_COLUMNS));
+                        step.set(0);
+                        helper.assertTrue(false, "the disk read ran out of time; asking again; reader="
+                                + service.getDiskReader().getDiag());
+                    }
                     helper.assertTrue(state.getTotalSectionsSent() >= 1,
                             "waiting for the disk serve to flush");
                     helper.assertTrue(

@@ -44,6 +44,8 @@ public class ServerConfigBase {
     public final boolean enableRegionSummaries() { return snapshot().updates().regionSummaries(); }
     public final boolean lodYieldsToVanillaTransport() { return snapshot().network().yieldToVanilla(); }
     public final boolean enableChunkGeneration() { return snapshot().generation().enabled(); }
+    /** False (the default): no LOD-triggered generation for a chunk wholly outside the world border. */
+    public final boolean generateOutsideWorldBorder() { return snapshot().generation().outsideWorldBorder(); }
     public final int generationConcurrencyLimitGlobal() { return snapshot().generation().concurrency().global(); }
     public final int generationConcurrencyLimitPerPlayer() { return snapshot().generation().concurrency().perPlayer(); }
     public final int generationTimeoutTicks() { return snapshot().generation().timeoutTicks(); }

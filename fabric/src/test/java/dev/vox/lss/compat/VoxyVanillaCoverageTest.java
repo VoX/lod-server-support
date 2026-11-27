@@ -63,11 +63,16 @@ public class VoxyVanillaCoverageTest {
         final net.minecraft.world.level.lighting.LevelLightEngine light=mock(net.minecraft.world.level.lighting.LevelLightEngine.class);
         final net.minecraft.world.level.chunk.LevelChunkSection section=mock(net.minecraft.world.level.chunk.LevelChunkSection.class);
         final Map<Long,LevelChunk> data=new HashMap<>();
+        /** The sky-light reader Voxy uses: a layer for every section unless a test says otherwise. */
+        final net.minecraft.world.level.lighting.LayerLightEventListener sky=mock(net.minecraft.world.level.lighting.LayerLightEventListener.class);
+        final net.minecraft.world.level.dimension.DimensionType dimensionType=mock(net.minecraft.world.level.dimension.DimensionType.class);
         World() {
+            when(light.getLayerListener(net.minecraft.world.level.LightLayer.SKY)).thenReturn(sky);
+            when(sky.getDataLayerData(any())).thenReturn(new net.minecraft.world.level.chunk.DataLayer());
             when(level.getChunkSource()).thenReturn(chunks);
             when(level.getLightEngine()).thenReturn(light);when(light.lightOnInColumn(anyLong())).thenReturn(true);
             when(light.getDebugSectionType(any(),any())).thenReturn(net.minecraft.world.level.lighting.LayerLightSectionStorage.SectionType.LIGHT_AND_DATA);
-            var type=mock(net.minecraft.world.level.dimension.DimensionType.class);when(type.hasSkyLight()).thenReturn(true);when(level.dimensionType()).thenReturn(type);
+            when(dimensionType.hasSkyLight()).thenReturn(true);when(level.dimensionType()).thenReturn(dimensionType);
             when(chunks.getChunk(anyInt(),anyInt(),eq(ChunkStatus.FULL),eq(false)))
                     .thenAnswer(call->data.get(ChunkPos.asLong(call.getArgument(0),call.getArgument(1))));
         }
@@ -78,6 +83,150 @@ public class VoxyVanillaCoverageTest {
             for(var chunk:data.values())framework().clearInlineMock(chunk);
             framework().clearInlineMock(chunks);framework().clearInlineMock(level);data.clear();
         }
+    }
+    // ---- Issue #429: the sky light Voxy is about to read must be there ----
+
+    /** Every section says "light and data", and yet the sky-light reader returns null (what
+     *  ScalableLux 0.1.0.1 does between attaching a packet's light and the client's light
+     *  pass). Handing the chunk over then stores sky light 0 in Voxy for good: black strips.
+     *  The chunk is held back, submitted once the layer exists, and never twice. */
+    @Test void aChunkWhoseSkyLightCannotBeReadYetIsHeldBackUntilItCan() {
+        VoxyLightStats.reset();
+        var backend=new Backend();var coverage=new VoxyVanillaCoverage(backend);var world=new World();
+        var chunk=world.add(9,0);var other=world.add(-9,0);
+        var held=net.minecraft.core.SectionPos.of(chunk.getPos(),0);
+        when(world.sky.getDataLayerData(held)).thenReturn(null);
+        assertEquals(VoxyVanillaCoverage.SKY_UNREADABLE,VoxyVanillaCoverage.lightState(world.level,chunk));
+        assertFalse(VoxyVanillaCoverage.lightReady(world.level,chunk));
+
+        sweep(coverage,world,0,100);
+        assertEquals(List.of(other),backend.calls,"the unreadable chunk is not handed over; its neighbour is");
+        assertEquals(1,coverage.skyWaitingForTest());
+        assertEquals(1,VoxyLightStats.borderHolds(),"one hold however often the chunk was looked at");
+        assertEquals(1,VoxyLightStats.borderWaiting());
+        assertTrue(VoxyLightStats.borderOldestWaitMillis(60_000_000_000L)>=55_000,"its age is the time since it was first seen so");
+
+        when(world.sky.getDataLayerData(held)).thenReturn(new net.minecraft.world.level.chunk.DataLayer());
+        sweep(coverage,world,10_000_000_000L,100);
+        assertEquals(1,backend.calls.stream().filter(c->c==chunk).count(),"handed over once its sky light can be read");
+        assertEquals(0,coverage.skyWaitingForTest());
+        assertEquals(0,VoxyLightStats.borderWaiting());
+        assertEquals(0,VoxyLightStats.borderOldestWaitMillis(99_000_000_000L));
+        assertEquals(1,VoxyLightStats.borderHolds(),"the count of holds stays");
+        sweep(coverage,world,20_000_000_000L,100);
+        assertEquals(2,backend.calls.size(),"and never a second time");
+        world.dispose();
+    }
+    /** An empty layer is light that was read (all dark); only null is "not there yet". */
+    @Test void anAllDarkSkyLayerIsReadableAndAnAllAirSectionNeedsNone() {
+        VoxyLightStats.reset();
+        var backend=new Backend();var coverage=new VoxyVanillaCoverage(backend);var world=new World();
+        var chunk=world.add(9,0);
+        when(world.sky.getDataLayerData(any())).thenReturn(new net.minecraft.world.level.chunk.DataLayer());
+        assertEquals(VoxyVanillaCoverage.LIGHT_READY,VoxyVanillaCoverage.lightState(world.level,chunk));
+        // an all-air section above the terrain legitimately has no layer
+        when(world.section.hasOnlyAir()).thenReturn(true);
+        when(world.sky.getDataLayerData(any())).thenReturn(null);
+        assertEquals(VoxyVanillaCoverage.LIGHT_READY,VoxyVanillaCoverage.lightState(world.level,chunk));
+        sweep(coverage,world,0,100);
+        assertEquals(0,VoxyLightStats.borderHolds());
+        world.dispose();
+    }
+    /** The Nether and the End have no sky light: their reader always returns null, and
+     *  waiting for it would hold every chunk back for ever. */
+    @Test void aDimensionWithoutSkyLightIsNeverHeldBack() {
+        VoxyLightStats.reset();
+        var backend=new Backend();var coverage=new VoxyVanillaCoverage(backend);var world=new World();
+        when(world.dimensionType.hasSkyLight()).thenReturn(false);
+        when(world.sky.getDataLayerData(any())).thenReturn(null);
+        var chunk=world.add(9,0);
+        assertEquals(VoxyVanillaCoverage.LIGHT_READY,VoxyVanillaCoverage.lightState(world.level,chunk));
+        sweep(coverage,world,0,100);
+        assertEquals(List.of(chunk),backend.calls);
+        assertEquals(0,VoxyLightStats.borderHolds());
+        verify(world.sky,never()).getDataLayerData(any());
+        world.dispose();
+    }
+    /** The older reasons still read as "pending", not as the sky-light case. */
+    @Test void lightThatIsNotSwitchedOnYetIsPendingNotUnreadable() {
+        var world=new World();var chunk=world.add(9,0);
+        when(world.light.lightOnInColumn(anyLong())).thenReturn(false);
+        assertEquals(VoxyVanillaCoverage.LIGHT_PENDING,VoxyVanillaCoverage.lightState(world.level,chunk));
+        verify(world.sky,never()).getDataLayerData(any());
+        world.dispose();
+    }
+    /** A chunk Voxy refused is not probed again before its retry is due: the probe clones a
+     *  layer per section on some light engines, and it would run every frame. */
+    @Test void aRefusedChunkIsNotProbedBeforeItsRetryIsDue() {
+        var backend=new Backend();var coverage=new VoxyVanillaCoverage(backend);var world=new World();
+        var chunk=world.add(9,0);
+        backend.behavior=c->false;
+        coverage.loaded(world.level,chunk);
+        coverage.tick(world.level,.5,.5,8,0);
+        assertEquals(1,backend.calls.size(),"submitted once and refused");
+        clearInvocations(world.sky,world.light);
+        for(int frame=1;frame<=20;frame++)coverage.pump(world.level,.5,.5,8,frame*10_000_000L);
+        verify(world.sky,never()).getDataLayerData(any());
+        verify(world.light,never()).getDebugSectionType(any(),any());
+        coverage.tick(world.level,.5,.5,8,VoxyVanillaCoverage.RETRY_INTERVAL+1);
+        assertEquals(2,backend.calls.size(),"and again once the retry is due");
+        world.dispose();
+    }
+    /** A waiting chunk that unloads or falls out of the square is no longer waiting. */
+    @Test void aWaitingChunkThatLeavesIsForgotten() {
+        VoxyLightStats.reset();
+        var backend=new Backend();var coverage=new VoxyVanillaCoverage(backend);var world=new World();
+        world.add(9,0);
+        when(world.sky.getDataLayerData(any())).thenReturn(null);
+        sweep(coverage,world,0,100);
+        assertEquals(1,coverage.skyWaitingForTest());
+        // the camera moves far away: the square no longer covers the chunk
+        for(int n=0;n<100;n++)coverage.tick(world.level,5000.5,.5,8,10_000_000_000L+n*50_000_000L);
+        assertEquals(0,coverage.skyWaitingForTest());
+        assertEquals(0,VoxyLightStats.borderWaiting());
+        // and a world change clears the list but keeps the count
+        world.add(9,0);
+        for(int n=0;n<100;n++)coverage.tick(world.level,.5,.5,8,30_000_000_000L+n*50_000_000L);
+        assertEquals(1,coverage.skyWaitingForTest());
+        coverage.clear();
+        assertEquals(0,coverage.skyWaitingForTest());
+        assertEquals(0,VoxyLightStats.borderWaiting());
+        assertTrue(VoxyLightStats.borderHolds()>=1);
+        world.dispose();
+    }
+    /** The player moves on and the held chunk is no longer at the border: nothing probes it
+     *  again, so it must leave the gauge, which exists to show a hold that does not end. */
+    @Test void aWaitingChunkThePlayerHasPassedIsNoLongerWaiting() {
+        VoxyLightStats.reset();
+        var backend=new Backend();var coverage=new VoxyVanillaCoverage(backend);var world=new World();
+        world.add(9,0);
+        when(world.sky.getDataLayerData(any())).thenReturn(null);
+        sweep(coverage,world,0,100);
+        assertEquals(1,coverage.skyWaitingForTest());
+        assertEquals(1,VoxyLightStats.borderWaiting());
+        assertFalse(VoxyVanillaCoverage.atBorder(9,0,152.5,.5,8),"premise: under the player it is not at the border");
+        // the player now stands in that chunk: still inside the square, no longer at its border
+        coverage.tick(world.level,152.5,.5,8,10_000_000_000L);
+        assertEquals(0,coverage.skyWaitingForTest());
+        assertEquals(0,VoxyLightStats.borderWaiting());
+        assertEquals(0,VoxyLightStats.borderOldestWaitMillis(99_000_000_000L));
+        // and a backlog that stops the pump early still reports what waits
+        when(world.sky.getDataLayerData(any())).thenReturn(null);
+        var other=new World();other.add(9,0);when(other.sky.getDataLayerData(any())).thenReturn(null);
+        var gated=new VoxyVanillaCoverage(backend);
+        sweep(gated,other,20_000_000_000L,100);
+        assertEquals(1,VoxyLightStats.borderWaiting());
+        backend.backlog=VoxyVanillaCoverage.BACKLOG_GATE+1;
+        gated.tick(other.level,152.5,.5,8,40_000_000_000L);
+        assertEquals(0,VoxyLightStats.borderWaiting(),"the gate returns early, the gauge is still brought up to date");
+        world.dispose();other.dispose();
+    }
+    @Test void theDiagLineIsAbsentAtZeroAndNamesWhatWaits() {
+        assertNull(VoxyLightStats.diagLineOrNull(0,0,0,0));
+        assertEquals("Voxy light: sections_without_sky=3, border_fill_held=0",VoxyLightStats.diagLineOrNull(3,0,0,0));
+        assertEquals("Voxy light: sections_without_sky=0, border_fill_held=12",VoxyLightStats.diagLineOrNull(0,12,0,5000));
+        assertEquals("Voxy light: sections_without_sky=0, border_fill_held=12, waiting=2 (oldest 41 s)",
+                VoxyLightStats.diagLineOrNull(0,12,2,41_900));
     }
     static void sweep(VoxyVanillaCoverage coverage,World world,long start,int ticks) {
         for(int n=0;n<ticks;n++)coverage.tick(world.level,.5,.5,8,start+n*50_000_000L);
