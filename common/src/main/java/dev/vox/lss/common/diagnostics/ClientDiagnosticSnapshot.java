@@ -51,6 +51,7 @@ public record ClientDiagnosticSnapshot(
         long getBorderFillSkyOldestWaitMs,
         int getMapOwedColumns,
         long getMapFillDelivered,
+        long getVertigoRefills,
         long getConnectionStartMs,
         int getQueuedColumnCount,
         int rateCap,

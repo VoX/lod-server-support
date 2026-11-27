@@ -250,6 +250,30 @@ public class LodRequestManager {
     // after the load lands. Main client thread only.
     private final it.unimi.dsi.fastutil.longs.LongOpenHashSet failuresDuringCacheLoad =
             new it.unimi.dsi.fastutil.longs.LongOpenHashSet();
+
+    // --- Vertigo hollowed columns (issue #437, 2026-11-27-vertigo-hollowed-columns-plan.md §3.2) ---
+    /** Pending re-asks are held back until the server has let the chunk go: a re-ask while it is
+     *  still loaded there costs a main-thread serialize (probeLoadedChunks); after, a warm
+     *  store serve. Bounded; at the cap the oldest is released at once. */
+    static final int HOLLOW_PENDING_CAP = 16_384;
+    /** Entries examined per tick (from the head). */
+    static final int HOLLOW_RELEASE_SCAN = 64;
+    /** Minimum age before a release, and the age at which any entry is released regardless
+     *  (a hover with the client's view distance below the server's). */
+    static final long HOLLOW_MIN_AGE_NANOS = 5_000_000_000L;
+    static final long HOLLOW_MAX_AGE_NANOS = 30_000_000_000L;
+    /** Player tickets keep chunks FULL to the server view distance + 2, and the server's
+     *  ticket centre lags the client by a round trip. */
+    static final int HOLLOW_SERVER_MARGIN = 4;
+    /** Assumed server view distance when the client never learned it (login packet). */
+    static final int HOLLOW_FALLBACK_SERVER_DISTANCE = 32;
+    /** Position -> unload time (nanos), in insertion order. Main client thread only. */
+    private final it.unimi.dsi.fastutil.longs.Long2LongLinkedOpenHashMap hollowPending =
+            new it.unimi.dsi.fastutil.longs.Long2LongLinkedOpenHashMap();
+    private int hollowServerViewDistance = -1;
+    private long vertigoRefills;
+    /** Test seam: the release clock. */
+    java.util.function.LongSupplier hollowClock = System::nanoTime;
     // Dirty notices arriving DURING the load (final honesty review minor-3): the leaf map
     // is empty then, so markDirtyIfKnown drops them — and a summary frame assembled
     // BEFORE the edit's mark could otherwise validate the edited position right after
@@ -562,6 +586,7 @@ public class LodRequestManager {
         this.lastIngestBacklog = ingestBacklogSections;
         tickDimensionAndCachePhase(currentDim, playerCx, playerCz);
         tickMovementPhase(playerCx, playerCz);
+        tickHollowedPhase(playerCx, playerCz);
         this.metrics.updateRollingRates();
         boolean halted = haltedByBackpressure(columnQueueSize, columnQueueBytes,
                 ingestBacklogSections);
@@ -1227,6 +1252,7 @@ public class LodRequestManager {
         }
         this.tracker.removeByPosition(packed);
         this.columns.onReceived(packed, columnTimestamp);
+        if (!this.hollowPending.isEmpty()) this.hollowPending.remove(packed); // repaired already
         // The map's debt is decided where the column arrives: owed unless a map takes it.
         this.mapFill.onReceived(packed, this.mapWritingProbe.getAsBoolean());
         if (authoritativeClear) this.columns.markAuthoritativeClear(packed, preClearStamp);
@@ -1603,6 +1629,93 @@ public class LodRequestManager {
         this.metrics.recordUpToDate();
     }
 
+    /**
+     * Vertigo hid real terrain of this vanilla chunk while Voxy saved it, and the chunk has now
+     * unloaded (issue #437). Queue a re-ask for when the server has let the chunk go. Main
+     * client thread only (the unload event runs there).
+     *
+     * @param serverViewDistance the server's view distance from the login packet, or 0 if unknown
+     */
+    public void onHollowed(ResourceKey<Level> dimension, long packed, int serverViewDistance) {
+        if (!this.acquisitionActive) return;
+        if (this.lastDimension == null || !this.lastDimension.equals(dimension)) return;
+        if (serverViewDistance > 0) this.hollowServerViewDistance = serverViewDistance;
+        if (this.pendingCacheLoad == null && this.hollowPending.size() >= HOLLOW_PENDING_CAP
+                && !this.hollowPending.containsKey(packed)) {
+            long oldest = this.hollowPending.firstLongKey();
+            this.hollowPending.removeFirstLong();
+            releaseHollowed(oldest);
+        }
+        this.hollowPending.putAndMoveToLast(packed, this.hollowClock.getAsLong());
+    }
+
+    /** The chunk loaded into vanilla again before its re-ask: the next unload decides again. */
+    public void onVanillaChunkLoaded(ResourceKey<Level> dimension, long packed) {
+        if (!this.hollowPending.isEmpty() && dimension.equals(this.lastDimension)) {
+            this.hollowPending.remove(packed);
+        }
+    }
+
+    /**
+     * Release the head of the pending re-asks once the server has let their chunks go (§3.2):
+     * more than the server view distance + {@link #HOLLOW_SERVER_MARGIN} from the player and
+     * at least {@link #HOLLOW_MIN_AGE_NANOS} old, or {@link #HOLLOW_MAX_AGE_NANOS} old. A close
+     * entry moves to the tail so it never blocks the rest. Waits while the cache loads: the
+     * loaded stamps must be in place for the release to drop them.
+     */
+    void tickHollowedPhase(int playerCx, int playerCz) {
+        if (this.hollowPending.isEmpty() || this.pendingCacheLoad != null) return;
+        long now = this.hollowClock.getAsLong();
+        int server = this.hollowServerViewDistance > 0 ? this.hollowServerViewDistance
+                : HOLLOW_FALLBACK_SERVER_DISTANCE;
+        int far = server + HOLLOW_SERVER_MARGIN;
+        for (int examined = 0, n = Math.min(HOLLOW_RELEASE_SCAN, this.hollowPending.size());
+             examined < n && !this.hollowPending.isEmpty(); examined++) {
+            long packed = this.hollowPending.firstLongKey();
+            long age = now - this.hollowPending.get(packed);
+            if (age < HOLLOW_MIN_AGE_NANOS) break; // insertion order: the rest are younger or moved
+            int distance = Math.max(Math.abs(PositionUtil.unpackX(packed) - playerCx),
+                    Math.abs(PositionUtil.unpackZ(packed) - playerCz));
+            if (distance > far || age >= HOLLOW_MAX_AGE_NANOS) {
+                this.hollowPending.removeFirstLong();
+                releaseHollowed(packed);
+            } else {
+                this.hollowPending.getAndMoveToLast(packed);
+            }
+        }
+    }
+
+    private void releaseHollowed(long packed) {
+        if (this.columns.onHollowed(packed)) {
+            // Load-bearing: an up_to_date answering a request that still carried the old
+            // stamp would otherwise park the forgotten position for the session.
+            this.tracker.removeByPosition(packed);
+            this.vertigoRefills++;
+        }
+    }
+
+    /** Before a save: every pending re-ask is persisted as a removal (the session or the
+     *  dimension is ending, so nothing is asked). During an abandoned cache load the stamps
+     *  are still only in the file: remove them there. */
+    void flushHollowedPending() {
+        if (this.hollowPending.isEmpty()) return;
+        if (this.pendingCacheLoad != null) {
+            if (this.serverAddress != null && this.lastDimension != null) {
+                for (long packed : this.hollowPending.keySet()) {
+                    ColumnCacheStore.removeAsync(this.serverAddress, this.lastDimension, packed);
+                }
+            }
+        } else {
+            for (long packed : this.hollowPending.keySet()) this.columns.onHollowed(packed);
+        }
+        this.hollowPending.clear();
+    }
+
+    /** Columns re-asked because Vertigo had hollowed them in Voxy (diag {@code vertigo_refills=}). */
+    public long getVertigoRefills() { return this.vertigoRefills; }
+
+    int hollowPendingCount() { return this.hollowPending.size(); }
+
     private void onDimensionChange(ResourceKey<Level> newDimension) {
         if (ClientTraceLog.enabled()) {
             ClientTraceLog.event("dim_change", "\"to\":\"" + newDimension.identifier() + "\"");
@@ -1644,6 +1757,7 @@ public class LodRequestManager {
         this.mapFill.reset();
         this.tracker.clear();
         this.metrics.reset();
+        this.hollowPending.clear();
     }
 
     private void startAsyncCacheLoad(ResourceKey<Level> dimension) {
@@ -1667,6 +1781,7 @@ public class LodRequestManager {
 
     public void saveCache() {
         if (this.serverAddress == null || this.lastDimension == null) return;
+        flushHollowedPending();
         for (var entry : this.cancelledDuringCacheLoad.long2LongEntrySet()) {
             if (entry.getLongValue() <= 0) {
                 ColumnCacheStore.removeAsync(this.serverAddress, this.lastDimension, entry.getLongKey());

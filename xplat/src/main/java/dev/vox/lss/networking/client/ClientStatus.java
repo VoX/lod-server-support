@@ -208,6 +208,7 @@ public final class ClientStatus {
                 dev.vox.lss.compat.VoxyLightStats.borderOldestWaitMillis(System.nanoTime()),
                 manager.getMapOwedColumns(),
                 manager.getMapFillDelivered(),
+                manager.getVertigoRefills(),
                 ClientNetGlue.getConnectionStartMs(),
                 ClientNetGlue.getQueuedColumnCount(),
                 LSSClientConfig.CONFIG.lodColumnsPerSecondLimit(),

@@ -214,6 +214,8 @@ class VoxyCompat {
     static void vanillaChunkLoaded(net.minecraft.client.multiplayer.ClientLevel level,net.minecraft.world.level.chunk.LevelChunk chunk) {
         if(vanillaCoverage!=null)vanillaCoverage.loaded(level,chunk);
     }
+    /** Voxy saves this level's vanilla chunks (issue #437 gate). Unknown counts as yes. */
+    static boolean vanillaIngestEnabled(ClientLevel level) {return vanillaCoverage==null || vanillaCoverage.ingestEnabled(level);}
     static void vanillaBorderRendered() {if(vanillaCoverage!=null)vanillaCoverage.afterRender();}
     static void vanillaBorderTick() {if(vanillaCoverage!=null)vanillaCoverage.clientTick();}
     static void retireVanillaBorder() {if(vanillaCoverage!=null)vanillaCoverage.clear();}

@@ -1,6 +1,8 @@
 # Vertigo hollowed columns plan (issue #437)
 
-Status: PLANNED (2026-11-27), reviewed and folded (section 9). Owner: maintainer runs.
+Status: BUILT on main (2026-11-27), see section 10 for where the build departs from sections
+3.1 and 7 (the detector reads the chunk, not Vertigo's API). Reviewed and folded (section 9).
+Owner: maintainer runs.
 Target: 0.25.0 (New Features), beta first on 26.3 and 1.21.1, then 26.2 and 1.21.11.
 
 ## 1. Problem and evidence
@@ -117,7 +119,7 @@ spectator at y = 260). Rig: `~/.local/state/lss-repro/issue-437/`.
   decided at the first neighbour unload, plus the case where the chunk and its neighbours
   drop together (a teleport): then the write that counts is the one made when Voxy added it.
 - **Unload listener.** It runs on `ClientChunkEvents.CHUNK_UNLOAD` in its own phase,
-  `lss:before_vertigo`, ordered before `Event.DEFAULT_PHASE` (`addPhaseOrdering`).
+  `lss:vertigo_check` (its path sorts after `default`, so only the explicit ordering puts it first), ordered before `Event.DEFAULT_PHASE` (`addPhaseOrdering`).
   - Vertigo removes its per-chunk state in its own default-phase listener, so it must run
     after LSS.
   - The unload fires before the slot is nulled and before Sodium's queued removal.
@@ -381,3 +383,68 @@ The second fold simplified the design: there is no loaded set and no Vertigo eve
 registration, the suspect set replaces the flag, and the band lost its lower bound. It goes
 to the implementation review, not a third plan round. That review reads the real code, and
 the live repro checks the outcome.
+
+## 10. As built (2026-11-27)
+
+The live repro changed the detector. The rest (sections 3.2 to 3.5) is built as planned.
+
+- **Vertigo's client API is not usable.** On the rig (Vertigo 1.2.7 on a 26.3 Fabric server and
+  client) the server filtered sections, and the trench appeared. Yet the client's
+  `VertigoAPI.isTrackingSections` was false at every unload (`runs/fix-dbg/`, 225 of 225).
+  - Vertigo's client chooses its tracking manager when the `LocalPlayer` is constructed
+    (`TrackingManager.createClient`, `ClientPlayNetworking.canSend(VertigoInstalledPacket)`).
+    In this setup it falls back to whole-chunk tracking, which reports every section of a
+    loaded chunk as loaded.
+  - Its section packets still apply (`ChunkSectionLoadPacket.process` checks only the world and
+    the chunk), so the vanilla chunks do get their real sections when the player moves
+    vertically.
+  - A detector gated on Vertigo's API would have fired for no one.
+- **The detector reads the chunk** (`VertigoHollowDetector.hollow`). A chunk is hollow when a
+  section between its lowest and highest `WORLD_SURFACE` block is all air (or absent) on the
+  client.
+  - The heightmap is the server's: Vertigo filters only sections and block entities. The
+    unload log of the repro shows real heights (for example `top=71..84`) over empty sections.
+  - Each column's top block sits in its section, so a section in that band that is all air is
+    one Vertigo hid. A section of air below every column's top would be a cave the width of
+    the whole chunk, and costs at most a needless re-serve.
+  - Sky and deep terrain never count. The first tells nothing, and the second is out of sight
+    in LOD terrain.
+  - Not caught: a chunk whose surface Vertigo sent but whose cliff face below it is hidden.
+    Rare, and recorded as a limitation.
+  - Nothing of Vertigo is bound: no reflection, and no binding-surface test or golden jar.
+    The only gate is `isModLoaded("vertigo")` with the Voxy bridge live. The event-phase
+    ordering is gone too, since the chunk's own sections are still there in any
+    `CHUNK_UNLOAD` listener.
+- **Silent evictions.** After a teleport, the server's forget packets find the old chunks out of
+  the client cache's range, so vanilla's `drop` does nothing and Fabric fires no unload event.
+  Voxy never saw those chunks leave and keeps what it saved when they arrived.
+  - The repro left a two-row strip there (`runs/fix2-dbg/`: unload events for rows 18 to 25,
+    none for 16 and 17).
+  - `VertigoCompat` therefore tracks the chunks it saw load. Once a second it treats a tracked
+    chunk that is no longer what the cache holds at its position as dropped: reported if a
+    neighbour's unload had marked it, or if it is hollow now.
+- **Files.**
+  - `xplat/.../compat/VertigoHollowDetector.java` (pure rule) and `VertigoCompat.java`
+    (adapter, tracking and sweep).
+  - `fabric/.../compat/VertigoFabricHook.java` (unload, load and tick events; it reads
+    `Options.serverRenderDistance` through `lss.accesswidener`).
+  - `LodRequestManager` (`onHollowed`, `tickHollowedPhase`, `flushHollowedPending` at the top
+    of `saveCache`).
+  - `ColumnStateMap.onHollowed`.
+  - `ClientNetGlue` (`wantsHollowReports`, `reportHollowed`, `vanillaChunkLoaded`).
+  - `vertigo_refills=` on the client diag's Columns line (a new `ClientDiagnosticSnapshot`
+    field).
+- **Tests.**
+  - `VertigoHollowDetectorTest` (10), `ColumnStateMapHollowedTest` (6),
+    `LodRequestManagerHollowedTest` (8).
+  - The `SectionStateFuzzTest` differential has a new `onHollowed` op, mirrored in
+    `ReferenceColumnStateMap`.
+  - Mutation-checked: dropping the removal on a missing stamp, dropping the in-flight removal
+    on release, and dropping the neighbour suspect each turn a test red.
+- **Live result** (`~/.local/state/lss-repro/issue-437/runs/`), with 0.24.0 runs as the
+  before:
+  - `base-flight2`: the trench, still there 60 s after returning.
+  - `base-novertigo`: the control, no trench.
+  - `fix-b`: the build. The trench far from the player had refilled 15 s after returning, the
+    stretch within the server's load distance had refilled by 60 s, and the client logged no
+    LSS errors.

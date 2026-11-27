@@ -19,6 +19,7 @@ public class LSSClient implements ClientModInitializer {
         LSSClientCommands.init();
         dev.vox.lss.networking.client.FarPlayerRenderer.initRenderer();
         ModCompat.init();
+        dev.vox.lss.compat.VertigoFabricHook.init();
         net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientChunkEvents.CHUNK_LOAD.register(ModCompat::vanillaChunkLoaded);
         BenchmarkBridge.initClient();
     }

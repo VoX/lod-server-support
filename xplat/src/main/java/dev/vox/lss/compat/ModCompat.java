@@ -30,6 +30,9 @@ public final class ModCompat {
             journeyMapLoaded = true;
             JourneyMapCompat.init();
         }
+        if (voxyLoaded && dev.vox.lss.platform.LoaderServices.get().isModLoaded("vertigo")) {
+            VertigoCompat.init(); // issue #437: only Voxy saves Vertigo's air
+        }
         discoveryComplete = true;
     }
 

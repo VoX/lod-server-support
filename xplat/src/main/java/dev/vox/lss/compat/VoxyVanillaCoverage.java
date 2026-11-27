@@ -80,6 +80,13 @@ final class VoxyVanillaCoverage {
         } catch(ReflectiveOperationException | RuntimeException | LinkageError unavailable) {return null;}
     }
 
+    /** True when Voxy would save this level's vanilla chunks (its ingest is on for it); true
+     *  as well when that cannot be told, since then Voxy may be writing. */
+    boolean ingestEnabled(ClientLevel level) {
+        if(disabled)return true;
+        try {return access.destination(level)!=null;}
+        catch(Throwable unknown) {if(unknown instanceof Error error && !(error instanceof LinkageError))throw error;return true;}
+    }
     void afterRender() {pumpClient(false);}
     void clientTick() {pumpClient(true);}
     private void pumpClient(boolean newTick) {

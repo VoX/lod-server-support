@@ -785,6 +785,57 @@ class ColumnStateMap {
     }
 
     /**
+     * Vertigo hid real terrain of this column from the client while Voxy saved the vanilla
+     * chunk, so the consumer now holds Vertigo's air over the column (issue #437,
+     * docs/planning/2026-11-27-vertigo-hollowed-columns-plan.md §3.4). Forget the stamp so
+     * the next scan re-asks with ts=-1, like the lost-content branch of
+     * {@link #onIngestFailed}, but without a strike: the consumer did nothing wrong, and a
+     * column flown over many times must never park.
+     *
+     * <ul>
+     *   <li>No stamp in memory: nothing to re-ask, but the removal is recorded. A position
+     *       the movement prune dropped still has its stamp in the cache file, and the
+     *       merge-save would otherwise keep it.</li>
+     *   <li>Session-satisfied (not generated with a kept stamp, or parked at the failure
+     *       cap): drop the stamp and record the removal, with no retry mark. classify keeps
+     *       answering SATISFIED this session, so a retry mark could never be consumed.</li>
+     *   <li>A pending clear resync: the last delivery was a clear to air, which is what the
+     *       consumer now holds. Nothing to repair.</li>
+     * </ul>
+     *
+     * @return true when the stamp was dropped and a re-ask is now due (the caller drops the
+     *         position's in-flight entry: an up_to_date answering the old stamp would
+     *         otherwise park the forgotten position for the session)
+     */
+    boolean onHollowed(long packed) {
+        Leaf leaf = leafFor(packed);
+        int bit = bitIndexFor(packed);
+        long old = leaf == null ? -1L : leaf.ts[bit];
+        if (old == -1L) {
+            this.persistentRemovals.add(packed);
+            return false;
+        }
+        long m = 1L << bit;
+        if ((leaf.sessionSatisfied & m) != 0) {
+            tsPut(leaf, bit, -1L);
+            this.persistentRemovals.add(packed);
+            leaf.validated &= ~m;
+            leaf.summaryValidated &= ~m;
+            leaf.recomputeNeeds();
+            return false;
+        }
+        if (this.clearedResync.containsKey(packed)) return false;
+        tsPut(leaf, bit, -1L);
+        this.persistentRemovals.add(packed); // deliberate delete — must reach the file
+        leaf.validated &= ~m;
+        leaf.summaryValidated &= ~m;
+        clearDirty(leaf, m);
+        setRetry(leaf, m);
+        leaf.recomputeNeeds();
+        return true;
+    }
+
+    /**
      * A column that was stamped received never actually reached a consumer (decode error,
      * consumer rejection, undispatched at disconnect) — forget the stamp so the position
      * re-requests with ts=-1, and mark retry so the scanner's ring reopen makes
