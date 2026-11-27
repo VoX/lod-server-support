@@ -85,6 +85,11 @@ public final class FabricChannelPressure {
         };
     }
 
+    /** The player's netty channel, or null: for {@link ColumnPacketPassthrough}. */
+    static Channel channel(ServerPlayer player) {
+        return channelOf(player);
+    }
+
     /** Channel resolution shared by both reads; null on any failure shape. */
     private static Channel channelOf(ServerPlayer player) {
         try {

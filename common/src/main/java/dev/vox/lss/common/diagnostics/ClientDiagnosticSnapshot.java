@@ -45,6 +45,12 @@ public record ClientDiagnosticSnapshot(
         long getColumnsDropped,
         long getSkyEstimatedColumns,
         long getSkyEstimateFailures,
+        long getVoxySectionsWithoutSky,
+        long getBorderFillSkyHolds,
+        int getBorderFillSkyWaiting,
+        long getBorderFillSkyOldestWaitMs,
+        int getMapOwedColumns,
+        long getMapFillDelivered,
         long getConnectionStartMs,
         int getQueuedColumnCount,
         int rateCap,
@@ -52,4 +58,5 @@ public record ClientDiagnosticSnapshot(
         String farPlayersLine,
         String farRendererLine,
         String xaeroDiagLine,
-        String journeyMapDiagLine) {}
+        String journeyMapDiagLine,
+        String mapFillDiagLine) {}

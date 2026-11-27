@@ -33,6 +33,11 @@ lod:
 # Higher concurrency can fill missing terrain sooner, but competes with gameplay.
 generation:
   enabled: true # Generate missing terrain; disabling stops new jobs, existing jobs finish.
+  #outside_world_border: true # [restart] Also generate terrain that lies wholly outside the
+  #   world border. Left out (the default), distant terrain is generated up to the border only;
+  #   beyond it players still see terrain that already exists. To set it, delete the "#" in
+  #   front of the name. Versions 0.23 and older do not know this setting, so take the line out
+  #   again before going back to one.
   concurrency:
     global: 40 # Maximum concurrent generations across the server; range 1–512.
     per_player: 40 # Maximum per player; cannot exceed the global limit.

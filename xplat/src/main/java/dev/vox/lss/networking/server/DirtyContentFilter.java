@@ -16,9 +16,10 @@ import java.util.Map;
  * (inhabitedTime ticks every tick a player is in range), so a save-hook-driven dirty
  * tracker re-marks every loaded chunk near a player forever. Each mark triggers a
  * broadcast, a client re-request, and a full column re-send of identical bytes —
- * a measured ~2-5 columns/s/player of pure waste. This filter hashes exactly what LSS
- * serves (the serialized sections + light wire bytes) and lets a save mark dirty only
- * when that content actually changed.
+ * a measured ~2-5 columns/s/player of pure waste. This filter hashes the content LSS
+ * serves (the sections and their light, in Minecraft's own layout: the bytes every
+ * served form is translated from) and lets a save mark dirty only when that content
+ * actually changed.
  *
  * <p>Fail-open: serialization errors fall back to "changed" — a spurious re-send is
  * harmless, a missed update is not. Paper needs no twin: its dirty detection is
@@ -46,7 +47,7 @@ import java.util.Map;
  * so it saves once within ~10 s) re-broadcast to every client holding it from an earlier
  * session, and the whole loaded disc re-downloaded (cold-restart-resync recorded 449
  * marked / 0 suppressed with nothing changed). Two seeders now establish the baseline
- * BEFORE the first save: the generation serve ({@link #seed}) and the chunk-LOAD seam
+ * BEFORE the first save: the generation serve ({@link #seedServed}) and the chunk-LOAD seam
  * ({@link #seedLoaded} — each loader's chunk-load event, fired at FULL status when the
  * light engine already holds the chunk's data, so the hash equals the first save's
  * unless content or light genuinely changed). Eviction is LRU (coldest chunk first)
@@ -60,14 +61,12 @@ public class DirtyContentFilter {
      *  whose baseline was evicted re-marks dirty once at its next save — self-heals).
      *  Package-visible so the eviction test can fill exactly to the cap. */
     static final int MAX_ENTRIES_PER_DIMENSION = 512 * 1024;
-    private static final long FNV_OFFSET = 0xcbf29ce484222325L;
-    private static final long FNV_PRIME = 0x100000001b3L;
     /** All-air columns serialize to null bytes — valid content, hashed as this sentinel
      *  so air-to-air saves stay quiet and air-to-built transitions mark dirty. */
     private static final long ALL_AIR_HASH = 0x9E3779B97F4A7C15L;
 
     private final Map<String, Long2LongLinkedOpenHashMap> hashesByDimension = new HashMap<>();
-    private final ColumnSerializer serializer;
+    private final ColumnHasher hasher;
 
     // Saves whose LOD-visible content matched the stored hash — the metadata-only re-saves this
     // filter exists to suppress (vanilla's ~10s inhabitedTime re-saves). Closes the dirty
@@ -78,31 +77,62 @@ public class DirtyContentFilter {
     // replace the vanilla status tasks); a lively server reading 0 here has no load seam.
     private long totalSeededLoads;
 
-    /** Serializes a column to exactly the section bytes LSS serves (the hash input).
-     *  Injectable for tests only — lets the exception fail-open path run without MC
-     *  level/chunk objects; production always wires {@link SectionSerializer#serializeColumn}. */
+    /** Serializes a column's LOD-visible content (the hash input): the MC-native body the
+     *  served bytes are translated from, so equal here means equal as served
+     *  ({@link SectionSerializer#nativeColumn}). Every baseline and every comparison goes
+     *  through this one seam, which is what keeps them comparable. Injectable for tests
+     *  only — lets the exception fail-open path run without MC level/chunk objects. */
     @FunctionalInterface
     interface ColumnSerializer {
         byte[] serializeSections(ServerLevel level, LevelChunk chunk, int cx, int cz);
     }
 
-    public DirtyContentFilter() {
-        this((level, chunk, cx, cz) -> SectionSerializer.serializeColumn(level, chunk, cx, cz).serializedSections());
+    /** A column's content hash: what is stored and compared. */
+    @FunctionalInterface
+    private interface ColumnHasher {
+        long hash(ServerLevel level, LevelChunk chunk, int cx, int cz);
     }
 
-    /** Test seam (see {@link ColumnSerializer}); zero behavior change when default-wired. */
+    /** Production: {@link SectionSerializer#nativeColumnHash} writes the native body into
+     *  a reused buffer and hashes it there — the same bytes {@link SectionSerializer#nativeColumn}
+     *  returns, without the array (the parity gametest holds the two together). */
+    public DirtyContentFilter() {
+        this.hasher = (level, chunk, cx, cz) -> remapAbsentSentinel(
+                SectionSerializer.nativeColumnHash(level, chunk, cx, cz, ALL_AIR_HASH));
+    }
+
+    /** Test seam (see {@link ColumnSerializer}): the same hash over the given bytes. */
     DirtyContentFilter(ColumnSerializer serializer) {
-        this.serializer = serializer;
+        this.hasher = (level, chunk, cx, cz) -> hashContent(serializer.serializeSections(level, chunk, cx, cz));
     }
 
     /**
-     * Record served content as the change baseline. A serve IS a content observation:
-     * seeding here means a generated chunk's first unload-save (identical bytes, since
-     * serves and the save hook share the same serializer) no longer re-marks it dirty —
-     * which otherwise re-sends every generated column a second time for nothing.
+     * Record a just-SERVED live chunk's content as the change baseline (the generation
+     * serve). A serve IS a content observation: seeding here means a generated chunk's
+     * first unload-save (identical content, read through the same serializer) no longer
+     * re-marks it dirty — which otherwise re-sends every generated column a second time
+     * for nothing. Call it in the same server-thread task as the serve, so nothing can
+     * change in between. Fail-open by omission, like {@link #seedLoaded}.
+     *
+     * <p>It reads the chunk again instead of taking the served bytes: the baseline must
+     * be the hash of what {@link #observeSave} will hash, and that is this serializer's
+     * output, not the translated bytes a client receives.
      */
-    public synchronized void seed(String dimension, int cx, int cz, byte[] serializedSections) {
-        storeHash(dimension, PositionUtil.packPosition(cx, cz), hashContent(serializedSections));
+    public void seedServed(ServerLevel level, LevelChunk chunk, String dimension) {
+        seedServed(level, chunk, chunk.getPos().x(), chunk.getPos().z(), dimension);
+    }
+
+    /** Position-explicit body (test seam). The serialization runs outside the monitor,
+     *  as in {@link #seedLoaded}. */
+    void seedServed(ServerLevel level, LevelChunk chunk, int cx, int cz, String dimension) {
+        long hash;
+        try {
+            hash = this.hasher.hash(level, chunk, cx, cz);
+        } catch (Exception e) {
+            LSSLogger.debug("Dirty-content serve seed failed for chunk " + cx + "," + cz + ": " + e);
+            return;
+        }
+        storeHash(dimension, PositionUtil.packPosition(cx, cz), hash);
     }
 
     /**
@@ -129,7 +159,7 @@ public class DirtyContentFilter {
     void seedLoaded(ServerLevel level, LevelChunk chunk, int cx, int cz, String dimension) {
         long hash;
         try {
-            hash = hashContent(this.serializer.serializeSections(level, chunk, cx, cz));
+            hash = this.hasher.hash(level, chunk, cx, cz);
         } catch (Exception e) {
             LSSLogger.debug("Dirty-content load seed failed for chunk " + cx + "," + cz + ": " + e);
             return;
@@ -149,19 +179,23 @@ public class DirtyContentFilter {
     }
 
     /**
-     * One save observation with the serialized bytes handed OUT (Phase 3 save-hook
-     * deposits): {@code changed} mirrors {@link #contentChanged}; when changed AND
-     * {@code depositable}, {@code sectionBytes} are the exact wire bytes just hashed
-     * (null = a changed ALL-AIR column — the store's byte[0] shape). The fail-open
-     * path (serialization error) is changed but NOT depositable: the caller must
-     * DELETE any stored row it cannot refresh, never leave pre-edit bytes behind.
-     * A record return, deliberately not a callback: the deposit runs in the CALLER,
-     * structurally outside this monitor (the hook may run off-main under
-     * C2ME/Moonrise).
+     * One save observation: {@code changed} mirrors {@link #contentChanged};
+     * {@code contentRead} is false only on the fail-open path (the content could not be
+     * serialized, so the save counts as changed without knowing what is there). Either
+     * way the caller DELETES the position's stored row on a change and never leaves
+     * pre-edit bytes behind. A record return, deliberately not a callback: the store
+     * call runs in the CALLER, structurally outside this monitor (the hook may run
+     * off-main under C2ME/Moonrise).
+     *
+     * <p>The record no longer hands out bytes. It did for the save-hook deposit, which
+     * was removed (delete-only since the R2-M2 round, see
+     * {@code ServerReceiverGlue.onChunkSaveData}), and what is hashed here is the
+     * native body, not the bytes a store row holds.
      */
-    public record SaveObservation(boolean changed, boolean depositable, byte[] sectionBytes) {
-        static final SaveObservation UNCHANGED = new SaveObservation(false, false, null);
-        static final SaveObservation FAIL_OPEN = new SaveObservation(true, false, null);
+    public record SaveObservation(boolean changed, boolean contentRead) {
+        static final SaveObservation UNCHANGED = new SaveObservation(false, true);
+        static final SaveObservation CHANGED = new SaveObservation(true, true);
+        static final SaveObservation FAIL_OPEN = new SaveObservation(true, false);
     }
 
     public synchronized SaveObservation observeSave(ServerLevel level, LevelChunk chunk,
@@ -172,11 +206,9 @@ public class DirtyContentFilter {
     /** Position-explicit body (test seam, like contentChanged's). */
     synchronized SaveObservation observeSave(ServerLevel level, LevelChunk chunk,
                                              int cx, int cz, String dimension) {
-        byte[] sections;
         long hash;
         try {
-            sections = this.serializer.serializeSections(level, chunk, cx, cz);
-            hash = hashContent(sections);
+            hash = this.hasher.hash(level, chunk, cx, cz);
         } catch (Exception e) {
             LSSLogger.debug("Dirty-content hash failed for chunk " + cx + "," + cz + ": " + e);
             return SaveObservation.FAIL_OPEN;
@@ -189,10 +221,9 @@ public class DirtyContentFilter {
         }
         if (Boolean.getBoolean("lss.soak.dirtydebug")) {
             LSSLogger.info("[DirtyDebug] re-marked " + cx + "," + cz
-                    + " hash=" + Long.toHexString(hash)
-                    + " len=" + (sections == null ? 0 : sections.length));
+                    + " hash=" + Long.toHexString(hash));
         }
-        return new SaveObservation(true, true, sections);
+        return SaveObservation.CHANGED;
     }
 
     /** Position-explicit body; package-visible so tests can drive the injected serializer
@@ -200,11 +231,8 @@ public class DirtyContentFilter {
      *  overload) so the seam keeps the class's entry-points-hold-the-lock insurance. */
     synchronized boolean contentChanged(ServerLevel level, LevelChunk chunk, int cx, int cz, String dimension) {
         long hash;
-        int lastLen;
         try {
-            byte[] sections = this.serializer.serializeSections(level, chunk, cx, cz);
-            hash = hashContent(sections);
-            lastLen = sections == null ? 0 : sections.length;
+            hash = this.hasher.hash(level, chunk, cx, cz);
         } catch (Exception e) {
             LSSLogger.debug("Dirty-content hash failed for chunk " + cx + "," + cz + ": " + e);
             return true;
@@ -215,7 +243,7 @@ public class DirtyContentFilter {
         if (!changed) this.totalSuppressed++; // metadata-only re-save the filter suppressed
         if (changed && Boolean.getBoolean("lss.soak.dirtydebug")) {
             LSSLogger.info("[DirtyDebug] re-marked " + cx + "," + cz
-                    + " hash=" + Long.toHexString(hash) + " len=" + lastLen);
+                    + " hash=" + Long.toHexString(hash));
         }
         return changed;
     }
@@ -264,22 +292,16 @@ public class DirtyContentFilter {
         return n;
     }
 
-    private static long hashContent(byte[] bytes) {
-        return bytes == null || bytes.length == 0 ? ALL_AIR_HASH : fnv1a64(bytes);
-    }
-
-    private static long fnv1a64(byte[] bytes) {
-        long h = FNV_OFFSET;
-        for (byte b : bytes) {
-            h ^= (b & 0xFF);
-            h *= FNV_PRIME;
-        }
-        return remapAbsentSentinel(h);
+    /** Package-visible for the tests that pin what is stored. */
+    static long hashContent(byte[] bytes) {
+        return bytes == null || bytes.length == 0
+                ? ALL_AIR_HASH
+                : remapAbsentSentinel(dev.vox.lss.common.ContentHash64.hash(bytes));
     }
 
     /** 0 is the map's absent sentinel — remap so a real hash never collides with "absent"
      *  (a stored 0 would make the first observation read as unchanged). Package-visible:
-     *  no constructible input has a raw FNV-1a of 0, so the remap is only pinnable in isolation. */
+     *  no input with a raw hash of 0 is at hand, so the remap is only pinnable in isolation. */
     static long remapAbsentSentinel(long h) {
         return h == 0L ? 1L : h;
     }

@@ -222,6 +222,31 @@ class VoxyCompat {
         ingestColumn(dhBridgeDead, level, level.dimension(), x, z, data);
     }
 
+    /**
+     * How many of the column's sections reach Voxy with no sky light although they are at
+     * or above its highest block, in a dimension that has sky light: those are drawn dark.
+     * Sections below the highest block may legitimately have none (solid ground, caves).
+     * A count for {@link VoxyLightStats}; it changes nothing that is handed over.
+     */
+    static int sectionsWithoutSky(ClientLevel level, VoxelColumnData columnData) {
+        if (level == null || columnData == null || columnData.sections() == null) return 0;
+        try {
+            if (!level.dimensionType().hasSkyLight()) return 0;
+            int highest = Integer.MIN_VALUE;
+            for (var s : columnData.sections()) {
+                if (s.section() != null && !s.section().hasOnlyAir()) highest = Math.max(highest, s.sectionY());
+            }
+            if (highest == Integer.MIN_VALUE) return 0;
+            int dark = 0;
+            for (var s : columnData.sections()) {
+                if (s.sectionY() >= highest && s.skyLight() == null) dark++;
+            }
+            return dark;
+        } catch (RuntimeException e) {
+            return 0;
+        }
+    }
+
     /** The ingest body — the pre-#71 consumer lambda, unchanged, hoisted so the anonymous
      *  consumer class stays a thin dispatch shell. */
     static void ingestColumn(AtomicBoolean bridgeDead,
@@ -248,6 +273,7 @@ class VoxyCompat {
                 return;
             }
             boolean allAccepted = true;
+            VoxyLightStats.addDarkSections(sectionsWithoutSky(level, columnData));
             for (var s : columnData.sections()) {
                 // H-12 guard: LSS ships "absent light layer = null" (the universal
                 // "absent means all-zero" wire default). When this guard was written Voxy

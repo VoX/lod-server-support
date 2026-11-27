@@ -362,9 +362,14 @@ class ClientOptionCatalogTest {
 
     @Test
     void theShippedActionsArePinned() {
-        assertEquals(List.of("lss:redownload_terrain"),
+        assertEquals(List.of("lss:redownload_terrain", "lss:fill_map"),
                 ClientOptionCatalog.pages().get(0).actions().stream().map(ActionSpec::id).toList(),
-                "the General page carries the one button");
+                "the General page carries the two buttons, in this order");
+        ActionSpec fillMap = ClientOptionCatalog.pages().get(0).actions().get(1);
+        assertEquals(ClientOptionCatalog.ID_FILL_MAP, fillMap.id());
+        assertEquals(ActionSpec.Action.FILL_MAP, fillMap.action());
+        assertEquals("lss.config.fill_map", fillMap.nameKey());
+        assertEquals("lss.config.fill_map.tooltip", fillMap.tooltipKey());
         assertTrue(ClientOptionCatalog.pages().get(1).actions().isEmpty(), "Far Players has no buttons");
         ActionSpec redownload = ClientOptionCatalog.pages().get(0).actions().get(0);
         assertEquals(ClientOptionCatalog.ID_REDOWNLOAD_TERRAIN, redownload.id());

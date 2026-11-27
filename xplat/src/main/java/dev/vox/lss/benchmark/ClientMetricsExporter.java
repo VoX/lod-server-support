@@ -136,7 +136,11 @@ public final class ClientMetricsExporter {
 
         // Map ingestion (map-ingestion plan §3.8/§4.4): the xaero/journeymap groups,
         // present only when the map mod is installed (the live gates' instruments).
-        result.putAll(dev.vox.lss.compat.ModCompat.mapIngestionMetrics());
+        var maps = dev.vox.lss.compat.ModCompat.mapIngestionMetrics();
+        result.putAll(maps);
+        // The map's debt and its fill (issue #380), beside the map groups and like them
+        // only with a map mod installed.
+        if (!maps.isEmpty() && manager != null) result.put("map_fill", manager.mapFillMetrics());
 
         // Declared-and-unanswered (the awaiting-answer set), replaced per scan.
         result.put("tracker_in_flight", manager != null ? manager.getPendingCount() : 0);

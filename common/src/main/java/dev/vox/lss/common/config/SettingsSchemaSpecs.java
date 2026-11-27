@@ -16,6 +16,10 @@ final class SettingsSchemaSpecs {
         server.add(new Spec("lod.distance.by_dimension", "lodDistanceChunksByWorld", Kind.INTEGER_MAP, Timing.H, Platform.ALL, false));
         server.add(new Spec("lod.distance.by_world", "lodDistanceChunksByWorld", Kind.INTEGER_MAP, Timing.H, Platform.PAPER, false));
         server.add(new Spec("generation.enabled", "enableChunkGeneration", Kind.BOOLEAN, Timing.H, Platform.ALL, false));
+        // 0.24.0 plan §2. Commented out in the templates like show_permission_refusal: a file
+        // this version creates must still load on 0.23, which rejects unknown keys. Restart
+        // only: a client that was refused a position is not told when the rule is lifted.
+        server.add(new Spec("generation.outside_world_border", "generateOutsideWorldBorder", Kind.BOOLEAN, Timing.R, Platform.ALL, false));
         server.add(new Spec("generation.concurrency.global", "generationConcurrencyLimitGlobal", Kind.INTEGER, Timing.H, Platform.ALL, false));
         server.add(new Spec("generation.concurrency.per_player", "generationConcurrencyLimitPerPlayer", Kind.INTEGER, Timing.H, Platform.ALL, false));
         server.add(new Spec("generation.timeout_ticks", "generationTimeoutSeconds", Kind.INTEGER, Timing.H, Platform.ALL, false));

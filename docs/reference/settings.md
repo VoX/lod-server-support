@@ -73,6 +73,7 @@ server file that says `mode: "required"` loads there only after changing it.
 | lod.distance.by_dimension | integer_map | {"minecraft:overworld":512,"minecraft:the_nether":64,"minecraft:the_end":512} | 0 sentinel; 1–2048 | H | all |
 | lod.distance.by_world | integer_map | {} | 0 sentinel; 1–2048 | H | paper |
 | generation.enabled | boolean | true |  | H | all |
+| generation.outside_world_border | boolean | false |  | R | all |
 | generation.concurrency.global | integer | 40 | 1–512 | H | all |
 | generation.concurrency.per_player | integer | 40 | 1–512 | H | all |
 | generation.timeout_ticks | integer | 1200 | 20–12000 ticks | H | all |
@@ -152,6 +153,11 @@ lod:
 # Higher concurrency can fill missing terrain sooner, but competes with gameplay.
 generation:
   enabled: true # Generate missing terrain; disabling stops new jobs, existing jobs finish.
+  #outside_world_border: true # [restart] Also generate terrain that lies wholly outside the
+  #   world border. Left out (the default), distant terrain is generated up to the border only;
+  #   beyond it players still see terrain that already exists. To set it, delete the "#" in
+  #   front of the name. Versions 0.23 and older do not know this setting, so take the line out
+  #   again before going back to one.
   concurrency:
     global: 40 # Maximum concurrent generations across the server; range 1–512.
     per_player: 40 # Maximum per player; cannot exceed the global limit.
@@ -321,6 +327,7 @@ far_players:
 | lod.distance.by_dimension | integer_map | {"minecraft:overworld":512,"minecraft:the_nether":64,"minecraft:the_end":512} | 0 sentinel; 1–2048 | H | all |
 | lod.distance.by_world | integer_map | {} | 0 sentinel; 1–2048 | H | paper |
 | generation.enabled | boolean | true |  | H | all |
+| generation.outside_world_border | boolean | false |  | R | all |
 | generation.concurrency.global | integer | 40 | 1–512 | H | all |
 | generation.concurrency.per_player | integer | 40 | 1–512 | H | all |
 | generation.timeout_ticks | integer | 1200 | 20–12000 ticks | H | all |
@@ -401,6 +408,11 @@ lod:
 # Higher concurrency can fill missing terrain sooner, but competes with gameplay.
 generation:
   enabled: true # Generate missing terrain; disabling stops new jobs, existing jobs finish.
+  #outside_world_border: true # [restart] Also generate terrain that lies wholly outside the
+  #   world border. Left out (the default), distant terrain is generated up to the border only;
+  #   beyond it players still see terrain that already exists. To set it, delete the "#" in
+  #   front of the name. Versions 0.23 and older do not know this setting, so take the line out
+  #   again before going back to one.
   concurrency:
     global: 40 # Maximum concurrent generations across the server; range 1–512.
     per_player: 40 # Maximum per player; cannot exceed the global limit.
