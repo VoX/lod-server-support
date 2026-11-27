@@ -119,7 +119,7 @@ public class DirtyContentFilter {
      * output, not the translated bytes a client receives.
      */
     public void seedServed(ServerLevel level, LevelChunk chunk, String dimension) {
-        seedServed(level, chunk, chunk.getPos().x(), chunk.getPos().z(), dimension);
+        seedServed(level, chunk, chunk.getPos().x, chunk.getPos().z, dimension);
     }
 
     /** Position-explicit body (test seam). The serialization runs outside the monitor,

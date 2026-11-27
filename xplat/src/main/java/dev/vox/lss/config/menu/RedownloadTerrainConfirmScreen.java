@@ -172,7 +172,7 @@ public final class RedownloadTerrainConfirmScreen extends ConfirmScreen {
             List<Component> lines = new ArrayList<>();
             ClientCommandActions.fillMap(lines::add);
             if (lines.isEmpty()) return;
-            SystemToast.add(Minecraft.getInstance().gui.toastManager(),
+            SystemToast.add(Minecraft.getInstance().getToastManager(),
                     SystemToast.SystemToastId.PERIODIC_NOTIFICATION,
                     Component.translatable("lss.config.fill_map"), lines.get(0));
             lines.forEach(ClientStatusScreen::sendChatFeedback);
