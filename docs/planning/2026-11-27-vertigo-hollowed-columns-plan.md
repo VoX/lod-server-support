@@ -42,9 +42,17 @@ mc26.3-0.9.2, Fabric lifecycle-events 4.1.9, LSS main `f5107cfb6`):
 - **The LSS border fill** (`VoxyVanillaCoverage`) writes the same air, but Voxy's own hooks
   write it anyway. The border fill does not decide whether the hole stays.
 
-Not reproduced live yet. **P7 step 1 is the live repro** (section 7): confirm the hole, that
-the client heightmap is the server's, and that a ts = -1 re-serve after the unload fills it.
-If the repro disagrees with this section, the plan goes back to review.
+**Reproduced live (2026-11-27)** on the measurement rig (pregenerated 26.3 world, warm store,
+LSS 0.24.0, Vertigo 1.2.7 on both sides, a real Sodium + Voxy client at render distance 4,
+spectator at y = 260). Rig: `~/.local/state/lss-repro/issue-437/`.
+- A 16 blocks/s flight over terrain LSS had already served left a trench in the Voxy terrain
+  with sky visible through it. It was still there 60 s later (`runs/base-flight2/`), like the
+  issue's screenshot.
+- The village at the start of the flight, never stamped because vanilla had it from the join,
+  stayed intact. LSS asked for those columns normally once they unloaded, which confirms that
+  a ts = -1 re-serve repairs the hole.
+- A teleport away (`runs/base-vertigo2/`) leaves no trench: the whole disc drops at once, the
+  slots are already null when Sodium's removals run, and Voxy writes nothing.
 
 ## 2. Approaches considered
 
@@ -78,102 +86,115 @@ If the repro disagrees with this section, the plan goes back to review.
 
 ### 3.1 Detecting a hollowed chunk (Fabric client only)
 
-- **`VertigoCompat`.** New `xplat/.../compat/VertigoCompat.java`. It resolves Vertigo with
-  `Class.forName(name, false, loader)`, only when `FabricLoader.isModLoaded("vertigo")`, and
-  binds by exact descriptor:
-  - `VertigoAPI.isTrackingSections(Player)Z`;
-  - `VertigoAPI.isSectionLoaded(Player,int,int,int)Z`;
-  - `VertigoClientEvents.SECTION_LOADED` (a Fabric `Event`), registered with a
-    `java.lang.reflect.Proxy` of `VertigoClientEvents$Load`.
+- **`VertigoCompat`.** New `xplat/.../compat/VertigoCompat.java`. Only when
+  `FabricLoader.isModLoaded("vertigo")`, it resolves `builderb0y.vertigo.api.VertigoAPI` with
+  `Class.forName(name, false, loader)` and binds by exact descriptor:
+  - `isTrackingSections(Player)Z`;
+  - `isSectionLoaded(Player,int,int,int)Z`.
 
   Any failure turns the feature off for the session with one INFO line, and touches nothing
   else.
-- **Gates** (all must hold for anything to run):
+- **Gates** (all must hold):
   - Vertigo resolved;
   - `Minecraft.getInstance().player` non-null;
   - an LSS terrain session with active acquisition;
   - Voxy's ingest bridge live (`VoxyCompat.isInitialized()`), and Voxy's ingest enabled for
-    the level (the `isIngestEnabled` check `VoxyVanillaCoverage` already makes). With Voxy
-    ingest off, Voxy writes no air and a re-serve would be wasted;
+    the level (the check `VoxyVanillaCoverage.destination` already makes);
   - `isTrackingSections(player)`.
-- **Visible band.** For a chunk, take the min and max of its `WORLD_SURFACE` heightmap over
-  its 256 columns: 256 array reads. The band runs from one section below the lowest
-  surface section up to the highest surface section. A hidden section is relevant only if
-  it is in the band. On the ground, Vertigo's ±r covers the band, so walking never
-  triggers. Flying high, or deep underground under mountains, it does.
-- **`partialNow(chunk)`**: some section in the band has `isSectionLoaded == false`.
-- **`grewLater` flag** (per loaded chunk, `LongOpenHashSet`). It catches a chunk that was
-  partial at Voxy's last write and then filled in before the unload (the player descended).
-  - A `SECTION_LOADED` for a band section of an already-tracked chunk, in a later client tick
-    than the chunk's first range, sets the flag. The first range of a new chunk fires its
-    events together in one tick.
-  - Over-firing (the chunk filled in early and Voxy then wrote it whole) only costs a needless
-    re-serve.
-- **Unload.** A `ClientChunkEvents.CHUNK_UNLOAD` listener runs in its own phase,
-  `lss:before_vertigo`, ordered before `Event.DEFAULT_PHASE` with `addPhaseOrdering`.
+- **`partialNow(chunk)`**: some section of the chunk is not loaded by Vertigo, and its bottom
+  is at or below the chunk's top block.
+  - The top block is the highest `WORLD_SURFACE` value of the chunk's 256 columns. The client
+    holds the server's heightmap: Vertigo filters only sections and block entities, and its
+    section packets do not touch heightmaps.
+  - Sections above the top are air on the server too.
+  - There is no lower bound. A lower bound would miss cliff faces at chunk edges, the seabed
+    (`WORLD_SURFACE` counts water) and the Nether (its heightmap is the roof).
+  - The price: at Vertigo ranges of 6 or less, walking on the ground re-serves too, because
+    sections deep under the ground are hidden. That is measured (section 4).
+- **When Voxy writes.** Voxy's last write for a chunk is Sodium's `onChunkRemoved`. It fires
+  when the chunk loses "ready" status, which happens at the first unload among its 8
+  neighbours. On its own drop, the slot is null and Voxy writes nothing. So the hole is
+  decided at the first neighbour unload, plus the case where the chunk and its neighbours
+  drop together (a teleport): then the write that counts is the one made when Voxy added it.
+- **Unload listener.** It runs on `ClientChunkEvents.CHUNK_UNLOAD` in its own phase,
+  `lss:before_vertigo`, ordered before `Event.DEFAULT_PHASE` (`addPhaseOrdering`).
   - Vertigo removes its per-chunk state in its own default-phase listener, so it must run
-    after LSS. The unload fires before the slot is nulled and before Sodium's queued
-    removal, and Vertigo's range-unload packet arrives after the forget packet.
-  - If `partialNow(chunk)` or `grewLater` holds, the position goes to the manager. The
-    listener runs on the client thread and calls `LodRequestManager.onHollowed(dimension,
-    packed)` directly, with no `mc.execute` hop.
-  - Either way, the position leaves the loaded set and the flag set.
-- **Loaded set.** `CHUNK_LOAD` adds the position to a per-level loaded set while the gates
-  hold. Section 3.3 uses it.
+    after LSS.
+  - The unload fires before the slot is nulled and before Sodium's queued removal.
+  - Vertigo's range-unload packet arrives after the forget packet.
+
+  For the unloading chunk C:
+  1. **Neighbours.** For each of C's 8 neighbours N still in the client chunk cache: if
+     `partialNow(N)`, add N to `suspect` (a `LongOpenHashSet`, cleared with the session and the
+     level). Sodium takes N out of "ready" because of this unload, and Voxy writes N as it is
+     now.
+  2. **C itself.** C is hollowed if `suspect.remove(C)` or `partialNow(C)` holds. The second
+     test covers a chunk dropped together with all its neighbours, and errs toward a needless
+     re-serve when the player climbed since.
+  3. **Report.** A hollowed C goes to `LodRequestManager.onHollowed(dimension, packed)`,
+     called directly (the listener is on the client thread).
+
+  The cost per unload is at most 9 evaluations of 24 API calls and 256 heightmap reads each,
+  with no allocation.
+- **Not detected** (recorded limitation): chunks that are loaded when the player leaves the
+  dimension or disconnects keep their holes until the player passes there again; Re-download
+  Terrain fills them at once. Fabric fires no `CHUNK_UNLOAD` there. The new `LocalPlayer` has
+  an empty Vertigo state, and a flush of every loaded chunk would also run on the in-world
+  teardowns (reception off, settings rebuild, map-policy park), with the probe cost of
+  section 3.2. A player who comes back through the same portal or rejoins at the same spot
+  repairs them when leaving.
 
 ### 3.2 Releasing the re-ask once the server has let the chunk go
 
-A re-ask while the server still has the chunk loaded is serialized on the server's main
-thread (`RequestProcessingService.probeLoadedChunks`, about 0.2 ms each). After the server
-unloads the chunk, it is a warm store serve off the main thread. So the manager holds
-hollowed positions back:
+A re-ask while the server still has the chunk loaded is serialized on the server's main thread
+(`RequestProcessingService.probeLoadedChunks`, about 0.2 ms each). Once the chunk has unloaded,
+the re-ask is a warm store serve off the main thread. So the manager holds hollowed positions
+back:
 
-- `onHollowed` puts the position in `hollowPending` (position → unload time, insertion
-  order, capped at 16,384; at the cap the oldest is released at once).
-- Each client tick, the manager looks at up to 64 entries from the head. An entry is released
-  when both hold:
-  - its Chebyshev distance from the player's chunk is more than `serverRenderDistance + 2`;
-  - at least 5 s have passed since the unload.
-
-  The server loads player chunks out to its view distance + 1. Vertigo needs a Fabric
-  server, and Fabric unloads a chunk within ticks of its last ticket going.
-  `Options.serverRenderDistance` is the value from the login packet; a port checks the field
-  name on each line.
-- If the chunk loads into vanilla again first, the entry is dropped. The next unload decides
-  again.
-- **Release** = `tracker.removeByPosition(packed)`, then `columns.onHollowed(packed)`, then
-  `metrics.recordHollowed()`.
-  - Removing the in-flight entry is load-bearing. An `up_to_date` answer to a request still
-    carrying the old stamp would otherwise park the position as satisfied for the session.
-    Untracked, that answer is discarded, while a real column is still accepted.
-  - During a pending cache load, record the position in a `hollowedDuringCacheLoad` list and
-    re-apply it with `onHollowed`, not `onIngestFailed`, over the loaded stamps. On a dimension
-    change it goes to `ColumnCacheStore.removeAsync`, like the failure list.
-
-### 3.3 Leaving the world or dimension
-
-Fabric fires no `CHUNK_UNLOAD` on world unload or dimension change. On a dimension change,
-the old chunks are dropped after the client has switched level, and the new `LocalPlayer` has
-an empty Vertigo tracking manager. Voxy has already written the partial content of every
-chunk in view, so stamps kept now would persist a hole across sessions.
-
-- In `onDimensionChange` and at session teardown, before `saveCache`, every position in
-  `hollowPending` and every position in the loaded set is forgotten with
-  `columns.onHollowed` (persisted as a removal; no requests, since the session is leaving
-  that dimension).
-- Where Vertigo's state is still readable, a loaded position counts only if `partialNow` or
-  `grewLater` holds. Otherwise all of the loaded set counts. That is one re-serve of the view
-  disc the next time the player is there, and only for Vertigo users.
+- **Queue.** `onHollowed` ignores another dimension (the `lastDimension` guard
+  `onIngestFailure` has). Otherwise it puts the position in `hollowPending`
+  (`Long2LongLinkedOpenHashMap`, position → unload time), capped at 16,384; at the cap the
+  oldest entry is released at once.
+- **Release check.** Each client tick, the manager examines up to 64 entries from the head.
+  - An entry is released when its Chebyshev distance from the player's chunk is more than
+    `serverRenderDistance + 4`, and at least 5 s have passed since the unload.
+  - An entry that is too close goes to the tail (`putAndMoveToLast`), so one close entry never
+    blocks the rest.
+  - Any entry is released after 30 s regardless, at the cost of one probe of a loaded chunk.
+    This covers a player who hovers with a client view distance below the server's.
+  - Why +4: player tickets keep chunks FULL out to `serverVD + 2`, and the server's ticket
+    centre lags the client by a round trip. Vertigo needs a Fabric server, and Fabric unloads
+    within ticks once the ticket goes.
+  - `Options.serverRenderDistance` is the login packet's value. The port checks the field on
+    each line.
+- **Entries dropped without a release:**
+  - the chunk loads into vanilla again first (the next unload decides again);
+  - a column for the position is received after the unload (it is repaired already).
+- **Release** = `columns.onHollowed(packed)`.
+  - Only if that actually unstamped: `tracker.removeByPosition(packed)` and
+    `metrics.recordHollowed()`. Removing the in-flight entry is load-bearing: an `up_to_date`
+    answering a request that still carried the old stamp would otherwise park the -1
+    position as satisfied for the session. Untracked, that answer is discarded, and a real
+    column is still accepted.
+  - During a pending cache load, record the position in `hollowedDuringCacheLoad`. It is
+    re-applied with `onHollowed` over the loaded stamps, or on a dimension change sent to
+    `ColumnCacheStore.removeAsync` like the failure list.
+- **Leaving.** At `onDimensionChange` and at every manager teardown, before `saveCache`, every
+  entry still in `hollowPending` is applied with `columns.onHollowed` (persisted as a removal;
+  no request, since the session or dimension is ending).
 
 ### 3.4 Forgetting the stamp without a strike
 
 New `ColumnStateMap.onHollowed(packed)`: the lost-content unstamp of `onIngestFailed`,
 without the strike counter or the park.
 
-- Old stamp -1 (unknown, or an all-air park): nothing.
+- Old stamp -1 in memory (unknown, or an all-air park): nothing.
 - `sessionSatisfied` set (not generated with a kept stamp, or parked at the ingest-failure
-  cap): nothing. `classify` would keep returning SATISFIED, and the retry mark would stay
-  for good and reopen its ring on every scan.
+  cap): `tsPut(-1)` and `persistentRemovals.add` only, with no retry mark. `classify` keeps
+  returning SATISFIED this session, and a retry mark would stay for good and reopen its ring
+  on every scan.
+- No in-memory state (pruned out of range before the release, for example after a teleport):
+  `persistentRemovals.add`, so the merge-save drops the file's stamp.
 - `clearedResync` holds the position (the last delivery was a clear to air): nothing. Voxy
   holds air, which matches.
 - Otherwise (stamp > 0, or a legacy 0):
@@ -189,8 +210,9 @@ without the strike counter or the park.
 
 ### 3.5 What players see
 
-- With Vertigo and Voxy on an LSS server, the band behind a flight fills back in about 5 to
-  10 seconds after it leaves view.
+- With Vertigo and Voxy on an LSS server, the trench behind a flight fills back in about 5 to
+  10 seconds after it leaves view (up to 30 s if the client's view distance is below the
+  server's).
 - Nothing changes for anyone without Vertigo on both sides, or with Voxy ingest off.
 - The client `/lss diag` request line gains `vertigo_refills=<n>`, shown only when non-zero.
 - **No setting.** It runs only when Vertigo hides visible terrain, and its cost is bounded by
@@ -260,21 +282,27 @@ Line seams to check at port time:
   - `ColumnStateMapHollowedTest`:
     - > 0 and 0 stamps go to -1 with a retry mark, a persistent removal and cleared
       validation bits;
-    - -1, `sessionSatisfied` and pending-clear positions are untouched;
+    - a `sessionSatisfied` position with a stamp goes to -1 and a removal, with no retry mark;
+    - a position without in-memory state gets a removal only;
+    - -1 and pending-clear positions are untouched;
     - 100 repeats never park and never move `ingestFailures`/`ingestParked`.
 
     Also update `ReferenceColumnStateMap` and the differential and fuzz tests for the new
     mutator.
   - `LodRequestManager`:
-    - release waits for both distance and age, and a reload drops the entry;
+    - release waits for both distance and age, a close head entry moves to the tail, 30 s
+      releases regardless, and a reload or a received column drops the entry;
+    - `onHollowed` from another dimension is ignored, and the pending entries are applied
+      before `saveCache` on a dimension change and on teardown;
     - release removes the in-flight entry, and a stale `up_to_date` then does not park;
     - the pending cache load is replayed with `onHollowed`;
-    - a dimension change forgets the pending and loaded positions into the old bucket;
     - the next scan emits ts = -1.
   - `VertigoCompat` (fake API and heightmap):
-    - band math, including world-height clamping and a hidden section above the top block
-      (not relevant);
-    - `grewLater` from a later-tick load only;
+    - `partialNow`: a hidden section above the top block does not count, one at or below
+      does, and world-height clamping holds;
+    - a neighbour unload marks a partial neighbour suspect, and its own later unload reports
+      it even when it is full by then;
+    - a chunk dropped with all its neighbours is judged by `partialNow`;
     - not tracking means nothing, and failed resolution means nothing, without throwing.
 - **Binding surface:** `VertigoBindingSurfaceTest` checks the three members against the line's
   Vertigo golden jar (`maven.modrinth:vertigo:<version id>`, new `vertigo_golden` property),
@@ -302,8 +330,12 @@ keeping black holes.`
   later. This depends on that shared queue.
 - **Release delay.** A player turning straight back sees the band for up to about 10 s. That
   is accepted for the server-load gain: a still-loaded chunk costs a main-thread serialize.
-- **Dimension and disconnect flush.** It may re-serve some full chunks (the conservative
-  branch). This is bounded at one view disc per change, Vertigo users only.
+- **Leaving a dimension or disconnecting** keeps the holes of the chunks loaded at that moment
+  (3.1, "Not detected"). Re-download Terrain fills them, and so does passing there again.
+- **Small Vertigo ranges** (6 or less) re-serve while walking, because hidden sections deep
+  underground count. This is bounded by the chunk unload rate, Vertigo users only. It is
+  measured, and if it is too much, a lower bound comes back (minimum surface over the chunk
+  and its neighbours, minus two sections).
 - **A client-only Vertigo** (server without it): `isTrackingSections` is false, so nothing
   runs. That is correct, because the server then sends whole chunks.
 
@@ -315,8 +347,8 @@ Panel (2026-11-27): one correctness and failure-case reviewer (Opus), one decisi
 | # | Finding | Disposition |
 | --- | --- | --- |
 | C1 / D2 | "Any unloaded section" fires on almost every unload: Vertigo's ±r leaves air sections above the surface unloaded even on the ground | **Fixed:** the heightmap band (3.1). Verified: Vertigo filters only sections and block entities |
-| C2 | Root cause wrong in mechanism: Sodium add/remove fire on ready status, Voxy's last write is at lose-ready (the slot is null at the drop). False negative when the chunk fills in between | **Fixed:** §1 rewritten; the `grewLater` flag from Vertigo's `SECTION_LOADED` (3.1). Verified in `MixinClientChunkCache` / `MixinRenderSectionManager` |
-| C3 | No `CHUNK_UNLOAD` on world unload or dimension change; Voxy has written the partial disc, so the hole persists across sessions | **Fixed:** the flush in 3.3 |
+| C2 | Root cause wrong in mechanism: Sodium add/remove fire on ready status, Voxy's last write is at lose-ready (the slot is null at the drop). False negative when the chunk fills in between | **Fixed:** §1 rewritten; the neighbour `suspect` set (3.1) decides at the first neighbour unload. Verified in `MixinClientChunkCache` / `MixinRenderSectionManager`, and the teleport repro shows the null-slot case |
+| C3 | No `CHUNK_UNLOAD` on world unload or dimension change; Voxy has written the partial disc, so the hole persists across sessions | **First fold:** a loaded-set flush. **Second fold:** dropped (see R3); `hollowPending` is still flushed as removals before `saveCache`; recorded limitation in 3.1 |
 | C4 | `onHollowed` on a `sessionSatisfied` position strands a retry mark | **Fixed:** skip it; also clear the validation bits (3.4). Verified at `ColumnStateMap` classify and `onNotGenerated` |
 | C5 | In-flight removal is load-bearing (a stale `up_to_date` parks a -1 position); call directly on the client thread | **Fixed** (3.1, 3.2) |
 | C6 | Phase ordering works; add a null-player check | **Fixed** (gates) |
@@ -328,3 +360,24 @@ Panel (2026-11-27): one correctness and failure-case reviewer (Opus), one decisi
 | D5 | It is a new integration, not a bug fix; do not promise the disc under the player | **Fixed:** target 0.25.0, New Features, bullet reworded. It ships with the next train and gets no dedicated release |
 | D6 | Check maps in the repro; probably an upside | **Fixed** (§7 repro, 3.4) |
 | D7, D8 | Rejected alternatives and persistence: keep | Kept |
+
+**Second round** (2026-11-27, one Opus reviewer over the folded design; verified inline):
+
+| # | Finding | Disposition |
+| --- | --- | --- |
+| R1 | The release scan looks at 64 head entries only: a close head stalls the queue, and a hover with client VD below server VD keeps the band forever | **Fixed:** close entries move to the tail; release after 30 s regardless (3.2) |
+| R2 | A position pruned before its release keeps its saved stamp (merge-save) | **Fixed:** `onHollowed` without in-memory state adds a persistent removal (3.4) |
+| R3 | The loaded-set flush also runs on in-world teardowns (reception off, settings rebuild, map-policy park, proxy rejoin): it unstamps chunks both sides still have loaded, and they are re-asked at once on the main thread | **Fixed by removal:** the loaded-set flush is dropped (it also needed the join disc, R9, and lost the Vertigo state on a dimension change, R6). Recorded as a limitation in 3.1, since passing there again or Re-download Terrain repairs it |
+| R4 | The heightmap band misses cliff faces at chunk edges, the seabed and the Nether | **Fixed:** no lower bound, only "at or below the chunk's top block" (3.1). Walking at small Vertigo ranges re-serves; measured, with the fallback recorded in §8 |
+| R5 | The client heightmap is the server's (confirmed); local block updates can only lower it | No change (errs toward a needless re-serve) |
+| R6 | The dimension-change flush always takes the conservative branch; no dimension guard on `onHollowed` | **Fixed:** the flush is gone (R3); `onHollowed` ignores another dimension (3.2) |
+| R7 | `grewLater` fires on every descent, and its tick test needs care | **Replaced:** the neighbour `suspect` set (3.1). It judges a chunk at the moment Sodium takes it out of "ready", which is the moment Voxy writes it, and needs no Vertigo events |
+| R8 | Player tickets keep chunks FULL to serverVD + 2, so the release margin was zero | **Fixed:** `serverRenderDistance + 4` (3.2) |
+| R9 | The join disc is missing from the loaded set | Moot (R3) |
+| R10 | `sessionSatisfied` with a stamp should still drop the stamp; remove the in-flight entry only on an actual unstamp; drop the pending entry when a column arrives | **Fixed** (3.2, 3.4) |
+| Q4 | Teardown ordering before `saveCache`: no new problems | Kept |
+
+The second fold simplified the design: there is no loaded set and no Vertigo event
+registration, the suspect set replaces the flag, and the band lost its lower bound. It goes
+to the implementation review, not a third plan round. That review reads the real code, and
+the live repro checks the outcome.
