@@ -423,7 +423,12 @@ The live repro changed the detector. The rest (sections 3.2 to 3.5) is built as 
   - The first build left a two-row strip there (`runs/fix2-dbg/`).
   - For each chunk that left, each still-loaded neighbour that is hollow now becomes a suspect.
     The chunk is reported if it was a suspect or is hollow itself.
-  - The one second of latency is free, since a re-ask waits at least 5 s.
+  - The one second of latency is free for the re-ask, which waits at least 5 s anyway. It does
+    move the neighbour check: a neighbour is judged up to a second after Voxy saved it. A player
+    diving in that second can leave one chunk unreported (recorded limitation; Re-download
+    Terrain fixes it).
+  - The sweep itself has no unit test (it needs the client chunk cache). The live rig covers
+    it: the `fix-c` run.
   - There is no `CHUNK_UNLOAD` listener and no event-phase ordering.
 - **Files.**
   - `xplat/.../compat/VertigoHollowDetector.java` (the neighbour rule) and `VertigoCompat.java`
@@ -494,3 +499,16 @@ every finding inline before folding.
 | I6 | The pending cap is not enforced during a cache load | **Kept**, with a comment saying why |
 | K4 | Scope; ask the reporter to try it | **Kept.** The soak server has no Vertigo, so the rig check and the Astra row carry it, and the release reply asks the reporter |
 | K4b | An optional `-Dlss.vertigo.repair=false` switch | **Not added**: it is inert without Vertigo, and a false re-serve costs only a store serve |
+
+**Fold reader** (2026-11-27, one Opus reader over the fold commit). No blockers. Every "left"
+case it checked against the 26.3 bytecode was fine: in-place reloads, a new object at the same
+position, view-distance changes, a same-dimension respawn, a dead player, and the empty-chunk
+sentinel.
+- **Fixed:** a chunk that leaves and comes back within one sweep drops its old suspect mark.
+- **Fixed:** a test for surfaces below Y 0.
+- **Recorded:** the one-second neighbour latency and the sweep's missing unit test (section 10).
+- **Kept:** releases of far entries are uncapped (64 per tick). Far chunks are past the server's
+  load distance, so their serves are store reads.
+
+**Gate fix:** Sponge compiles the server half of xplat. `Vertigo*.java` is client-only and joins
+the derived client excludes in `sponge/build.gradle`.

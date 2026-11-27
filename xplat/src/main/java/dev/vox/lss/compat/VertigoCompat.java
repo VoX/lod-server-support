@@ -44,7 +44,10 @@ public final class VertigoCompat {
     public static void chunkLoaded(ClientLevel level, LevelChunk chunk) {
         if (!enabled || level == null || chunk == null) return;
         switchLevel(level);
-        tracked.put(VertigoHollowDetector.pack(chunk.getPos().x(), chunk.getPos().z()), chunk);
+        long key = VertigoHollowDetector.pack(chunk.getPos().x(), chunk.getPos().z());
+        LevelChunk previous = tracked.put(key, chunk);
+        // Left and came back within one sweep: the old chunk's suspect mark is not this one's.
+        if (previous != null && previous != chunk) detector.forget(key);
         ClientNetGlue.vanillaChunkLoaded(level.dimension(), chunk.getPos().x(), chunk.getPos().z());
     }
 

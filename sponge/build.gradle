@@ -67,6 +67,7 @@ def xplatClientExcludes = [
         'dev/vox/lss/seed/ClientWorldSeed.java',
         'dev/vox/lss/compat/Xaero*.java',
         'dev/vox/lss/compat/Voxy*.java',
+        'dev/vox/lss/compat/Vertigo*.java', // the Vertigo repair (#437) is client-only
         'dev/vox/lss/compat/DhVoxyBridge.java',
         'dev/vox/lss/compat/ModCompat.java',
         // Map ingestion (JourneyMap backend, the shared ingest pacing and the heap belt) is

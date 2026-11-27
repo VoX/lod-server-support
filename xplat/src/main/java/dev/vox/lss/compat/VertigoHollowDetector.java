@@ -67,6 +67,9 @@ final class VertigoHollowDetector {
 
     void clear() { this.suspect.clear(); }
 
+    /** A new chunk took this position: an old suspect mark is not its own. */
+    void forget(long key) { this.suspect.remove(key); }
+
     int suspectCount() { return this.suspect.size(); }
 
     static long pack(int x, int z) { return ((long) z << 32) | (x & 0xFFFFFFFFL); }

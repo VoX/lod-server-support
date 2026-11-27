@@ -76,6 +76,12 @@ class VertigoHollowDetectorTest {
         assertTrue(VertigoCompat.topSectionEmpty(chunk(island, at(60))), "the island's own surface hidden");
     }
 
+    @Test void aSurfaceBelowYZeroCountsToo() {
+        // Deep-dark terrain or a low valley floor: tops at Y -10, held as air.
+        assertTrue(VertigoCompat.topSectionEmpty(chunk((x, z) -> -10, at(-10))));
+        assertFalse(VertigoCompat.topSectionEmpty(chunk((x, z) -> -10, at(0), at(20))));
+    }
+
     @Test void aChunkWithoutItsHeightmapIsNeverHollow() {
         var chunk = chunk((x, z) -> 70, at(70));
         when(chunk.hasPrimedHeightmap(Heightmap.Types.WORLD_SURFACE)).thenReturn(false);
@@ -129,6 +135,15 @@ class VertigoHollowDetectorTest {
         assertTrue(detector.left(0, 0, HOLLOW, new World()));
         assertFalse(detector.left(1, 0, FULL, new World()));
         assertEquals(0, detector.suspectCount(), "nothing else is loaded");
+    }
+
+    @Test void aNewChunkAtASuspectsPositionDropsTheMark() {
+        var detector = new VertigoHollowDetector();
+        var world = new World().disc(1, HOLLOW);
+        detector.left(1, 1, world.drop(1, 1), world);
+        detector.forget(VertigoHollowDetector.pack(0, 0));
+        world.put(0, 0, FULL);
+        assertFalse(detector.left(0, 0, world.drop(0, 0), world), "the mark was the old chunk's");
     }
 
     @Test void suspectsLeaveWithTheirChunkAndClearResetsThem() {
