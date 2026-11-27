@@ -64,7 +64,14 @@ class SectionStateFuzzTest {
         boolean ratchetFired = false;
         for (int op = 0; op < 4_000; op++) {
             long p = pool[rng.nextInt(pool.length)];
-            int kind = rng.nextInt(102); // new operations widen the range, preserving prune coverage
+            int kind = rng.nextInt(103); // new operations widen the range, preserving prune coverage
+            if (kind == 102) {
+                // Vertigo hollowed the column in a consumer (#437): the strike-free unstamp.
+                assertEquals(ref.onHollowed(p), impl.onHollowed(p),
+                        "onHollowed divergence at op " + op + " seed " + seed);
+                assertParity(ref, impl, pool, rng, seed, op);
+                continue;
+            }
             if (kind == 101) {
                 int tx = PositionUtil.unpackX(p) >> 5, tz = PositionUtil.unpackZ(p) >> 5;
                 var actual = new LongOpenHashSet();

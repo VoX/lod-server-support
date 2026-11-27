@@ -24,6 +24,7 @@
     "AccessorEntityRenderDispatcher",
     "AccessorBiomeManager",
     "SodiumDraftHook",
-    "FarPlaneHook"
+    "FarPlaneHook",
+    "AccessorOptions"
   ]
 }

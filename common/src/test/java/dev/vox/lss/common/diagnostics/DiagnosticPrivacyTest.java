@@ -72,6 +72,7 @@ class DiagnosticPrivacyTest {
                 7,
                 7L,
                 7L,
+                7L,
                 7,
                 7,
                 "alice@example.test /home/alice/token abcdef12-3456-7890-abcd-abcdef123456",

@@ -439,11 +439,14 @@ public final class ClientCommandActions {
         int receivedCols = details.getReceivedColumnCount();
         int empty = details.getEmptyColumnCount();
         int dirty = details.getDirtyColumnCount();
+        // vertigo_refills, only when non-zero (issue #437): columns asked again because
+        // Vertigo had hidden their terrain while Voxy saved the vanilla chunk.
+        long vertigoRefills = details.getVertigoRefills();
         feedback.accept(Component.literal(String.format(
                 "Columns: received=%d, empty=%d, dirty=%d, ingest_failed=%d, ingest_parked=%d",
                 receivedCols, empty, dirty, details.getTotalIngestFailures(),
                 details.getIngestParkedCount()
-        )).withStyle(ChatFormatting.GRAY));
+        ) + (vertigoRefills > 0 ? ", vertigo_refills=" + vertigoRefills : "")).withStyle(ChatFormatting.GRAY));
 
         // Light line (issue #382, conditional slot): columns that arrived with terrain
         // and no sky light and were lit by the client's estimate. Non-zero means the

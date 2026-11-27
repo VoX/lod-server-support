@@ -191,6 +191,28 @@ public final class ClientNetGlue {
         });
     }
 
+    /** True while a session would act on a Vertigo hollow report (issue #437): an active
+     *  manager with acquisition running. Main client thread. */
+    public static boolean wantsHollowReports() {
+        var manager = sessionGate.getRequestManager();
+        return manager != null && manager.isAcquisitionActive();
+    }
+
+    /** Vertigo hid real terrain of a vanilla chunk that left the client while Voxy saved it
+     *  (issue #437). Main client thread (the once-a-second sweep). */
+    public static void reportHollowed(ResourceKey<Level> dimension, int chunkX, int chunkZ, int serverViewDistance) {
+        var manager = sessionGate.getRequestManager();
+        if (manager != null && manager.isAcquisitionActive()) {
+            manager.onHollowed(dimension, PositionUtil.packPosition(chunkX, chunkZ), serverViewDistance);
+        }
+    }
+
+    /** A vanilla chunk loaded: a pending Vertigo re-ask for it is dropped (issue #437). */
+    public static void vanillaChunkLoaded(ResourceKey<Level> dimension, int chunkX, int chunkZ) {
+        var manager = sessionGate.getRequestManager();
+        if (manager != null) manager.onVanillaChunkLoaded(dimension, PositionUtil.packPosition(chunkX, chunkZ));
+    }
+
     /** A map backend dropped a column and names no delivery (see
      *  {@link LodRequestManager#onMapDrop}). Safe from any thread. */
     public static void reportMapDrop(ResourceKey<Level> dimension, int chunkX, int chunkZ) {

@@ -189,6 +189,33 @@ class ReferenceColumnStateMap {
         this.retry.add(packed);
     }
 
+    boolean onHollowed(long packed) {
+        long old = this.timestamps.get(packed);
+        if (old == -1L) {
+            this.persistentRemovals.add(packed);
+            return false;
+        }
+        if (this.sessionSatisfied.contains(packed)) {
+            this.timestamps.remove(packed);
+            this.persistentRemovals.add(packed);
+            if (old > 0) this.receivedCount--;
+            else if (old == 0) this.emptyCount--;
+            this.validated.remove(packed);
+            this.summaryValidated.remove(packed);
+            return false;
+        }
+        if (this.clearedResync.containsKey(packed)) return false;
+        this.timestamps.remove(packed);
+        this.persistentRemovals.add(packed);
+        if (old > 0) this.receivedCount--;
+        else if (old == 0) this.emptyCount--;
+        this.validated.remove(packed);
+        this.summaryValidated.remove(packed);
+        this.dirty.remove(packed);
+        this.retry.add(packed);
+        return true;
+    }
+
     void pruneOutOfRange(int playerCx, int playerCz, int pruneDistance) {
         int removed = 0;
         var iter = this.timestamps.long2LongEntrySet().fastIterator();
