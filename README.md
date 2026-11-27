@@ -163,7 +163,9 @@ generating distant terrain and stops adding to its LOD store; both go on by them
 3 GiB are free. The log says when this starts and ends, and `/lsslod diag` shows
 `ON HOLD: low disk`. A server that always runs with less free space can move the floor with the
 JVM flag `-Dlss.lowDiskHoldMiB=<MiB>` (`0` turns the hold off). The store's background backfill
-keeps its own 2 GiB floor whatever the flag says: it is the one part that writes in bulk.
+keeps its own 2 GiB floor whatever the flag says: it is the one part that writes in bulk. The LOD
+store is uncapped by default, so on a small disk it can be the store itself that fills it; then
+free space, or cap it with `storage.lod_store.max_size_mib`.
 
 **Compression (0.24.0; Fabric, NeoForge).** Terrain that is already compressed is no
 longer compressed a second time by the game on its way out. Players and proxies (Velocity
@@ -184,7 +186,7 @@ names one problem at a time). A file 0.23.0 created and you did not edit loads a
 | --- | --- |
 | `service` | Switch the LOD service on or off (restart), and `require_permission` to serve only players who hold `lss.use` (`vss.use`). With that on, a refused player's client says "distant terrain here needs a permission you don't have" (0.23.0); `show_permission_refusal: false` (a commented line in the file) makes it say the general "switched off here" instead. |
 | `lod.distance` | Server distance defaults and dimension overrides; Paper adds exact world-name overrides. |
-| `generation` | Enable generation, bound concurrent work, and set ticket timeouts in ticks. Disabling stops new admissions while existing work drains. Distant terrain is generated up to the vanilla world border (`/worldborder`) and not beyond it; terrain that already exists there is still shown. `outside_world_border: true` generates beyond it too (the line is in the file, commented out). Borders kept by a plugin or mod are not read. `/lsslod diag` counts requests refused at the border as `outside_border=`, and the log says so once. |
+| `generation` | Enable generation, bound concurrent work, and set ticket timeouts in ticks. Disabling stops new admissions while existing work drains. Distant terrain is generated up to the vanilla world border (`/worldborder`) and not beyond it; terrain that already exists there is still shown. `outside_world_border: true` generates beyond it too (the line is in the file, commented out). Borders kept by a plugin or mod are not read. `/lsslod diag` counts requests refused at the border as `outside_border=`, and the log says so once. After the border grows, players already online get the new terrain when they rejoin. |
 | `network` | Bandwidth limits in MiB/s before compression, queues, pacing and yielding to vanilla traffic. |
 | `storage.disk` | Read concurrency and reader-pool configuration. Concurrency reloads; changing the pool requires a restart. |
 | `storage.lod_store` | Cache processed columns to save repeated parsing/serialization CPU, using additional disk space that can be comparable to the world itself. Cap, resweep and backfill controls reload; enabling the store requires a restart. |
