@@ -33,7 +33,6 @@ class VertigoHollowDetectorTest {
     static LevelChunk chunk(IntBinaryOperator heights, int... airSections) {
         var chunk = mock(LevelChunk.class);
         when(chunk.hasPrimedHeightmap(Heightmap.Types.WORLD_SURFACE)).thenReturn(true);
-        when(chunk.getMinY()).thenReturn(-64);
         var sections = new LevelChunkSection[24];
         for (int i = 0; i < 24; i++) {
             var section = mock(LevelChunkSection.class);

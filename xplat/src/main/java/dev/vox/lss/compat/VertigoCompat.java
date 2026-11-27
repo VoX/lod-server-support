@@ -119,13 +119,12 @@ public final class VertigoCompat {
     static boolean topSectionEmpty(LevelChunk chunk) {
         if (!chunk.hasPrimedHeightmap(Heightmap.Types.WORLD_SURFACE)) return false;
         var sections = chunk.getSections();
-        int minY = chunk.getMinY();
         long checked = 0L; // sections already looked at (index < 64); taller worlds re-check
         for (int x = 0; x < 16; x++) {
             for (int z = 0; z < 16; z++) {
                 int top = chunk.getHeight(Heightmap.Types.WORLD_SURFACE, x, z);
-                if (top < minY) continue; // no block in this column
                 int index = chunk.getSectionIndex(top);
+                // A column with no block reports the world's floor - 1: section index -1.
                 if (index < 0 || index >= sections.length) continue;
                 if (index < 64) {
                     if ((checked & (1L << index)) != 0) continue;
