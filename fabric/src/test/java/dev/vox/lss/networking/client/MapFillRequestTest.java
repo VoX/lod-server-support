@@ -1631,6 +1631,83 @@ class MapFillRequestTest {
         }
     }
 
+    /** A stop typed while the cache is still loading, and then the player leaves this
+     *  dimension or the server before the load has finished: the answer was "stopped", so the
+     *  record must hear of it, although this stay never read the record and holds no column.
+     *  Through the real files. (0.24.0-beta.1 answered "stopped" and saved nothing.) */
+    @Test
+    void aStopWaitingForTheCacheIsSavedWhenThePlayerLeavesBeforeTheLoad() {
+        final String address = "map-fill-stop-unloaded";
+        start(3, LSSConstants.PROTOCOL_VERSION, true, address);
+        String bucket = manager.cacheBucketForTest();
+        try {
+            converge(); // no map: 48 owed
+            mapWriting = true;
+            assertEquals(MapFillRequest.Outcome.STARTED, manager.requestMapFill().outcome());
+            manager.saveCache();
+            assertTrue(ColumnCacheStore.loadStateAsync(bucket, dim).join().mapFillRequested, "premise: the record holds a request");
+
+            start(3, LSSConstants.PROTOCOL_VERSION, false, address);
+            manager.setPendingStateLoadForTest(new CompletableFuture<>()); // the load never finishes in this stay
+            mapWriting = true;
+            assertTrue(manager.stopMapFill());
+            manager.saveCache(); // the player leaves
+
+            var loaded = ColumnCacheStore.loadStateAsync(bucket, dim).join();
+            assertFalse(loaded.mapFillRequested, "the stop reached the record");
+            var map = new ColumnStateMap();
+            map.adoptLoaded(loaded);
+            assertEquals(48, map.size(), "and the cache is what it was");
+            assertEquals(48, map.mapOwedCount(), "with what the map is missing still recorded");
+        } finally {
+            ColumnCacheStore.clearForServer(bucket);
+        }
+    }
+
+    /** The same for a press: "the map fill starts as soon as the records have loaded" was
+     *  the answer, so a player who leaves before that finds the fill going on next time. */
+    @Test
+    void aPressWaitingForTheCacheIsSavedWhenThePlayerLeavesBeforeTheLoad() {
+        final String address = "map-fill-press-unloaded";
+        start(3, LSSConstants.PROTOCOL_VERSION, true, address);
+        String bucket = manager.cacheBucketForTest();
+        try {
+            converge(); // no map: 48 owed
+            manager.saveCache();
+            assertFalse(ColumnCacheStore.loadStateAsync(bucket, dim).join().mapFillRequested, "premise: no request yet");
+
+            start(3, LSSConstants.PROTOCOL_VERSION, false, address);
+            manager.setPendingStateLoadForTest(new CompletableFuture<>());
+            mapWriting = true;
+            assertEquals(MapFillRequest.Outcome.WAITING_FOR_CACHE, manager.requestMapFill().outcome());
+            manager.saveCache(); // the player leaves before the load
+
+            var loaded = ColumnCacheStore.loadStateAsync(bucket, dim).join();
+            assertTrue(loaded.mapFillRequested, "the press reached the record");
+            var map = new ColumnStateMap();
+            map.adoptLoaded(loaded);
+            assertEquals(48, map.mapOwedCount());
+        } finally {
+            ColumnCacheStore.clearForServer(bucket);
+        }
+    }
+
+    /** A session that downloads nothing from this server (the mod is off there, or Receive is
+     *  switched off) loads no cache, and nothing can be running in it: a stop says so. */
+    @Test
+    void aStopInASessionThatDownloadsNothingSaysThatNothingIsRunning() {
+        start(3, LSSConstants.PROTOCOL_VERSION, false);
+        manager.retireAcquisition(); // Receive switched off
+        var said = new java.util.ArrayList<String>();
+        ClientCommandActions.stopFillMap(line -> said.add(key(line)), manager);
+        assertEquals(List.of("lss.mapfill.not_running"), said);
+        assertFalse(manager.mapFillForTest().stopped(), "and nothing waits for a load that never comes");
+
+        start(3, LSSConstants.V16_COMPAT_PROTOCOL_VERSION, false); // an older server dialect: no fill there
+        ClientCommandActions.stopFillMap(line -> said.add(key(line)), manager);
+        assertEquals("lss.mapfill.not_running", said.get(1));
+    }
+
     /** Chat lines name the Fill Map button only where the options screen has one. On
      *  Sodium 0.6 (the usual one for Minecraft 1.21.1) or without Sodium, they name the
      *  command alone. */
