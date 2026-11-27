@@ -296,6 +296,9 @@ final class MapFill {
      *  then starts as soon as it has loaded. */
     boolean press() {
         if (!this.loaded) {
+            // The later word counts, as it does once the load is in: a press after a stop
+            // that is still waiting for the load takes that stop back.
+            this.stopBeforeLoad = false;
             this.pressPending = true;
             return false;
         }
