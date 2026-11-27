@@ -8,8 +8,6 @@ import dev.vox.lss.common.LSSConstants;
 import dev.vox.lss.common.PositionUtil;
 import dev.vox.lss.networking.payloads.SessionConfigS2CPayload;
 import net.minecraft.SharedConstants;
-import net.minecraft.core.registries.Registries;
-import net.minecraft.resources.Identifier;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.Bootstrap;
 import net.minecraft.world.level.Level;
@@ -24,7 +22,7 @@ import org.junit.jupiter.api.Test;
  */
 class LodRequestManagerHollowedTest {
     static final long S = 1_000_000_000L;
-    static final ResourceKey<Level> OVERWORLD = dim("overworld");
+    ResourceKey<Level> OVERWORLD; // set after the bootstrap: Level must not initialize first
     static final long P = PositionUtil.packPosition(10, 0);
 
     LodRequestManager manager;
@@ -33,6 +31,7 @@ class LodRequestManagerHollowedTest {
     @BeforeAll static void boot() { SharedConstants.tryDetectVersion(); Bootstrap.bootStrap(); }
 
     @BeforeEach void setUp() {
+        OVERWORLD = Level.OVERWORLD;
         manager = new LodRequestManager();
         manager.joinSlowStartEnabled = () -> false;
         manager.onSessionConfig(new SessionConfigS2CPayload(LSSConstants.PROTOCOL_VERSION, true, 64, true), "lss-hollow-test");
@@ -43,10 +42,6 @@ class LodRequestManagerHollowedTest {
         manager.onColumnReceived(P, 5_000L, OVERWORLD);
         assertEquals(5_000L, manager.columnsForTest().timestampFor(P), "premise: delivered and stamped");
         assertEquals(ColumnStateMap.SATISFIED, manager.columnsForTest().classify(P));
-    }
-
-    static ResourceKey<Level> dim(String name) {
-        return ResourceKey.create(Registries.DIMENSION, Identifier.parse("lss_test:" + name));
     }
 
     @Test void theReaskWaitsUntilTheServerHasLetTheChunkGo() {
@@ -105,7 +100,7 @@ class LodRequestManagerHollowedTest {
     }
 
     @Test void anotherDimensionIsIgnored() {
-        manager.onHollowed(dim("the_nether"), P, 8);
+        manager.onHollowed(Level.NETHER, P, 8);
         assertEquals(0, manager.hollowPendingCount());
     }
 
