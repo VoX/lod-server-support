@@ -413,21 +413,117 @@ class MapFillRequestTest {
     }
 
     @Test
-    void aFillNeverGoesBeforeTerrainNobodyHolds() {
+    void aFillRidesBehindTerrainNobodyHolds() {
         pressAfterADownloadWithoutAMap(3);
 
         long hole = p(2, -1);
         manager.onIngestFailure(dim, hole); // its consumer never got it: asked for again as terrain
         Batch batch = fire();
-        assertEquals(1, batch.positions().length, "only the column nobody holds");
-        assertEquals(hole, batch.positions()[0]);
-        assertEquals(0, manager.mapFillForTest().askedForTest(), "the fill waits");
+        assertEquals(hole, batch.positions()[0], "the column nobody holds comes first");
+        assertEquals(48, batch.positions().length, "and the owed columns ride behind it, in the same batch");
+        assertEquals(47, manager.mapFillForTest().askedForTest());
+        assertFalse(java.util.Arrays.stream(batch.positions()).skip(1).anyMatch(p -> p == hole));
 
         receive(hole, 9000);
         assertFalse(manager.isMapOwed(hole), "it arrived for everyone while a map is written");
         batch = fire();
-        assertEquals(47, batch.positions().length, "now the owed columns ride");
+        assertEquals(47, batch.positions().length, "the owed columns are declared again until answered");
         assertFalse(batch.has(hole));
+    }
+
+    /** A world that is still being generated out to the LOD distance keeps the scan asking
+     *  for columns nobody holds, and every batch is full of them, for hours. The fill is the
+     *  player's own request: it gets a quarter of such a batch, in place of the scan's farthest
+     *  entries, and runs to its end while the scan is still busy. (0.24.0's visual pass: two
+     *  fills of about 1,500 columns delivered none in two and three minutes, because one
+     *  column nobody held was enough to make the fill wait.) */
+    @Test
+    void aFillGetsAQuarterOfABatchTheScanWouldFillByItself() {
+        pressAfterADownloadWithoutAMap(24); // 2,400 held and owed
+        // The rings from 14 out lose their columns: terrain nobody holds, more than a batch of it.
+        var unheld = new LongOpenHashSet();
+        for (int x = -24; x <= 24; x++) {
+            for (int z = -24; z <= 24; z++) {
+                if (Math.max(Math.abs(x), Math.abs(z)) >= 14) {
+                    manager.onIngestFailure(dim, p(x, z));
+                    unheld.add(p(x, z));
+                }
+            }
+        }
+        int owed = manager.getMapOwedColumns();
+        assertEquals(2400 - unheld.size(), owed, "premise: what is still held is still owed");
+
+        Batch batch = fire();
+        int budget = manager.scannerForTest().getLastBudget();
+        assertTrue(unheld.size() > budget, "premise: the scan alone would fill the batch: " + unheld.size() + " > " + budget);
+        assertEquals(budget, batch.positions().length, "the batch does not grow past the budget");
+        assertEquals(4, MapFill.SHARE_DIVISOR, "a quarter");
+        int share = budget / MapFill.SHARE_DIVISOR;
+        int scans = 0, fills = 0;
+        for (int i = 0; i < batch.positions().length; i++) {
+            if (unheld.contains(batch.positions()[i])) {
+                scans++;
+                assertEquals(fills, 0, "the scan's entries come first, the fill's stand behind them");
+            } else {
+                fills++;
+                assertEquals(-1L, batch.timestamps()[i], "a fill asks as one who holds nothing");
+                assertTrue(manager.isMapOwed(batch.positions()[i]));
+            }
+        }
+        assertEquals(share, fills, "a quarter of the batch is the fill's");
+        assertEquals(budget - share, scans, "and the scan keeps three quarters");
+        assertEquals(share, manager.mapFillForTest().askedForTest());
+
+        // The server answers the fill from its store and is still generating the rest: the
+        // scan's columns never arrive in this test. The fill runs to its end all the same.
+        int rounds = 0;
+        while (manager.getMapOwedColumns() > 0 && rounds++ < 200) {
+            Batch next = fire();
+            for (int i = 0; next != null && i < next.positions().length; i++) {
+                long position = next.positions()[i];
+                if (unheld.contains(position)) continue; // still being generated
+                if (!mapAsks.contains(position)) mapAsks.add(position);
+                receive(position, columns().timestampFor(position));
+            }
+        }
+        assertEquals(0, manager.getMapOwedColumns(), "every owed column was filled while the scan stayed busy");
+        assertTrue(rounds <= 2 * (owed / share + 2), "at a quarter of a batch each time: " + rounds + " rounds for " + owed);
+        for (int i = 0; i < 4; i++) fire();
+        assertTrue(finished(), "and the fill says that it is done: " + notices);
+        assertEquals(owed, manager.getMapFillDelivered());
+    }
+
+    /** Only as many of the scan's entries make way as the fill has columns for: a fill of five
+     *  columns costs the scan five places in a full batch, not a quarter of it. */
+    @Test
+    void aSmallFillTakesOnlyThePlacesItNeeds() {
+        pressAfterADownloadWithoutAMap(24);
+        var unheld = new LongOpenHashSet();
+        var owedLeft = new LongOpenHashSet();
+        for (int x = -24; x <= 24; x++) {
+            for (int z = -24; z <= 24; z++) {
+                int ring = Math.max(Math.abs(x), Math.abs(z));
+                if (ring == 0) continue;
+                // Five columns at ring 10 stay held and owed; the rest is terrain nobody holds.
+                if (ring == 10 && z == 10 && x >= 0 && x < 5) {
+                    owedLeft.add(p(x, z));
+                } else if (ring > view) {
+                    manager.onIngestFailure(dim, p(x, z));
+                    unheld.add(p(x, z));
+                }
+            }
+        }
+        Batch batch = fire();
+        int budget = manager.scannerForTest().getLastBudget();
+        assertTrue(unheld.size() > budget, "premise: the scan alone would fill the batch");
+        assertEquals(budget, batch.positions().length, "the batch is as long as the budget");
+        int fills = 0;
+        for (long position : batch.positions()) {
+            if (owedLeft.contains(position)) fills++;
+            else assertTrue(unheld.contains(position), "everything else is the scan's own");
+        }
+        assertEquals(5, fills, "the five owed columns ride");
+        assertEquals(new LongOpenHashSet(batch.positions()).size(), batch.positions().length, "nothing is declared twice");
     }
 
     @Test

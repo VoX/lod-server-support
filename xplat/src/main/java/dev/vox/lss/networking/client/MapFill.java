@@ -100,6 +100,7 @@ final class MapFill {
     private boolean hintKnown;
     private boolean stopped;
     private boolean stopBeforeLoad;
+    private long[] picks = new long[0];
     private int notWrittenInARow;
     private Stall stall;
     /** The player was told this stay that a fill runs: its end is told too. */
@@ -586,18 +587,39 @@ final class MapFill {
         }
     }
 
+    /** The fill's share of a batch that the scan would fill by itself: one part in this many. */
+    static final int SHARE_DIVISOR = 4;
+
     /**
      * Adds owed columns to a request batch behind the scan's own {@code walked} entries, as
-     * "I hold nothing" (-1), nearest first. Nothing is added while the scan still asks for a
-     * column nobody holds (a non-positive timestamp among its entries) or the budget is used.
-     * Every scan declares its picks afresh, like the scan's own wants.
+     * "I hold nothing" (-1), nearest first. Every scan declares its picks afresh, like the
+     * scan's own wants.
+     *
+     * <p>The fill gets what the scan leaves of the batch, and never less than a quarter of
+     * it: when the scan leaves less, the fill's columns take the place of the scan's farthest
+     * entries, which the scan declares again at its next walk. A fill is the player's own
+     * request, and it must not wait for a scan that may never be done: on a world that is
+     * still being generated out to the LOD distance the scan asks for columns nobody holds
+     * for hours, and every batch is full of them. (Until 0.24.0's visual pass the fill added
+     * nothing while the scan asked for a single such column. Two fills of about 1,500 columns
+     * then delivered none in two and three minutes, and one of 3,641 finished in nine seconds
+     * once the scan had nothing to ask.)
+     *
+     * <p>The scan keeps three quarters of the batch, so terrain the server already has keeps
+     * arriving at three quarters of its speed. Terrain that still has to be generated waits
+     * for the fill, and that is the server's doing: it answers what it has for a player
+     * before it generates anything farther out (its nearest-first rule), and a fill's columns
+     * are near and exist. Measured on a fresh world with a budget of 800: the fill ran at 200
+     * columns a second (4,681 in 24 s), 440 chunks were generated in that time against some
+     * 40 a second before and after, and generation went on when the fill was done.
      *
      * @param possible a fill can ask now (a map is being written, the session downloads);
      *                 when not, the scan's declarations are still noted for the grace
      * @param deliveriesPending a column of this stay (the fill's or any other) is still on
      *                 its way to the consumers: whether the fill is done here is not decided
      *                 before the map has finished with all of them
-     * @return how many entries were added
+     * @return by how many entries the batch grew (0 also when the fill's columns only took
+     *         the place of entries of the scan)
      */
     int append(long[] positions, long[] timestamps, int walked, int budget,
                int playerCx, int playerCz, int viewDistance, int lodDistance, boolean possible,
@@ -611,34 +633,38 @@ final class MapFill {
         }
         for (int i = 0; i < walked; i++) this.walkedNow.add(positions[i]);
         if (!possible || now - this.notBefore < 0) return 0;
-        int room = Math.min(budget, positions.length) - walked;
+        int cap = Math.max(walked, Math.min(budget, positions.length));
+        int room = Math.max(cap - walked, cap / SHARE_DIVISOR);
         if (room <= 0) return 0;
-        for (int i = 0; i < walked; i++) {
-            if (timestamps[i] <= 0L) return 0;
-        }
         LongPredicate inView = inView(playerCx, playerCz, viewDistance);
         LongPredicate skipped = p -> this.settled.contains(p) || this.walkedNow.contains(p)
                 || this.walkedBefore.contains(p) || inView.test(p);
+        // Collected apart from the batch first: only as many of the scan's entries make way
+        // as the fill has columns for.
+        if (this.picks.length < room) this.picks = new long[room];
         // Untried columns first; what a map refused is asked again with the room they leave.
-        int picked = this.columns.collectMapOwed(playerCx, playerCz, lodDistance, positions, walked, room,
+        int picked = this.columns.collectMapOwed(playerCx, playerCz, lodDistance, this.picks, 0, room,
                 p -> skipped.test(p) || this.failures.containsKey(p));
         if (picked < room && !this.failures.isEmpty()) {
-            picked += this.columns.collectMapOwed(playerCx, playerCz, lodDistance, positions, walked + picked,
+            picked += this.columns.collectMapOwed(playerCx, playerCz, lodDistance, this.picks, picked,
                     room - picked, p -> skipped.test(p) || !this.failures.containsKey(p));
         }
         if (picked > 0) {
             if (this.askedNow.isEmpty() && this.askedBefore.isEmpty()) this.askedSince = now;
             this.quiet = false;
         }
+        // Behind the scan's entries where they fit; over its farthest ones where they do not.
+        int start = Math.min(walked, cap - picked);
         for (int i = 0; i < picked; i++) {
-            timestamps[walked + i] = -1L;
-            this.askedNow.add(positions[walked + i]);
+            positions[start + i] = this.picks[i];
+            timestamps[start + i] = -1L;
+            this.askedNow.add(this.picks[i]);
         }
         if (picked == 0 && !deliveriesPending && now - this.lastSettle >= SETTLE_INTERVAL_NANOS) {
             this.lastSettle = now;
             settle(playerCx, playerCz, lodDistance, inView);
         }
-        return picked;
+        return start + picked - walked;
     }
 
     /**

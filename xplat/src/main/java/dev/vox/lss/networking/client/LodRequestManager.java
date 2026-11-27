@@ -847,7 +847,9 @@ public class LodRequestManager {
         }
         if (scanned >= 0) {
             // A map fill rides behind the scan's own wants (see MapFill.append): the
-            // declaration is the walk's entries plus the owed columns that still fit.
+            // declaration is the walk's entries plus the owed columns that still fit, and
+            // at least a quarter of the batch is the fill's while one runs (its columns then
+            // stand where the walk's farthest entries stood; the count does not grow).
             int declared = scanned + appendMapFill(scanned, playerCx, playerCz, viewDistance);
             this.tracker.replaceWith(this.sendPositionBuffer, declared);
             // Arm/disarm the adaptive fast cadence beside the tracker replace, so
@@ -966,7 +968,7 @@ public class LodRequestManager {
     private int appendMapFill(int walked, int playerCx, int playerCz, int viewDistance) {
         this.mapFill.onScan();
         if (!this.mapFill.requested()) return 0;
-        int picked = this.mapFill.append(this.sendPositionBuffer, this.sendTimestampBuffer, walked,
+        int grown = this.mapFill.append(this.sendPositionBuffer, this.sendTimestampBuffer, walked,
                 this.scanner.getLastBudget(), playerCx, playerCz, viewDistance,
                 this.scanner.getEffectiveLodDistance(), mapFillPossible(), !this.pendingDeliveries.isEmpty());
         var finish = this.mapFill.pollFinish();
@@ -979,7 +981,7 @@ public class LodRequestManager {
                 mapFillLine("lss.mapfill.finished", finish.delivered(), finish.unfilled());
             }
         }
-        return picked;
+        return grown;
     }
 
     /** Once per dimension entry, when a map is being written: say what it is owed, or that
