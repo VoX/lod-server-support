@@ -800,13 +800,17 @@ public class SerializerParityGameTests {
         helper.runAfterDelay(4, () -> releaseChunk(chunkSource, chunkPos));
 
         var mock = placeMockServerPlayer(helper);
-        var service = new RequestProcessingService(server);
-        var state = service.registerPlayer(mock, LSSConstants.CAPABILITY_VOXEL_COLUMNS);
+        var serviceRef = new java.util.concurrent.atomic.AtomicReference<>(new RequestProcessingService(server));
+        var stateRef = new java.util.concurrent.atomic.AtomicReference<>(
+                serviceRef.get().registerPlayer(mock, LSSConstants.CAPABILITY_VOXEL_COLUMNS));
         var step = new AtomicInteger();
         var settle = new AtomicInteger();
+        var askedAgain = new AtomicInteger();
 
         helper.succeedWhen(() -> {
             helper.assertTrue(helper.getTick() >= 6, "waiting for the ticket release");
+            var service = serviceRef.get();
+            var state = stateRef.get();
             switch (step.get()) {
                 case 0 -> {
                     helper.assertTrue(chunkSource.getChunkNow(cx, cz) == null,
@@ -818,6 +822,24 @@ public class SerializerParityGameTests {
                 }
                 case 1 -> {
                     service.tick();
+                    if (service.getDiskReader().getDiag().getErrorCount() > 0) {
+                        // The one disk read ran out of time (the reader gives up after its
+                        // own 10 s on a loaded machine and reports not-found), so the service
+                        // took the generation road, which loads the chunk: nothing here can
+                        // come from disk any more. Ask again from the start on a fresh
+                        // service once the chunk has unloaded (its shutdown drops the
+                        // generation ticket). 2026-11-27: the 0.24.0 gate's one red, with
+                        // "Disk read timed out (>10s)" for exactly this chunk.
+                        helper.assertTrue(askedAgain.incrementAndGet() <= 3,
+                                "the disk read failed or ran out of time three times: look at the host and the reader log");
+                        service.shutdown();
+                        var fresh = new RequestProcessingService(server);
+                        serviceRef.set(fresh);
+                        stateRef.set(fresh.registerPlayer(mock, LSSConstants.CAPABILITY_VOXEL_COLUMNS));
+                        step.set(0);
+                        helper.assertTrue(false, "the disk read ran out of time; asking again; reader="
+                                + service.getDiskReader().getDiag());
+                    }
                     helper.assertTrue(state.getTotalSectionsSent() >= 1,
                             "waiting for the disk serve to flush");
                     helper.assertTrue(
